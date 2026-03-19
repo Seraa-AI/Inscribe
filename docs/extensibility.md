@@ -15,6 +15,76 @@ The fix: a **BlockRegistry** that maps ProseMirror node type names to **measure 
 
 ---
 
+## Extension API (implemented in `packages/core/src/extensions/`)
+
+The primary extensibility surface. Mirrors Tiptap's `Extension.create()` but bridges three worlds: ProseMirror schema, layout math, and canvas pixels.
+
+```typescript
+// The three-line setup
+const editor = new Editor({
+  extensions: [StarterKit, Highlight, MyImageExtension],
+});
+
+// StarterKit is configurable
+const editor = new Editor({
+  extensions: [
+    StarterKit.configure({ history: false, heading: { levels: [1, 2, 3] } }),
+    Highlight.configure({ multicolor: true }),
+  ],
+});
+```
+
+### Extension.create() — the factory
+
+```typescript
+const Highlight = Extension.create<HighlightOptions>({
+  name: "highlight",
+  defaultOptions: { color: "rgba(255,220,0,0.4)", multicolor: false },
+
+  // Phase 1 — schema (no schema context available yet)
+  addMarks() { return { highlight: { attrs: { color: {} }, ... } }; },
+
+  // Phase 2 — behaviour (this.schema is available)
+  addKeymap() { return { "Mod-Shift-h": toggleMark(this.schema.marks.highlight) }; },
+  addCommands() { return { toggleHighlight: (color?) => toggleMark(...) }; },
+
+  // Phase 3 — canvas rendering (mark decorator)
+  addMarkDecorators() {
+    return {
+      highlight: {
+        decoratePre(ctx, rect) {       // runs BEFORE text — draws background
+          ctx.fillStyle = rect.markAttrs.color;
+          ctx.fillRect(rect.x, rect.y - rect.ascent, rect.width, rect.ascent + rect.descent);
+        },
+      },
+    };
+  },
+});
+```
+
+### Three-phase resolution
+
+`ExtensionManager` resolves extensions in order:
+
+1. **Phase 1** — calls `addNodes()` + `addMarks()` on all extensions → builds one merged `Schema`
+2. **Phase 2** — calls `addKeymap()`, `addCommands()`, `addProseMirrorPlugins()` with `this.schema` available
+3. **Phase 3** — calls `addLayoutHandler()`, `addMarkDecorators()` → wires into `BlockRegistry` + renderer
+
+This ordering matters: you can't reference `this.schema.marks.bold` in `addMarks()` because the schema doesn't exist yet. But in `addKeymap()`, it's fully built.
+
+### MarkDecorator — pre/post paint hooks
+
+```
+For each text span:
+  ① decoratePre  (highlights, backgrounds) — runs before fillText
+  ② ctx.fillText                           — the actual text
+  ③ decoratePost (strikethrough, underline, squiggles) — runs after fillText
+```
+
+Bold and italic don't need decorators — they change the font string in `StyleResolver`, which changes the glyph metrics. Decorators are for visual-only effects that the font system can't express.
+
+---
+
 ## BlockRegistry Interface
 
 Every block type needs to answer two questions:
@@ -280,6 +350,36 @@ const editor = new Editor({
 ```
 
 **Important:** `FontConfig` is already the "theme engine for typography." The `Theme` interface above is additive — it doesn't replace `FontConfig`, it extends it. Keep them separate: `FontConfig` = type metrics for layout, `Theme` = visual presentation for rendering.
+
+---
+
+## What the New Editor API Looks Like (Phase 3 migration)
+
+The current `Editor` constructor takes `{ onChange }`. After wiring in `ExtensionManager`, it becomes:
+
+```typescript
+// Current (Phase 1)
+const editor = new Editor({ onChange: (state) => render(state) });
+
+// Phase 3 target
+const editor = new Editor({
+  extensions: [StarterKit],       // builds schema, plugins, keymap
+  onChange: (state) => render(state),
+});
+
+// Access the merged schema
+editor.schema.marks.bold;
+
+// Execute named commands
+editor.commands.toggleBold();
+editor.commands.toggleHighlight("#ffff00");
+
+// editor.commands are just ProseMirror Commands — same as today
+```
+
+The current hardcoded `schema.ts` becomes `StarterKit` + legal-specific extensions. The existing `createEditorState()` is replaced by `ExtensionManager.buildPlugins()` feeding into `EditorState.create()`.
+
+**This is a Phase 3 migration — the extension files are written but ExtensionManager is not yet wired into `Editor.ts`.** The public API contract is locked; the wiring follows in Phase 3.
 
 ---
 
