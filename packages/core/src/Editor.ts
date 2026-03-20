@@ -8,6 +8,10 @@ import { BlockRegistry } from "./layout/BlockRegistry";
 import type { Extension } from "./extensions/Extension";
 import { CursorManager } from "./renderer/CursorManager";
 import { CharacterMap } from "./layout/CharacterMap";
+import { TextMeasurer } from "./layout/TextMeasurer";
+import { layoutDocument, defaultPageConfig } from "./layout/PageLayout";
+import type { PageConfig, DocumentLayout } from "./layout/PageLayout";
+import { populateCharMap } from "./layout/BlockLayout";
 import { insertText } from "./model/commands";
 
 /**
@@ -82,6 +86,11 @@ export interface EditorOptions {
    */
   extensions?: Extension[];
   /**
+   * Page dimensions and margins. Defaults to A4 with 1-inch margins.
+   * The editor owns layout — it needs page geometry to run layoutDocument.
+   */
+  pageConfig?: PageConfig;
+  /**
    * Called on every state change. Optional when using the React adapter —
    * the Canvas component subscribes internally via editor.subscribe().
    */
@@ -101,12 +110,6 @@ export interface EditorOptions {
    * or clear the cursor.
    */
   onCursorTick?: (isVisible: boolean) => void;
-  /**
-   * The shared CharacterMap used by the renderer.
-   * Required for ↑ ↓ vertical navigation — the editor needs to know glyph
-   * positions to find the line above/below at the same x coordinate.
-   */
-  charMap?: CharacterMap;
 }
 
 /**
@@ -137,18 +140,50 @@ export class Editor {
   private container: HTMLElement | null = null;
   private readonly onChange: EditorChangeHandler | undefined;
   private readonly onFocusChange: ((focused: boolean) => void) | undefined;
-  private readonly charMap: CharacterMap | undefined;
 
   /** Subscriber set — notified on every state change, focus change, and cursor tick. */
   private readonly listeners = new Set<() => void>();
   private _isFocused = false;
+
+  // ── Engine-owned layout infrastructure ───────────────────────────────────
+
+  /** Page dimensions and margins — drives layoutDocument. */
+  readonly pageConfig: PageConfig;
+
+  /** The text measurer used by the layout engine. Created once; caches are reused. */
+  readonly measurer: TextMeasurer;
+
+  /**
+   * The CharacterMap — glyph positions for hit-testing and cursor rendering.
+   * Owned by the editor, populated during ensureLayout() for all pages.
+   */
+  readonly charMap: CharacterMap;
+
+  /**
+   * The current document layout — pages, blocks, dimensions.
+   * Re-computed by ensureLayout() after every state change.
+   */
+  private _layout: DocumentLayout;
+
+  /**
+   * True when the state has changed but layout has not yet been recomputed.
+   * ensureLayout() clears this flag.
+   */
+  private dirty = false;
+
+  /**
+   * Adapter-provided function that resolves a 1-based page number to the
+   * corresponding DOM element. Used by syncInputBridge / scrollCursorIntoView.
+   * Set via setPageElementLookup() — null until the rendering adapter provides it.
+   */
+  private pageElementLookup: ((page: number) => HTMLElement | null) | null = null;
 
   /** Owns the cursor blink timer. Public so adapters can read isVisible. */
   readonly cursorManager: CursorManager;
 
   /**
    * Font modifier map built from all extensions.
-   * Pass to layoutDocument — computed once at construction.
+   * Computed once at construction, used by layoutDocument.
    */
   readonly fontModifiers: Map<string, FontModifier>;
 
@@ -182,11 +217,13 @@ export class Editor {
   /** Merged input handlers from all extensions — consulted before the keymap. */
   private readonly inputHandlers: Record<string, InputHandler>;
 
-  constructor({ extensions = [StarterKit], onChange, onFocusChange, onCursorTick, charMap }: EditorOptions) {
+  constructor({ extensions = [StarterKit], pageConfig, onChange, onFocusChange, onCursorTick }: EditorOptions) {
     this.manager = new ExtensionManager(extensions);
     this.onChange = onChange;
     this.onFocusChange = onFocusChange;
-    this.charMap = charMap;
+    this.pageConfig = pageConfig ?? defaultPageConfig;
+    this.measurer = new TextMeasurer({ lineHeightMultiplier: 1.2 });
+    this.charMap = new CharacterMap();
     this.fontModifiers = this.manager.buildFontModifiers();
     this.markDecorators = this.manager.buildMarkDecorators();
     this.toolbarItems = this.manager.buildToolbarItems();
@@ -200,6 +237,15 @@ export class Editor {
       schema: this.manager.schema,
       plugins: this.manager.buildPlugins(),
     });
+
+    // Initial layout — run synchronously so editor.layout is available immediately
+    this._layout = layoutDocument(this.state.doc, {
+      pageConfig: this.pageConfig,
+      measurer: this.measurer,
+      fontModifiers: this.fontModifiers,
+      previousVersion: 0,
+    });
+    this.populateCharMapFromLayout();
 
     this.keymap = this.manager.buildKeymap();
     this.inputHandlers = this.manager.buildInputHandlers();
@@ -222,6 +268,69 @@ export class Editor {
   }
 
   /**
+   * The current document layout. Calls ensureLayout() so the result
+   * always reflects the latest EditorState.
+   */
+  get layout(): DocumentLayout {
+    this.ensureLayout();
+    return this._layout;
+  }
+
+  /**
+   * Guarantees the layout reflects the current EditorState.
+   * Cheap when layout is already current (dirty === false).
+   *
+   * Called automatically by `layout`, movement methods, and `getSelectionSnapshot`.
+   * Framework adapters should not need to call this directly.
+   */
+  ensureLayout(): void {
+    if (!this.dirty) return;
+    this.dirty = false;
+    this.charMap.clear();
+    this._layout = layoutDocument(this.state.doc, {
+      pageConfig: this.pageConfig,
+      measurer: this.measurer,
+      fontModifiers: this.fontModifiers,
+      previousVersion: this._layout.version,
+    });
+    this.populateCharMapFromLayout();
+  }
+
+  private populateCharMapFromLayout(): void {
+    for (const page of this._layout.pages) {
+      let lineOffset = 0;
+      for (const block of page.blocks) {
+        populateCharMap(block, this.charMap, page.pageNumber, lineOffset, this.measurer);
+        lineOffset += block.lines.length;
+      }
+    }
+  }
+
+  /**
+   * Returns a lightweight snapshot of the current selection state.
+   * Includes everything a toolbar or floating menu needs — no CharacterMap
+   * or layout internals required.
+   *
+   * Ensures layout is current before computing.
+   */
+  getSelectionSnapshot(): SelectionSnapshot {
+    this.ensureLayout();
+    const { selection } = this.state;
+    const blockInfo = this.getBlockInfo();
+    return {
+      anchor: selection.anchor,
+      head: selection.head,
+      from: selection.from,
+      to: selection.to,
+      empty: selection.empty,
+      activeMarks: this.getActiveMarks(),
+      activeMarkAttrs: this.getActiveMarkAttrs(),
+      blockType: blockInfo.blockType,
+      blockAttrs: blockInfo.blockAttrs,
+    };
+  }
+
+  /**
    * Mount the editor onto a container element.
    * Creates the hidden textarea and attaches event listeners.
    */
@@ -233,18 +342,101 @@ export class Editor {
     this.textarea.focus();
   }
 
-  destroy(): void {
-    this.cursorManager.stop();
+  /**
+   * Tear down the mounted view (textarea + event listeners) without
+   * destroying the Editor itself. Safe to call multiple times.
+   * After unmount the editor can be re-mounted with mount().
+   */
+  unmount(): void {
     if (this.textarea) {
       this.detachListeners();
       this.textarea.remove();
       this.textarea = null;
     }
     this.container = null;
+    this.pageElementLookup = null;
+  }
+
+  destroy(): void {
+    this.cursorManager.stop();
+    this.unmount();
   }
 
   focus(): void {
     this.textarea?.focus();
+  }
+
+  /**
+   * Register a function that resolves a 1-based page number to the
+   * DOM element representing that page. Called by the rendering adapter
+   * (e.g. Canvas) after mount so the editor can position the textarea
+   * and scroll the cursor into view.
+   */
+  setPageElementLookup(fn: ((page: number) => HTMLElement | null) | null): void {
+    this.pageElementLookup = fn;
+  }
+
+  /**
+   * Positions the hidden textarea at the cursor's visual location.
+   *
+   * Without this, the textarea sits at top:0 and the browser scrolls the
+   * scroll container back to the top whenever the user types — because
+   * the browser wants to keep the focused element visible.
+   *
+   * Also critical for mobile IME: the suggestion bar and magnifier appear
+   * near the textarea, so placing it at the cursor makes them usable.
+   */
+  syncInputBridge(): void {
+    if (!this.textarea || !this.container || !this.pageElementLookup) return;
+
+    const { head } = this.state.selection;
+    const coords = this.charMap.coordsAtPos(head);
+    if (!coords) return;
+
+    const pageEl = this.pageElementLookup(coords.page);
+    if (!pageEl) return;
+
+    const containerRect = this.container.getBoundingClientRect();
+    const pageRect = pageEl.getBoundingClientRect();
+
+    Object.assign(this.textarea.style, {
+      top: `${(pageRect.top - containerRect.top) + coords.y}px`,
+      left: `${(pageRect.left - containerRect.left) + coords.x}px`,
+      height: `${coords.height}px`,
+    });
+  }
+
+  /**
+   * Scrolls the nearest scrollable ancestor so the cursor is visible.
+   *
+   * Called after every state change (from dispatch) and after React renders
+   * (from the adapter) as a safety net for new-page scenarios.
+   */
+  scrollCursorIntoView(): void {
+    if (!this.container || !this.pageElementLookup) return;
+
+    const { head } = this.state.selection;
+    const coords = this.charMap.coordsAtPos(head);
+    if (!coords) return;
+
+    const pageEl = this.pageElementLookup(coords.page);
+    if (!pageEl) return;
+
+    const scrollParent = findScrollParent(this.container);
+    if (!scrollParent) return;
+
+    const pageRect = pageEl.getBoundingClientRect();
+    const scrollRect = scrollParent.getBoundingClientRect();
+
+    const cursorTop = pageRect.top + coords.y;
+    const cursorBottom = cursorTop + coords.height;
+    const buffer = 40;
+
+    if (cursorBottom > scrollRect.bottom - buffer) {
+      scrollParent.scrollTop += cursorBottom - scrollRect.bottom + buffer;
+    } else if (cursorTop < scrollRect.top + buffer) {
+      scrollParent.scrollTop -= scrollRect.top - cursorTop + buffer;
+    }
   }
 
   /**
@@ -291,7 +483,7 @@ export class Editor {
 
   /** Move up one line preserving x. Pass extend=true for Shift+↑. */
   moveUp(extend = false): void {
-    if (!this.charMap) return;
+    this.ensureLayout();
     const head = this.state.selection.head;
     const coords = this.charMap.coordsAtPos(head);
     if (!coords) return;
@@ -432,7 +624,7 @@ export class Editor {
 
   /** Move down one line preserving x. Pass extend=true for Shift+↓. */
   moveDown(extend = false): void {
-    if (!this.charMap) return;
+    this.ensureLayout();
     const head = this.state.selection.head;
     const coords = this.charMap.coordsAtPos(head);
     if (!coords) return;
@@ -468,8 +660,14 @@ export class Editor {
   private dispatch(tr: Transaction | null): void {
     if (!tr) return;
     this.state = this.state.apply(tr);
+    this.dirty = true;
+    this.ensureLayout();
     this.cursorManager.reset();
+    // ViewManager.update() runs inside notifyListeners (via subscribe),
+    // creating any new page DOM elements before we position the textarea.
     this.notifyListeners();
+    this.syncInputBridge();
+    this.scrollCursorIntoView();
     this.onChange?.(this.state);
   }
 
@@ -621,4 +819,16 @@ export class Editor {
   private clearTextarea(): void {
     if (this.textarea) this.textarea.value = "";
   }
+}
+
+// ── Module-level helpers ──────────────────────────────────────────────────────
+
+function findScrollParent(el: HTMLElement): HTMLElement | null {
+  let current = el.parentElement;
+  while (current) {
+    const { overflowY } = getComputedStyle(current);
+    if (overflowY === "auto" || overflowY === "scroll") return current;
+    current = current.parentElement;
+  }
+  return null;
 }

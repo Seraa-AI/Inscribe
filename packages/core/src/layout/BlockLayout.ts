@@ -234,7 +234,7 @@ function extractSpans(
  * Computes the x offset to apply to a line for text alignment.
  * justify is not yet implemented — falls back to left.
  */
-function computeAlignmentOffset(
+export function computeAlignmentOffset(
   align: BlockStyle["align"],
   availableWidth: number,
   lineWidth: number
@@ -248,5 +248,72 @@ function computeAlignmentOffset(
     case "left":
     default:
       return 0;
+  }
+}
+
+/**
+ * Populates a CharacterMap from a finalized LayoutBlock.
+ *
+ * Called by Editor.ensureLayout() so charMap has glyph positions immediately
+ * after layout — before the render cycle. This enables syncInputBridge() and
+ * scrollCursorIntoView() to work synchronously inside dispatch().
+ *
+ * The renderer's own charMap population (in PageRenderer.drawBlock) is guarded
+ * by hasGlyph/hasLine checks, so no duplicate entries are created.
+ */
+export function populateCharMap(
+  block: LayoutBlock,
+  map: CharacterMap,
+  page: number,
+  lineIndexOffset: number,
+  measurer: TextMeasurer,
+): void {
+  let lineY = block.y;
+
+  for (let li = 0; li < block.lines.length; li++) {
+    const line = block.lines[li]!;
+    const globalLineIndex = lineIndexOffset + li;
+
+    const lineOffsetX = computeAlignmentOffset(
+      block.align,
+      block.availableWidth,
+      line.width,
+    );
+
+    map.registerLine({
+      page,
+      lineIndex: globalLineIndex,
+      y: lineY,
+      height: line.lineHeight,
+      startDocPos: line.spans[0]?.docPos ?? 0,
+      endDocPos:
+        (line.spans[line.spans.length - 1]?.docPos ?? 0) +
+        (line.spans[line.spans.length - 1]?.text.length ?? 0),
+    });
+
+    for (const span of line.spans) {
+      const run = measurer.measureRun(span.text, span.font);
+
+      for (let ci = 0; ci < span.text.length; ci++) {
+        const charX =
+          block.x + lineOffsetX + span.x + run.charPositions[ci]!;
+        const charWidth =
+          ci < span.text.length - 1
+            ? run.charPositions[ci + 1]! - run.charPositions[ci]!
+            : run.totalWidth - run.charPositions[ci]!;
+
+        map.registerGlyph({
+          docPos: span.docPos + ci,
+          x: charX,
+          y: lineY,
+          width: charWidth,
+          height: line.lineHeight,
+          page,
+          lineIndex: globalLineIndex,
+        });
+      }
+    }
+
+    lineY += line.lineHeight;
   }
 }

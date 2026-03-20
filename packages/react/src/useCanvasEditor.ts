@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Editor, StarterKit } from "@inscribe/core";
-import type { Extension } from "@inscribe/core";
+import type { Extension, PageConfig } from "@inscribe/core";
 
 export interface UseCanvasEditorOptions {
   /** Extensions to load. Defaults to [StarterKit]. */
   extensions?: Extension[];
+  /** Page dimensions and margins. Defaults to A4 with 1-inch margins. */
+  pageConfig?: PageConfig;
   /**
    * Called on every document or selection change.
    * Mirrors TipTap's onUpdate.
@@ -51,10 +53,10 @@ export function useCanvasEditor(
 
     const instance = new Editor({
       extensions: opts.extensions ?? [StarterKit],
+      ...(opts.pageConfig ? { pageConfig: opts.pageConfig } : {}),
       onChange: (state) => {
         opts.onUpdate?.({ editor: instance });
         opts.onSelectionUpdate?.({ editor: instance });
-        // Suppress unused-param warning — state is available if needed
         void state;
       },
       onFocusChange: (focused) => {

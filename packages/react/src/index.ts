@@ -11,5 +11,5 @@ export type { UseEditorStateOptions, EditorStateContext } from "./useEditorState
 
 // Re-export core types consumers need when building with this adapter
 export type { Editor, SelectionSnapshot } from "@inscribe/core";
-export { StarterKit, defaultPageConfig } from "@inscribe/core";
-export type { PageConfig, Extension } from "@inscribe/core";
+export { StarterKit, defaultPageConfig, ViewManager } from "@inscribe/core";
+export type { PageConfig, DocumentLayout, Extension, ViewManagerOptions } from "@inscribe/core";

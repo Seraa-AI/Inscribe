@@ -35,7 +35,7 @@ const EMPTY_TOOLBAR: ToolbarSlice = {
 };
 
 export function App() {
-  const editor = useCanvasEditor({ extensions: EXTENSIONS });
+  const editor = useCanvasEditor({ extensions: EXTENSIONS, pageConfig: defaultPageConfig });
 
   // deepEqual is the default — handles string[], nested objects correctly.
   const toolbar = useEditorState({ editor, selector: selectToolbar }) ?? EMPTY_TOOLBAR;
@@ -57,7 +57,7 @@ export function App() {
       />
 
       <main style={styles.main}>
-        <Canvas editor={editor} pageConfig={defaultPageConfig} style={styles.canvas} />
+        <Canvas editor={editor} style={styles.canvas} />
       </main>
     </div>
   );
