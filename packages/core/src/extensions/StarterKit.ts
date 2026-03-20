@@ -14,6 +14,8 @@ import { FontSize } from "./built-in/FontSize";
 import type { Command } from "prosemirror-state";
 import type { NodeSpec, MarkSpec } from "prosemirror-model";
 import type { FontModifier, MarkDecorator, ToolbarItemSpec } from "./types";
+import type { BlockStyle } from "../layout/FontConfig";
+import type { BlockStrategy } from "../layout/BlockRegistry";
 
 interface StarterKitOptions {
   /** Pass false to exclude this extension entirely */
@@ -228,6 +230,32 @@ export const StarterKit = Extension.create<StarterKitOptions>({
       for (const [k, v] of Color.resolve().markDecorators) result[k] = v;
     }
     return result;
+  },
+
+  addLayoutHandlers() {
+    const handlers: Record<string, BlockStrategy> = {};
+    const opts = this.options;
+    if (opts.paragraph !== false) {
+      Object.assign(handlers, Paragraph.resolve().layoutHandlers);
+    }
+    if (opts.heading !== false) {
+      const ext = typeof opts.heading === "object" ? Heading.configure(opts.heading) : Heading;
+      Object.assign(handlers, ext.resolve().layoutHandlers);
+    }
+    return handlers;
+  },
+
+  addBlockStyles() {
+    const styles: Record<string, BlockStyle> = {};
+    const opts = this.options;
+    if (opts.paragraph !== false) {
+      Object.assign(styles, Paragraph.resolve().blockStyles);
+    }
+    if (opts.heading !== false) {
+      const ext = typeof opts.heading === "object" ? Heading.configure(opts.heading) : Heading;
+      Object.assign(styles, ext.resolve().blockStyles);
+    }
+    return styles;
   },
 
   addToolbarItems() {

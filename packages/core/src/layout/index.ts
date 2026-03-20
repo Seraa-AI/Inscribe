@@ -12,4 +12,5 @@ export { defaultFontConfig, getBlockStyle } from "./FontConfig";
 export type { FontConfig, BlockStyle } from "./FontConfig";
 export { resolveFont } from "./StyleResolver";
 export { BlockRegistry } from "./BlockRegistry";
-export type { BlockStrategy, BlockMeasurement, MeasureOptions, BlockRenderContext } from "./BlockRegistry";
+export type { BlockStrategy, BlockRenderContext } from "./BlockRegistry";
+export { TextBlockStrategy } from "./TextBlockStrategy";

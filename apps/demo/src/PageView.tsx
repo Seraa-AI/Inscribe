@@ -11,7 +11,7 @@ import {
   renderCursor,
   renderSelection,
 } from "@inscribe/core";
-import type { MarkDecorator } from "@inscribe/core";
+import type { MarkDecorator, BlockRegistry } from "@inscribe/core";
 
 interface PageViewProps {
   page: LayoutPage;
@@ -21,6 +21,7 @@ interface PageViewProps {
   measurer: TextMeasurer;
   map: CharacterMap;
   markDecorators: Map<string, MarkDecorator>;
+  blockRegistry?: BlockRegistry;
   isVisible: boolean;
   observeRef: (el: HTMLDivElement | null) => void;
   gap: number;
@@ -52,6 +53,7 @@ export function PageView({
   measurer,
   map,
   markDecorators,
+  blockRegistry,
   isVisible,
   observeRef,
   gap,
@@ -131,6 +133,7 @@ export function PageView({
       map,
       markDecorators,
       showMarginGuides: true,
+      ...(blockRegistry ? { blockRegistry } : {}),
     });
 
     drawOverlay();

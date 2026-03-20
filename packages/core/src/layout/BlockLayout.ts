@@ -6,6 +6,8 @@ import { FontConfig, defaultFontConfig, getBlockStyle, BlockStyle } from "./Font
 import { resolveFont } from "./StyleResolver";
 
 export interface LayoutBlock {
+  /** The original ProseMirror node — used by BlockStrategy.render() */
+  node: Node;
   /** Absolute x position — left margin, set by caller */
   x: number;
   /** Absolute y position — top of this block, set by PageLayout */
@@ -163,6 +165,7 @@ export function layoutBlock(node: Node, options: BlockLayoutOptions): LayoutBloc
   }
 
   return {
+    node,
     x,
     y,
     width: availableWidth,

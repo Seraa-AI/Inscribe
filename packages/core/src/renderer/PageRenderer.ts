@@ -4,6 +4,7 @@ import { CharacterMap } from "../layout/CharacterMap";
 import { TextMeasurer } from "../layout/TextMeasurer";
 import { clearCanvas } from "./canvas";
 import type { MarkDecorator } from "../extensions/types";
+import type { BlockRegistry } from "../layout/BlockRegistry";
 
 export interface RenderPageOptions {
   ctx: CanvasRenderingContext2D;
@@ -23,6 +24,8 @@ export interface RenderPageOptions {
   showMarginGuides?: boolean;
   /** Mark decorators from extensions — draws underlines, strikethroughs, highlights */
   markDecorators?: Map<string, MarkDecorator>;
+  /** Block registry from extensions — dispatches each block to its strategy */
+  blockRegistry?: BlockRegistry;
 }
 
 /**
@@ -49,6 +52,7 @@ export function renderPage(options: RenderPageOptions): void {
     map,
     showMarginGuides = false,
     markDecorators,
+    blockRegistry,
   } = options;
 
   const { pageWidth, pageHeight, margins } = pageConfig;
@@ -84,7 +88,23 @@ export function renderPage(options: RenderPageOptions): void {
   // and posAtCoords can't distinguish lines in different paragraphs.
   let lineIndexOffset = 0;
   for (const block of page.blocks) {
-    lineIndexOffset = drawBlock(ctx, block, measurer, map, page.pageNumber, lineIndexOffset, markDecorators);
+    const strategy = blockRegistry?.get(block.blockType);
+    if (strategy) {
+      lineIndexOffset = strategy.render(
+        block,
+        {
+          ctx,
+          pageNumber: page.pageNumber,
+          lineIndexOffset,
+          dpr,
+          measurer,
+          ...(markDecorators ? { markDecorators } : {}),
+        },
+        map,
+      );
+    } else {
+      lineIndexOffset = drawBlock(ctx, block, measurer, map, page.pageNumber, lineIndexOffset, markDecorators);
+    }
   }
 }
 

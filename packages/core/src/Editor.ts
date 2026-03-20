@@ -4,6 +4,7 @@ import type { InputHandler, FontModifier, MarkDecorator, ToolbarItemSpec } from 
 import type { Schema } from "prosemirror-model";
 import { ExtensionManager } from "./extensions/ExtensionManager";
 import { StarterKit } from "./extensions/StarterKit";
+import { BlockRegistry } from "./layout/BlockRegistry";
 import type { Extension } from "./extensions/Extension";
 import { CursorManager } from "./renderer/CursorManager";
 import { CharacterMap } from "./layout/CharacterMap";
@@ -164,6 +165,12 @@ export class Editor {
   readonly toolbarItems: ToolbarItemSpec[];
 
   /**
+   * Block registry built from all extensions.
+   * Pass to renderPage — maps node type names to BlockStrategy instances.
+   */
+  readonly blockRegistry: BlockRegistry;
+
+  /**
    * Bound command map — each entry calls the extension command with the
    * current state + this editor's dispatch. Built once; closures over `this`
    * so they always read the latest state at call time.
@@ -183,6 +190,7 @@ export class Editor {
     this.fontModifiers = this.manager.buildFontModifiers();
     this.markDecorators = this.manager.buildMarkDecorators();
     this.toolbarItems = this.manager.buildToolbarItems();
+    this.blockRegistry = this.manager.buildBlockRegistry();
     this.cursorManager = new CursorManager(() => {
       onCursorTick?.(this.cursorManager.isVisible);
       this.notifyListeners();

@@ -5,6 +5,8 @@ import type { Plugin, Command } from "prosemirror-state";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import type { Extension } from "./Extension";
 import type { MarkDecorator, ResolvedExtension, FontModifier, ToolbarItemSpec, InputHandler } from "./types";
+import { BlockRegistry } from "../layout/BlockRegistry";
+import type { FontConfig } from "../layout/FontConfig";
 
 /**
  * ExtensionManager — orchestrates all registered extensions.
@@ -111,20 +113,29 @@ export class ExtensionManager {
   // ── Layout ─────────────────────────────────────────────────────────────────
 
   /**
-   * Map of node type name → BlockStrategy.
-   * Consumed by BlockRegistry (Phase 3 work).
-   *
-   * Each extension that contributes a block node type should also provide
-   * addLayoutHandler(). Extensions that only contribute marks return null.
+   * Builds a BlockRegistry from all extensions that implement addLayoutHandlers().
+   * PageRenderer uses this to dispatch rendering to the correct strategy per block type.
    */
-  buildLayoutHandlers(): Map<string, NonNullable<ResolvedExtension["layoutHandler"]>> {
-    const handlers = new Map<string, NonNullable<ResolvedExtension["layoutHandler"]>>();
+  buildBlockRegistry(): BlockRegistry {
+    const registry = new BlockRegistry();
     for (const ext of this.resolved) {
-      if (ext.layoutHandler) {
-        handlers.set(ext.name, ext.layoutHandler);
+      for (const [nodeTypeName, strategy] of Object.entries(ext.layoutHandlers)) {
+        registry.register(nodeTypeName, strategy);
       }
     }
-    return handlers;
+    return registry;
+  }
+
+  /**
+   * Merged block styles from all extensions.
+   * Pass as fontConfig to layoutDocument so heading/paragraph fonts come from extensions.
+   */
+  buildBlockStyles(): FontConfig {
+    const merged: FontConfig = {};
+    for (const ext of this.resolved) {
+      Object.assign(merged, ext.blockStyles);
+    }
+    return merged;
   }
 
   // ── Mark decorators ────────────────────────────────────────────────────────

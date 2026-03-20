@@ -75,7 +75,8 @@ export class Extension<Options extends object = object> {
       keymap:  schema ? (config.addKeymap?.call(p2) ?? {}) : {},
       commands: schema ? (config.addCommands?.call(p2) ?? {}) : {},
       // Phase 3/4: options available, no schema needed
-      layoutHandler: config.addLayoutHandler?.call(p1) ?? null,
+      layoutHandlers: config.addLayoutHandlers?.call(p1) ?? {},
+      blockStyles: config.addBlockStyles?.call(p1) ?? {},
       markDecorators: new Map(Object.entries(config.addMarkDecorators?.call(p1) ?? {})),
       fontModifiers: config.addFontModifiers?.call(p1) ?? new Map(),
       toolbarItems: config.addToolbarItems?.call(p1) ?? [],

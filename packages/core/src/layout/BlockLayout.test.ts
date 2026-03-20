@@ -3,6 +3,7 @@ import { layoutBlock } from "./BlockLayout";
 import { TextMeasurer } from "./TextMeasurer";
 import { CharacterMap } from "./CharacterMap";
 import { defaultFontConfig } from "./FontConfig";
+import type { FontConfig } from "./FontConfig";
 import { schema } from "../model/schema";
 
 const CHAR_WIDTH = 8;
@@ -236,9 +237,9 @@ describe("layoutBlock — CharacterMap", () => {
     const map = new CharacterMap();
     const node = schema.node("paragraph", { align: "center" }, [schema.text("Hi")]);
 
-    const config = {
+    const config: FontConfig = {
       ...defaultFontConfig,
-      paragraph: { ...defaultFontConfig.paragraph, align: "center" as const },
+      paragraph: { font: "14px Georgia, serif", spaceBefore: 0, spaceAfter: 10, align: "center" },
     };
 
     layoutBlock(node, {

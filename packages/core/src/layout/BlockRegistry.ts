@@ -1,49 +1,46 @@
-import type { Node as ProseMirrorNode } from "prosemirror-model";
-import type { TextMeasurer } from "./TextMeasurer";
-import type { PageConfig } from "./PageLayout";
 import type { CharacterMap } from "./CharacterMap";
+import type { TextMeasurer } from "./TextMeasurer";
+import type { LayoutBlock } from "./BlockLayout";
+import type { MarkDecorator } from "../extensions/types";
 
 // ── BlockStrategy ─────────────────────────────────────────────────────────────
 
-export interface BlockMeasurement {
-  width: number;
-  height: number;
-  spaceBefore: number;
-  spaceAfter: number;
-}
-
-export interface MeasureOptions {
-  availableWidth: number;
-  measurer: TextMeasurer;
-  pageConfig: PageConfig;
-}
-
+/**
+ * Context passed to BlockStrategy.render().
+ * Contains everything a strategy needs to draw its block and register glyphs.
+ */
 export interface BlockRenderContext {
   ctx: CanvasRenderingContext2D;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  /** 1-based page number — used when registering glyphs into CharacterMap */
+  pageNumber: number;
+  /**
+   * Page-global line count before this block.
+   * Each strategy must use globalLineIndex = lineIndexOffset + localLineIndex
+   * when registering lines and glyphs, so click hit-testing works across blocks.
+   */
+  lineIndexOffset: number;
   dpr: number;
+  measurer: TextMeasurer;
+  markDecorators?: Map<string, MarkDecorator>;
 }
 
 /**
- * BlockStrategy — the two-pass contract every block type must implement.
+ * BlockStrategy — the render contract every block type must implement.
  *
- * Measure pass: PageLayout calls measure() for every block before assigning
- * any block to a page. No CharacterMap access here — positions aren't final yet.
+ * render() draws the block onto the canvas and populates the CharacterMap
+ * with glyph positions for cursor / click hit-testing.
  *
- * Render pass: PageRenderer calls render() once positions are committed.
- * This is where CharacterMap entries are populated for hit-testing.
+ * Returns the updated lineIndexOffset (lineIndexOffset + block.lines.length)
+ * so the caller can pass it to the next block.
+ *
+ * Future extensions implement this for images, code blocks, tables, etc.
  */
 export interface BlockStrategy {
-  measure(node: ProseMirrorNode, options: MeasureOptions): BlockMeasurement;
   render(
-    node: ProseMirrorNode,
-    layout: BlockMeasurement & { x: number; y: number },
-    ctx: BlockRenderContext,
-    map?: CharacterMap,
-  ): void;
+    block: LayoutBlock,
+    renderCtx: BlockRenderContext,
+    map: CharacterMap,
+  ): number;
 }
 
 // ── BlockRegistry ─────────────────────────────────────────────────────────────
@@ -51,8 +48,9 @@ export interface BlockStrategy {
 /**
  * Registry mapping ProseMirror node type names to BlockStrategies.
  *
- * Built by ExtensionManager from all extensions that implement addLayoutHandler().
- * Consumed by PageLayout (measure pass) and PageRenderer (render pass).
+ * Built by ExtensionManager from all extensions that implement addLayoutHandlers().
+ * Consumed by PageRenderer — for each block, PageRenderer calls
+ * registry.get(block.blockType)?.render(block, ctx, map).
  */
 export class BlockRegistry {
   private readonly strategies = new Map<string, BlockStrategy>();

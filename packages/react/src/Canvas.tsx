@@ -193,6 +193,7 @@ export function Canvas({
             measurer={measurerRef.current}
             map={charMapRef.current}
             markDecorators={editor?.markDecorators ?? new Map()}
+            {...(editor?.blockRegistry ? { blockRegistry: editor.blockRegistry } : {})}
             isVisible={visiblePages.has(page.pageNumber)}
             observeRef={observePage(page.pageNumber)}
             gap={gap}

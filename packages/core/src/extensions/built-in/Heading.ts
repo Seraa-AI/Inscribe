@@ -1,6 +1,8 @@
 import { setBlockType } from "prosemirror-commands";
 import { Extension } from "../Extension";
 import type { ToolbarItemSpec } from "../types";
+import type { BlockStyle } from "../../layout/FontConfig";
+import { TextBlockStrategy } from "../../layout/TextBlockStrategy";
 
 interface HeadingOptions {
   levels: number[];
@@ -48,6 +50,26 @@ export const Heading = Extension.create<HeadingOptions>({
     }
     cmds["setParagraph"] = () => setBlockType(this.schema.nodes["paragraph"]!);
     return cmds;
+  },
+
+  addLayoutHandlers() {
+    return { heading: TextBlockStrategy };
+  },
+
+  addBlockStyles() {
+    const levelStyles: Record<number, BlockStyle> = {
+      1: { font: "bold 28px Georgia, serif", spaceBefore: 24, spaceAfter: 12, align: "left" as const },
+      2: { font: "bold 22px Georgia, serif", spaceBefore: 20, spaceAfter: 10, align: "left" as const },
+      3: { font: "bold 18px Georgia, serif", spaceBefore: 16, spaceAfter: 8,  align: "left" as const },
+      4: { font: "bold 16px Georgia, serif", spaceBefore: 14, spaceAfter: 6,  align: "left" as const },
+      5: { font: "bold 14px Georgia, serif", spaceBefore: 12, spaceAfter: 4,  align: "left" as const },
+      6: { font: "bold 12px Georgia, serif", spaceBefore: 10, spaceAfter: 2,  align: "left" as const },
+    };
+    const styles: Record<string, BlockStyle> = {};
+    for (const level of this.options.levels) {
+      styles[`heading_${level}`] = levelStyles[level]!;
+    }
+    return styles;
   },
 
   addToolbarItems(): ToolbarItemSpec[] {

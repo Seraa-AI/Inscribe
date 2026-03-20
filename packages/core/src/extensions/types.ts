@@ -16,6 +16,7 @@
 import type { NodeSpec, MarkSpec, Schema } from "prosemirror-model";
 import type { Command, Plugin } from "prosemirror-state";
 import type { BlockStrategy } from "../layout/BlockRegistry";
+import type { BlockStyle } from "../layout/FontConfig";
 import type { ParsedFont } from "../layout/StyleResolver";
 
 /**
@@ -175,13 +176,26 @@ export interface ExtensionConfig<Options = object> {
   // Block extensions only. Inline extensions use addMarkDecorators instead.
 
   /**
-   * Layout strategy for a block node type.
-   * Registered in BlockRegistry under this extension's name.
+   * Map of node type name → BlockStrategy.
+   * Each entry is registered in BlockRegistry so PageRenderer can dispatch
+   * rendering to the correct strategy per block type.
    *
-   * Only implement this for block node extensions (paragraph, image, etc.).
-   * The node type name registered must match this extension's `name`.
+   * Simple extensions (one block type) return `{ [this.name]: strategy }`.
+   * Aggregating extensions like StarterKit merge strategies from inner extensions.
+   *
+   * @example
+   * addLayoutHandlers() {
+   *   return { paragraph: TextBlockStrategy };
+   * }
    */
-  addLayoutHandler?(this: Phase1Context<Options>): BlockStrategy;
+  addLayoutHandlers?(this: Phase1Context<Options>): Record<string, BlockStrategy>;
+
+  /**
+   * Block styles contributed by this extension.
+   * Merged into the FontConfig used by layoutDocument.
+   * Keys are node type names or compound keys like "heading_1".
+   */
+  addBlockStyles?(this: Phase1Context<Options>): Record<string, BlockStyle>;
 
   // ── Phase 4: Render ─────────────────────────────────────────────────────────
 
@@ -230,7 +244,10 @@ export interface ResolvedExtension {
   plugins: Plugin[];
   keymap: Record<string, Command>;
   commands: Record<string, (...args: unknown[]) => Command>;
-  layoutHandler: BlockStrategy | null;
+  /** Map of node type name → BlockStrategy, contributed by this extension. */
+  layoutHandlers: Record<string, BlockStrategy>;
+  /** Block styles contributed by this extension (merged into FontConfig). */
+  blockStyles: Record<string, BlockStyle>;
   markDecorators: Map<string, MarkDecorator>;
   fontModifiers: Map<string, FontModifier>;
   toolbarItems: ToolbarItemSpec[];

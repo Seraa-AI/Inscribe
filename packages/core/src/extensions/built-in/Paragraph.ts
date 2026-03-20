@@ -1,5 +1,6 @@
 import { Extension } from "../Extension";
 import { splitBlock } from "prosemirror-commands";
+import { TextBlockStrategy } from "../../layout/TextBlockStrategy";
 
 /**
  * Paragraph — the default block node.
@@ -27,6 +28,16 @@ export const Paragraph = Extension.create({
   addKeymap() {
     return {
       Enter: splitBlock,
+    };
+  },
+
+  addLayoutHandlers() {
+    return { paragraph: TextBlockStrategy };
+  },
+
+  addBlockStyles() {
+    return {
+      paragraph: { font: "14px Georgia, serif", spaceBefore: 0, spaceAfter: 10, align: "left" as const },
     };
   },
 });
