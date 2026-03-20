@@ -11,6 +11,7 @@ import { Strikethrough } from "./built-in/Strikethrough";
 import { Highlight } from "./built-in/Highlight";
 import { Color } from "./built-in/Color";
 import { FontSize } from "./built-in/FontSize";
+import { List } from "./built-in/List";
 import type { Command } from "prosemirror-state";
 import type { NodeSpec, MarkSpec } from "prosemirror-model";
 import type { FontModifier, MarkDecorator, ToolbarItemSpec } from "./types";
@@ -30,6 +31,7 @@ interface StarterKitOptions {
   highlight?: false | { color?: string; multicolor?: boolean };
   color?: false | { colors?: string[] };
   fontSize?: false | { sizes?: number[] };
+  list?: false;
 }
 
 /**
@@ -59,6 +61,9 @@ export const StarterKit = Extension.create<StarterKitOptions>({
         ? Heading.configure(opts.heading)
         : Heading;
       Object.assign(nodes, ext.resolve().nodes);
+    }
+    if (opts.list !== false) {
+      Object.assign(nodes, List.resolve().nodes);
     }
 
     return nodes;
@@ -132,6 +137,9 @@ export const StarterKit = Extension.create<StarterKitOptions>({
       const ext = typeof opts.heading === "object" ? Heading.configure(opts.heading) : Heading;
       Object.assign(km, ext.resolve(this.schema).keymap);
     }
+    if (opts.list !== false) {
+      Object.assign(km, List.resolve(this.schema).keymap);
+    }
     if (opts.underline !== false) {
       Object.assign(km, Underline.resolve(this.schema).keymap);
     }
@@ -183,6 +191,9 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     if (opts.fontSize !== false) {
       const ext = typeof opts.fontSize === "object" ? FontSize.configure(opts.fontSize) : FontSize;
       Object.assign(cmds, ext.resolve(this.schema).commands);
+    }
+    if (opts.list !== false) {
+      Object.assign(cmds, List.resolve(this.schema).commands);
     }
 
     return cmds;
@@ -242,6 +253,9 @@ export const StarterKit = Extension.create<StarterKitOptions>({
       const ext = typeof opts.heading === "object" ? Heading.configure(opts.heading) : Heading;
       Object.assign(handlers, ext.resolve().layoutHandlers);
     }
+    if (opts.list !== false) {
+      Object.assign(handlers, List.resolve().layoutHandlers);
+    }
     return handlers;
   },
 
@@ -254,6 +268,9 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     if (opts.heading !== false) {
       const ext = typeof opts.heading === "object" ? Heading.configure(opts.heading) : Heading;
       Object.assign(styles, ext.resolve().blockStyles);
+    }
+    if (opts.list !== false) {
+      Object.assign(styles, List.resolve().blockStyles);
     }
     return styles;
   },
@@ -291,6 +308,9 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     if (opts.fontSize !== false) {
       const ext = typeof opts.fontSize === "object" ? FontSize.configure(opts.fontSize) : FontSize;
       items.push(...ext.resolve().toolbarItems);
+    }
+    if (opts.list !== false) {
+      items.push(...List.resolve().toolbarItems);
     }
 
     return items;

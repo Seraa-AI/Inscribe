@@ -25,6 +25,10 @@ export interface LayoutBlock {
   align: BlockStyle["align"];
   /** Available width — renderer needs this to compute alignment offsets */
   availableWidth: number;
+  /** Bullet character or ordered number string (e.g. "•", "1."). Present on list item blocks only. */
+  listMarker?: string;
+  /** Absolute x position to draw the list marker — to the left of the indented text. */
+  listMarkerX?: number;
 }
 
 export interface BlockLayoutOptions {
@@ -176,6 +180,7 @@ export function layoutBlock(node: Node, options: BlockLayoutOptions): LayoutBloc
     blockType: node.type.name,
     align: blockStyle.align,
     availableWidth,
+    // listMarker and listMarkerX are set by layoutDocument for list items
   };
 }
 

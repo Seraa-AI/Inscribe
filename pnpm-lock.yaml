@@ -26,16 +26,16 @@ importers:
 
   apps/demo:
     dependencies:
-      '@canvas-editor/core':
+      '@inscribe/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@canvas-editor/export':
+      '@inscribe/export':
         specifier: workspace:*
         version: link:../../packages/export
-      '@canvas-editor/plugins':
+      '@inscribe/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
-      '@canvas-editor/react':
+      '@inscribe/react':
         specifier: workspace:*
         version: link:../../packages/react
       react:
@@ -75,6 +75,9 @@ importers:
       prosemirror-model:
         specifier: ^1.25.4
         version: 1.25.4
+      prosemirror-schema-list:
+        specifier: ^1.5.1
+        version: 1.5.1
       prosemirror-state:
         specifier: ^1.4.4
         version: 1.4.4
@@ -91,7 +94,7 @@ importers:
 
   packages/export:
     dependencies:
-      '@canvas-editor/core':
+      '@inscribe/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -104,7 +107,7 @@ importers:
 
   packages/plugins:
     dependencies:
-      '@canvas-editor/core':
+      '@inscribe/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -117,7 +120,7 @@ importers:
 
   packages/react:
     dependencies:
-      '@canvas-editor/core':
+      '@inscribe/core':
         specifier: workspace:*
         version: link:../core
       react:
@@ -1172,6 +1175,9 @@ packages:
 
   prosemirror-model@1.25.4:
     resolution: {integrity: sha512-PIM7E43PBxKce8OQeezAs9j4TP+5yDpZVbuurd1h5phUxEKIu+G2a+EUZzIC5nS1mJktDJWzbqS23n1tsAf5QA==}
+
+  prosemirror-schema-list@1.5.1:
+    resolution: {integrity: sha512-927lFx/uwyQaGwJxLWCZRkjXG0p48KpMj6ueoYiu4JX05GGuGcgzAy62dfiV8eFZftgyBUvLx76RsMe20fJl+Q==}
 
   prosemirror-state@1.4.4:
     resolution: {integrity: sha512-6jiYHH2CIGbCfnxdHbXZ12gySFY/fz/ulZE333G6bPqIZ4F+TXo9ifiR86nAHpWnfoNjOb3o5ESi7J8Uz1jXHw==}
@@ -2346,6 +2352,12 @@ snapshots:
   prosemirror-model@1.25.4:
     dependencies:
       orderedmap: 2.1.1
+
+  prosemirror-schema-list@1.5.1:
+    dependencies:
+      prosemirror-model: 1.25.4
+      prosemirror-state: 1.4.4
+      prosemirror-transform: 1.11.0
 
   prosemirror-state@1.4.4:
     dependencies:

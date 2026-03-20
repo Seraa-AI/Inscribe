@@ -368,6 +368,83 @@ describe("Editor — heading commands", () => {
   });
 });
 
+// ── List commands ─────────────────────────────────────────────────────────────
+
+describe("Editor — list commands", () => {
+  it("toggleBulletList wraps a paragraph into a bullet list", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["toggleBulletList"]?.();
+    expect(editor.getBlockInfo().blockType).toBe("bulletList");
+    expect(editor.getState().doc.textContent).toBe("Hello");
+    cleanup();
+  });
+
+  it("toggleBulletList a second time removes the list (toggle off)", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["toggleBulletList"]?.();
+    editor.commands["toggleBulletList"]?.();
+    expect(editor.getBlockInfo().blockType).toBe("paragraph");
+    expect(editor.getState().doc.textContent).toBe("Hello");
+    cleanup();
+  });
+
+  it("toggleOrderedList wraps a paragraph into an ordered list", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["toggleOrderedList"]?.();
+    expect(editor.getBlockInfo().blockType).toBe("orderedList");
+    cleanup();
+  });
+
+  it("toggleOrderedList a second time removes the list (toggle off)", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["toggleOrderedList"]?.();
+    editor.commands["toggleOrderedList"]?.();
+    expect(editor.getBlockInfo().blockType).toBe("paragraph");
+    cleanup();
+  });
+
+  it("toggleOrderedList while in a bullet list converts to ordered list", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["toggleBulletList"]?.();
+    expect(editor.getBlockInfo().blockType).toBe("bulletList");
+    editor.commands["toggleOrderedList"]?.();
+    expect(editor.getBlockInfo().blockType).toBe("orderedList");
+    expect(editor.getState().doc.textContent).toBe("Hello");
+    cleanup();
+  });
+
+  it("toggleBulletList while in an ordered list converts to bullet list", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["toggleOrderedList"]?.();
+    editor.commands["toggleBulletList"]?.();
+    expect(editor.getBlockInfo().blockType).toBe("bulletList");
+    cleanup();
+  });
+
+  it("getBlockInfo returns bulletList when cursor is inside a bullet list", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["toggleBulletList"]?.();
+    expect(editor.getBlockInfo().blockType).toBe("bulletList");
+    cleanup();
+  });
+
+  it("getBlockInfo returns paragraph after list is removed", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["toggleBulletList"]?.();
+    editor.commands["toggleBulletList"]?.();
+    expect(editor.getBlockInfo().blockType).toBe("paragraph");
+    cleanup();
+  });
+});
+
 // ── Underline / Strikethrough ─────────────────────────────────────────────────
 
 describe("Editor — underline and strikethrough", () => {
@@ -437,6 +514,111 @@ describe("Editor — underline and strikethrough", () => {
     editor.setSelection(1, 6);
     editor.commands["toggleStrikethrough"]?.();
     expect(editor.getActiveMarks()).not.toContain("strikethrough");
+    cleanup();
+  });
+});
+
+// ── keyboard event dispatch ───────────────────────────────────────────────────
+// These tests guard against regressions where a keymap command runs but
+// e.preventDefault() is not called, causing the browser's default textarea
+// behaviour to also fire (e.g. Enter inserts "\n" as text, Tab shifts focus).
+
+describe("Editor — keyboard event handling", () => {
+  /** Fire a keydown on the textarea and return the event (so callers can
+   *  check .defaultPrevented). */
+  function pressKey(
+    container: HTMLElement,
+    key: string,
+    opts: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean } = {}
+  ): KeyboardEvent {
+    const ta = container.querySelector("textarea")!;
+    const event = new KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ...opts,
+    });
+    ta.dispatchEvent(event);
+    return event;
+  }
+
+  it("Enter inside a list calls splitListItem and prevents default", () => {
+    const { editor, type, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+
+    editor.commands["toggleBulletList"]?.();
+    type("Hello");
+
+    const docBefore = editor.getState().doc.toString();
+    const event = pressKey(container, "Enter");
+
+    // Default must be prevented — no "\n" leaks into handleInput
+    expect(event.defaultPrevented).toBe(true);
+    // List item was split — doc structure changed
+    expect(editor.getState().doc.toString()).not.toBe(docBefore);
+    // textContent must still be "Hello", not "Hello\n"
+    expect(editor.getState().doc.textContent).toBe("Hello");
+    cleanup();
+  });
+
+  it("Enter outside a list prevents default and does not insert newline text", () => {
+    const { editor, type, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    type("Hello");
+
+    const event = pressKey(container, "Enter");
+
+    // splitBlock is registered — default must be prevented
+    expect(event.defaultPrevented).toBe(true);
+    // No literal "\n" must appear in the document text
+    expect(editor.getState().doc.textContent).not.toContain("\n");
+    cleanup();
+  });
+
+  it("Tab is always prevented regardless of context (never shifts browser focus)", () => {
+    const { editor, type, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    type("Hello");
+
+    const event = pressKey(container, "Tab");
+    expect(event.defaultPrevented).toBe(true);
+    cleanup();
+  });
+
+  it("Tab outside a list is prevented and inserts no text", () => {
+    const { editor, type, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    type("Hello");
+
+    pressKey(container, "Tab");
+    // No tab character must appear in the document
+    expect(editor.getState().doc.textContent).toBe("Hello");
+    cleanup();
+  });
+
+  it("Tab inside a list is prevented and inserts no text", () => {
+    const { editor, type, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+
+    editor.commands["toggleBulletList"]?.();
+    type("Item 1");
+    pressKey(container, "Enter");
+    type("Item 2");
+
+    const event = pressKey(container, "Tab");
+    expect(event.defaultPrevented).toBe(true);
+    // No tab character must appear in the document
+    expect(editor.getState().doc.textContent).not.toContain("\t");
+    cleanup();
+  });
+
+  it("Shift-Tab is always prevented", () => {
+    const { editor, type, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    type("Hello");
+
+    const event = pressKey(container, "Tab", { shiftKey: true });
+    expect(event.defaultPrevented).toBe(true);
     cleanup();
   });
 });

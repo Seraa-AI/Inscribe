@@ -14,3 +14,4 @@ export { resolveFont } from "./StyleResolver";
 export { BlockRegistry } from "./BlockRegistry";
 export type { BlockStrategy, BlockRenderContext } from "./BlockRegistry";
 export { TextBlockStrategy } from "./TextBlockStrategy";
+export { ListItemStrategy } from "./ListItemStrategy";

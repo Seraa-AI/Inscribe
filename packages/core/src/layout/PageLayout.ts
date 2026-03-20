@@ -74,15 +74,24 @@ export function layoutDocument(
   let y = margins.top;
   let prevSpaceAfter = 0;
 
-  doc.forEach((node, offset) => {
+  /**
+   * Collect the flat sequence of layoutable items from the doc.
+   * List container nodes (bulletList, orderedList) are expanded into their
+   * individual list item paragraphs so each item is a separate LayoutBlock.
+   */
+  const items = collectLayoutItems(doc, fontConfig);
+
+  for (const item of items) {
     // ── Hard page break ──────────────────────────────────────────────────────
-    if (node.type.name === "page_break") {
+    if (item.isPageBreak) {
       pages.push(currentPage);
       currentPage = newPage(pages.length + 1);
       y = margins.top;
       prevSpaceAfter = 0;
-      return;
+      continue;
     }
+
+    const { node, nodePos, listMarker, indentLeft } = item;
 
     // ── Margin collapsing ────────────────────────────────────────────────────
     const level = node.attrs["level"] as number | undefined;
@@ -93,13 +102,15 @@ export function layoutDocument(
       : collapseMargins(prevSpaceAfter, blockStyle.spaceBefore);
 
     const targetY = y + gap;
+    const blockX = margins.left + indentLeft;
+    const blockWidth = contentWidth - indentLeft;
 
     // ── Measure block (no CharacterMap — just dimensions) ────────────────────
     const block = layoutBlock(node, {
-      nodePos: offset,
-      x: margins.left,
+      nodePos,
+      x: blockX,
       y: targetY,
-      availableWidth: contentWidth,
+      availableWidth: blockWidth,
       page: currentPage.pageNumber,
       measurer,
       fontConfig,
@@ -107,12 +118,17 @@ export function layoutDocument(
       // map intentionally omitted — PageRenderer populates it
     });
 
+    if (listMarker !== undefined) {
+      const markerX = blockX - MARKER_RIGHT_GAP;
+      block.listMarker = listMarker;
+      block.listMarkerX = markerX;
+      block.blockType = "list_item";
+    }
+
     // ── Page overflow check ───────────────────────────────────────────────────
     const blockBottom = targetY + block.height;
     const pageBottom = margins.top + contentHeight;
     const overflows = blockBottom > pageBottom && !isFirstOnPage;
-
-    // A block taller than a full page must still be placed — never skip.
     const tooTallForAnyPage = block.height > contentHeight;
 
     if (overflows && !tooTallForAnyPage) {
@@ -122,17 +138,22 @@ export function layoutDocument(
       y = margins.top;
       prevSpaceAfter = 0;
 
-      // Re-layout at the top of the new page
       const reflow = layoutBlock(node, {
-        nodePos: offset,
-        x: margins.left,
+        nodePos,
+        x: blockX,
         y: margins.top,
-        availableWidth: contentWidth,
+        availableWidth: blockWidth,
         page: currentPage.pageNumber,
         measurer,
         fontConfig,
         ...(fontModifiers ? { fontModifiers } : {}),
       });
+
+      if (listMarker !== undefined) {
+        reflow.listMarker = listMarker;
+        reflow.listMarkerX = blockX - MARKER_RIGHT_GAP;
+        reflow.blockType = "list_item";
+      }
 
       currentPage.blocks.push(reflow);
       y = margins.top + reflow.height;
@@ -143,7 +164,7 @@ export function layoutDocument(
       y = targetY + block.height;
       prevSpaceAfter = block.spaceAfter;
     }
-  });
+  }
 
   // Flush last page (always — even if empty, so there's at least one page)
   pages.push(currentPage);
@@ -155,6 +176,65 @@ export function layoutDocument(
 
 function newPage(pageNumber: number): LayoutPage {
   return { pageNumber, blocks: [] };
+}
+
+/** A single item ready for layout — either a plain block or an expanded list item. */
+interface LayoutItem {
+  isPageBreak?: true;
+  node: Node;
+  nodePos: number;
+  /** Extra left indent in px (0 for regular blocks, LIST_INDENT for list items). */
+  indentLeft: number;
+  /** Bullet character or ordered number, e.g. "•" or "1.". Undefined for non-list blocks. */
+  listMarker?: string;
+}
+
+const LIST_INDENT = 24;  // px — text starts this far right of the margin
+const MARKER_RIGHT_GAP = 6;  // px — gap between the marker's right edge and the text
+
+/**
+ * Walks the doc's top-level children and returns a flat array of layout items.
+ * List container nodes (bulletList, orderedList) are expanded into one item
+ * per list item so each renders as an independent LayoutBlock.
+ */
+function collectLayoutItems(doc: Node, _fontConfig: FontConfig): LayoutItem[] {
+  const items: LayoutItem[] = [];
+
+  doc.forEach((node, offset) => {
+    if (node.type.name === "page_break") {
+      items.push({ isPageBreak: true, node, nodePos: offset, indentLeft: 0 });
+      return;
+    }
+
+    if (node.type.name === "bulletList" || node.type.name === "orderedList") {
+      const isBullet = node.type.name === "bulletList";
+      let itemIndex = node.attrs["order"] as number ?? 1;
+
+      node.forEach((listItem, liOffset) => {
+        // nodePos of the paragraph inside this listItem:
+        // offset (before bulletList) + 1 (into bulletList) + liOffset (before listItem) + 1 (into listItem)
+        const paraNodePos = offset + 1 + liOffset + 1;
+        const para = listItem.firstChild;
+        if (!para) return;
+
+        const marker = isBullet ? "•" : `${itemIndex}.`;
+
+        items.push({
+          node: para,
+          nodePos: paraNodePos,
+          indentLeft: LIST_INDENT,
+          listMarker: marker,
+        });
+
+        itemIndex++;
+      });
+      return;
+    }
+
+    items.push({ node, nodePos: offset, indentLeft: 0 });
+  });
+
+  return items;
 }
 
 /**

@@ -364,6 +364,18 @@ export class Editor {
 
   getBlockInfo(): { blockType: string; blockAttrs: Record<string, unknown> } {
     const { $from } = this.state.selection;
+    // Walk up to the direct child of doc (depth 1) so container nodes like
+    // bulletList / orderedList are returned rather than their inner paragraph.
+    // This lets toolbar isActive correctly detect "we are inside a bullet list".
+    for (let d = 1; d <= $from.depth; d++) {
+      const node = $from.node(d);
+      if (node.isBlock && d === 1) {
+        return {
+          blockType: node.type.name,
+          blockAttrs: node.attrs as Record<string, unknown>,
+        };
+      }
+    }
     return {
       blockType: $from.parent.type.name,
       blockAttrs: $from.parent.attrs as Record<string, unknown>,
@@ -554,6 +566,8 @@ export class Editor {
       e.preventDefault();
       return;
     }
+    // Tab must always be captured so the browser never shifts focus away.
+    if (e.key === "Tab") e.preventDefault();
     // Then document-level commands declared by extensions via addKeymap().
     if (this.tryKeymapCommand(e)) {
       e.preventDefault();
