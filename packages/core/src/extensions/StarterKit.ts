@@ -12,6 +12,7 @@ import { Highlight } from "./built-in/Highlight";
 import { Color } from "./built-in/Color";
 import { FontSize } from "./built-in/FontSize";
 import { List } from "./built-in/List";
+import { Alignment } from "./built-in/Alignment";
 import type { Command } from "prosemirror-state";
 import type { NodeSpec, MarkSpec } from "prosemirror-model";
 import type { FontModifier, MarkDecorator, ToolbarItemSpec } from "./types";
@@ -32,6 +33,7 @@ interface StarterKitOptions {
   color?: false | { colors?: string[] };
   fontSize?: false | { sizes?: number[] };
   list?: false;
+  alignment?: false;
 }
 
 /**
@@ -140,6 +142,9 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     if (opts.list !== false) {
       Object.assign(km, List.resolve(this.schema).keymap);
     }
+    if (opts.alignment !== false) {
+      Object.assign(km, Alignment.resolve(this.schema).keymap);
+    }
     if (opts.underline !== false) {
       Object.assign(km, Underline.resolve(this.schema).keymap);
     }
@@ -194,6 +199,9 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     }
     if (opts.list !== false) {
       Object.assign(cmds, List.resolve(this.schema).commands);
+    }
+    if (opts.alignment !== false) {
+      Object.assign(cmds, Alignment.resolve(this.schema).commands);
     }
 
     return cmds;
@@ -282,6 +290,9 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     if (opts.heading !== false) {
       const ext = typeof opts.heading === "object" ? Heading.configure(opts.heading) : Heading;
       items.push(...ext.resolve().toolbarItems);
+    }
+    if (opts.alignment !== false) {
+      items.push(...Alignment.resolve().toolbarItems);
     }
     if (opts.bold !== false) {
       const ext = typeof opts.bold === "object" ? Bold.configure(opts.bold) : Bold;

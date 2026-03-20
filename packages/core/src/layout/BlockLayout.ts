@@ -88,6 +88,15 @@ export function layoutBlock(node: Node, options: BlockLayoutOptions): LayoutBloc
   const level = node.attrs["level"] as number | undefined;
   const blockStyle = getBlockStyle(fontConfig, node.type.name, level);
 
+  // Per-node alignment attr overrides the static BlockStyle default.
+  // Guards against garbage values — only the four known align strings are accepted.
+  const VALID_ALIGNS = new Set(["left", "center", "right", "justify"]);
+  const rawAlign = node.attrs["align"];
+  const resolvedAlign: BlockStyle["align"] =
+    (typeof rawAlign === "string" && VALID_ALIGNS.has(rawAlign))
+      ? (rawAlign as BlockStyle["align"])
+      : blockStyle.align;
+
   // ── 1. Extract spans ──────────────────────────────────────────────────────
   const spans = extractSpans(node, nodePos, blockStyle.font, fontConfig, fontModifiers);
 
@@ -121,7 +130,7 @@ export function layoutBlock(node: Node, options: BlockLayoutOptions): LayoutBloc
       // Alignment offset — critical: without this, click positions are wrong
       // for centered/right-aligned text
       const lineOffsetX = computeAlignmentOffset(
-        blockStyle.align,
+        resolvedAlign,
         availableWidth,
         line.width
       );
@@ -178,7 +187,7 @@ export function layoutBlock(node: Node, options: BlockLayoutOptions): LayoutBloc
     spaceBefore: blockStyle.spaceBefore,
     spaceAfter: blockStyle.spaceAfter,
     blockType: node.type.name,
-    align: blockStyle.align,
+    align: resolvedAlign,
     availableWidth,
     // listMarker and listMarkerX are set by layoutDocument for list items
   };

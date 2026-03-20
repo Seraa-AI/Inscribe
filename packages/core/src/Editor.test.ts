@@ -445,6 +445,55 @@ describe("Editor — list commands", () => {
   });
 });
 
+// ── Alignment commands ────────────────────────────────────────────────────────
+
+describe("Editor — alignment commands", () => {
+  it("setAlignCenter changes paragraph align attr to center", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["setAlignCenter"]?.();
+    expect(editor.getBlockInfo().blockAttrs["align"]).toBe("center");
+    cleanup();
+  });
+
+  it("setAlignRight changes paragraph align attr to right", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["setAlignRight"]?.();
+    expect(editor.getBlockInfo().blockAttrs["align"]).toBe("right");
+    cleanup();
+  });
+
+  it("setAlignLeft restores default alignment", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["setAlignCenter"]?.();
+    editor.commands["setAlignLeft"]?.();
+    expect(editor.getBlockInfo().blockAttrs["align"]).toBe("left");
+    cleanup();
+  });
+
+  it("setAlignCenter preserves heading level attr", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["setHeading2"]?.();
+    editor.commands["setAlignCenter"]?.();
+    const info = editor.getBlockInfo();
+    expect(info.blockType).toBe("heading");
+    expect(info.blockAttrs["level"]).toBe(2);
+    expect(info.blockAttrs["align"]).toBe("center");
+    cleanup();
+  });
+
+  it("setAlignJustify sets align to justify", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["setAlignJustify"]?.();
+    expect(editor.getBlockInfo().blockAttrs["align"]).toBe("justify");
+    cleanup();
+  });
+});
+
 // ── Underline / Strikethrough ─────────────────────────────────────────────────
 
 describe("Editor — underline and strikethrough", () => {

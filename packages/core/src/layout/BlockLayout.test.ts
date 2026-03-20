@@ -252,3 +252,53 @@ describe("layoutBlock — CharacterMap", () => {
     expect(coords?.x).toBeCloseTo(192);
   });
 });
+
+// ── Node attr alignment ───────────────────────────────────────────────────────
+
+describe("layoutBlock — node attr alignment", () => {
+  it("node align attr overrides FontConfig align", () => {
+    // FontConfig says left, node attr says center — node attr wins
+    const node = schema.nodes["paragraph"]!.create({ align: "center" }, schema.text("Hi"));
+    const block = layoutBlock(node, {
+      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: measurer(),
+    });
+    expect(block.align).toBe("center");
+  });
+
+  it("falls back to FontConfig align when node has no align attr", () => {
+    // list_item paragraph has no align attr — falls back to blockStyle
+    const node = schema.nodes["paragraph"]!.create(null, schema.text("Hi"));
+    const block = layoutBlock(node, {
+      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: measurer(),
+    });
+    // defaultFontConfig paragraph.align is "left"
+    expect(block.align).toBe("left");
+  });
+
+  it("node align right is respected", () => {
+    const node = schema.nodes["paragraph"]!.create({ align: "right" }, schema.text("Hi"));
+    const block = layoutBlock(node, {
+      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: measurer(),
+    });
+    expect(block.align).toBe("right");
+  });
+
+  it("CharacterMap glyph x is offset for center alignment from node attr", () => {
+    const map = new CharacterMap();
+    const node = schema.nodes["paragraph"]!.create({ align: "center" }, schema.text("Hi"));
+    layoutBlock(node, {
+      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: measurer(), map,
+    });
+    // "Hi" = 2 chars × 8px = 16px wide. Center offset = (400 - 16) / 2 = 192
+    const coords = map.coordsAtPos(1);
+    expect(coords?.x).toBeCloseTo(192);
+  });
+
+  it("ignores invalid align attr values and falls back to FontConfig", () => {
+    const node = schema.nodes["paragraph"]!.create({ align: "garbage" }, schema.text("Hi"));
+    const block = layoutBlock(node, {
+      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: measurer(),
+    });
+    expect(block.align).toBe("left");
+  });
+});

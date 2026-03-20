@@ -14,6 +14,8 @@ export { Underline } from "./built-in/Underline";
 export { Strikethrough } from "./built-in/Strikethrough";
 export { Color } from "./built-in/Color";
 export { FontSize } from "./built-in/FontSize";
+export { Alignment } from "./built-in/Alignment";
+export { List } from "./built-in/List";
 
 export type {
   ExtensionConfig,
