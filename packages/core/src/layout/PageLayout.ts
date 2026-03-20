@@ -2,7 +2,6 @@ import { Node } from "prosemirror-model";
 import { TextMeasurer } from "./TextMeasurer";
 import { FontConfig, defaultFontConfig, getBlockStyle } from "./FontConfig";
 import { layoutBlock, LayoutBlock } from "./BlockLayout";
-import { layoutTable } from "./TableLayout";
 
 export interface PageConfig {
   pageWidth: number;
@@ -107,28 +106,17 @@ export function layoutDocument(
     const blockWidth = contentWidth - indentLeft;
 
     // ── Measure block (no CharacterMap — just dimensions) ────────────────────
-    const block = node.type.name === "table"
-      ? layoutTable(node, {
-          nodePos,
-          x: blockX,
-          y: targetY,
-          availableWidth: blockWidth,
-          page: currentPage.pageNumber,
-          measurer,
-          fontConfig,
-          ...(fontModifiers ? { fontModifiers } : {}),
-        })
-      : layoutBlock(node, {
-          nodePos,
-          x: blockX,
-          y: targetY,
-          availableWidth: blockWidth,
-          page: currentPage.pageNumber,
-          measurer,
-          fontConfig,
-          ...(fontModifiers ? { fontModifiers } : {}),
-          // map intentionally omitted — PageRenderer populates it
-        });
+    const block = layoutBlock(node, {
+      nodePos,
+      x: blockX,
+      y: targetY,
+      availableWidth: blockWidth,
+      page: currentPage.pageNumber,
+      measurer,
+      fontConfig,
+      ...(fontModifiers ? { fontModifiers } : {}),
+      // map intentionally omitted — PageRenderer populates it
+    });
 
     if (listMarker !== undefined) {
       const markerX = blockX - MARKER_RIGHT_GAP;
@@ -150,27 +138,16 @@ export function layoutDocument(
       y = margins.top;
       prevSpaceAfter = 0;
 
-      const reflow = node.type.name === "table"
-        ? layoutTable(node, {
-            nodePos,
-            x: blockX,
-            y: margins.top,
-            availableWidth: blockWidth,
-            page: currentPage.pageNumber,
-            measurer,
-            fontConfig,
-            ...(fontModifiers ? { fontModifiers } : {}),
-          })
-        : layoutBlock(node, {
-            nodePos,
-            x: blockX,
-            y: margins.top,
-            availableWidth: blockWidth,
-            page: currentPage.pageNumber,
-            measurer,
-            fontConfig,
-            ...(fontModifiers ? { fontModifiers } : {}),
-          });
+      const reflow = layoutBlock(node, {
+        nodePos,
+        x: blockX,
+        y: margins.top,
+        availableWidth: blockWidth,
+        page: currentPage.pageNumber,
+        measurer,
+        fontConfig,
+        ...(fontModifiers ? { fontModifiers } : {}),
+      });
 
       if (listMarker !== undefined) {
         reflow.listMarker = listMarker;

@@ -16,7 +16,6 @@ import { Alignment } from "./built-in/Alignment";
 import { CodeBlock, insertCodeIndent } from "./built-in/CodeBlock";
 import { HorizontalRule } from "./built-in/HorizontalRule";
 import { Typography } from "./built-in/Typography";
-import { Table } from "./built-in/Table";
 import { chainCommands } from "prosemirror-commands";
 import type { InputRule } from "prosemirror-inputrules";
 import type { Command } from "prosemirror-state";
@@ -43,7 +42,6 @@ interface StarterKitOptions {
   codeBlock?: false;
   horizontalRule?: false;
   typography?: false;
-  table?: false;
 }
 
 /**
@@ -82,9 +80,6 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     }
     if (opts.horizontalRule !== false) {
       Object.assign(nodes, HorizontalRule.resolve().nodes);
-    }
-    if (opts.table !== false) {
-      Object.assign(nodes, Table.resolve().nodes);
     }
 
     return nodes;
@@ -158,25 +153,15 @@ export const StarterKit = Extension.create<StarterKitOptions>({
       const ext = typeof opts.heading === "object" ? Heading.configure(opts.heading) : Heading;
       Object.assign(km, ext.resolve(this.schema).keymap);
     }
-    // Tab: chain table (next cell) → codeBlock (spaces) → list (indent)
+    // Tab: chain codeBlock (spaces) → list (indent)
     {
       const tabCmds: Command[] = [];
-      if (opts.table !== false) {
-        const tableKm = Table.resolve(this.schema).keymap;
-        if (tableKm["Tab"]) tabCmds.push(tableKm["Tab"]);
-      }
       if (opts.codeBlock !== false) tabCmds.push(insertCodeIndent());
       if (opts.list !== false) {
         const listTab = List.resolve(this.schema).keymap["Tab"];
         if (listTab) tabCmds.push(listTab);
       }
       if (tabCmds.length > 0) km["Tab"] = chainCommands(...tabCmds);
-
-      // Shift-Tab: table prev cell
-      if (opts.table !== false) {
-        const tableKm = Table.resolve(this.schema).keymap;
-        if (tableKm["Shift-Tab"]) km["Shift-Tab"] = tableKm["Shift-Tab"];
-      }
     }
 
     // Merge remaining List keymaps except Tab (already handled above)
@@ -256,9 +241,6 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     if (opts.horizontalRule !== false) {
       Object.assign(cmds, HorizontalRule.resolve(this.schema).commands);
     }
-    if (opts.table !== false) {
-      Object.assign(cmds, Table.resolve(this.schema).commands);
-    }
 
     return cmds;
   },
@@ -326,9 +308,6 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     if (opts.horizontalRule !== false) {
       Object.assign(handlers, HorizontalRule.resolve().layoutHandlers);
     }
-    if (opts.table !== false) {
-      Object.assign(handlers, Table.resolve().layoutHandlers);
-    }
     return handlers;
   },
 
@@ -350,9 +329,6 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     }
     if (opts.horizontalRule !== false) {
       Object.assign(styles, HorizontalRule.resolve().blockStyles);
-    }
-    if (opts.table !== false) {
-      Object.assign(styles, Table.resolve().blockStyles);
     }
     return styles;
   },
@@ -402,9 +378,6 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     }
     if (opts.horizontalRule !== false) {
       items.push(...HorizontalRule.resolve().toolbarItems);
-    }
-    if (opts.table !== false) {
-      items.push(...Table.resolve().toolbarItems);
     }
 
     return items;
@@ -495,7 +468,6 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     if (opts.list !== false) merge(List.resolve().markdownSerializerRules);
     if (opts.codeBlock !== false) merge(CodeBlock.resolve().markdownSerializerRules);
     if (opts.horizontalRule !== false) merge(HorizontalRule.resolve().markdownSerializerRules);
-    if (opts.table !== false) merge(Table.resolve().markdownSerializerRules);
 
     return { nodes, marks };
   },
