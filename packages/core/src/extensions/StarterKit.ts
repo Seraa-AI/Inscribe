@@ -5,8 +5,10 @@ import { Heading } from "./built-in/Heading";
 import { Bold } from "./built-in/Bold";
 import { Italic } from "./built-in/Italic";
 import { History } from "./built-in/History";
+import { BaseEditing } from "./built-in/BaseEditing";
 import type { Command } from "prosemirror-state";
 import type { NodeSpec, MarkSpec } from "prosemirror-model";
+import type { FontModifier, ToolbarItemSpec } from "./types";
 
 interface StarterKitOptions {
   /** Pass false to exclude this extension entirely */
@@ -78,6 +80,9 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     const km: Record<string, Command> = {};
     const opts = this.options;
 
+    // BaseEditing is always included — Backspace + Delete are not optional
+    Object.assign(km, BaseEditing.resolve(this.schema).keymap);
+
     if (opts.paragraph !== false) {
       Object.assign(km, Paragraph.resolve(this.schema).keymap);
     }
@@ -115,5 +120,42 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     }
 
     return cmds;
+  },
+
+  addInputHandlers() {
+    // BaseEditing is always included — arrow keys are not optional
+    return BaseEditing.resolve().inputHandlers;
+  },
+
+  addFontModifiers() {
+    const map = new Map<string, FontModifier>();
+    const opts = this.options;
+
+    if (opts.bold !== false) {
+      const ext = typeof opts.bold === "object" ? Bold.configure(opts.bold) : Bold;
+      for (const [k, v] of ext.resolve().fontModifiers) map.set(k, v);
+    }
+    if (opts.italic !== false) {
+      const ext = typeof opts.italic === "object" ? Italic.configure(opts.italic) : Italic;
+      for (const [k, v] of ext.resolve().fontModifiers) map.set(k, v);
+    }
+
+    return map;
+  },
+
+  addToolbarItems() {
+    const items: ToolbarItemSpec[] = [];
+    const opts = this.options;
+
+    if (opts.bold !== false) {
+      const ext = typeof opts.bold === "object" ? Bold.configure(opts.bold) : Bold;
+      items.push(...ext.resolve().toolbarItems);
+    }
+    if (opts.italic !== false) {
+      const ext = typeof opts.italic === "object" ? Italic.configure(opts.italic) : Italic;
+      items.push(...ext.resolve().toolbarItems);
+    }
+
+    return items;
   },
 });

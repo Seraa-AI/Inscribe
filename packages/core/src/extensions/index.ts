@@ -17,4 +17,6 @@ export type {
   ResolvedExtension,
   MarkDecorator,
   SpanRect,
+  FontModifier,
+  ToolbarItemSpec,
 } from "./types";

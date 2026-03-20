@@ -46,6 +46,8 @@ export interface BlockLayoutOptions {
    * PageLayout increments this counter as it stacks blocks.
    */
   lineIndexOffset?: number;
+  /** Mark name → font modifier. When provided, resolveFont uses it instead of the built-in switch. */
+  fontModifiers?: Map<string, import("../extensions/types").FontModifier>;
 }
 
 /**
@@ -73,6 +75,7 @@ export function layoutBlock(node: Node, options: BlockLayoutOptions): LayoutBloc
     measurer,
     map,
     lineIndexOffset = 0,
+    fontModifiers,
   } = options;
 
   const fontConfig = options.fontConfig ?? defaultFontConfig;
@@ -80,7 +83,7 @@ export function layoutBlock(node: Node, options: BlockLayoutOptions): LayoutBloc
   const blockStyle = getBlockStyle(fontConfig, node.type.name, level);
 
   // ── 1. Extract spans ──────────────────────────────────────────────────────
-  const spans = extractSpans(node, nodePos, blockStyle.font, fontConfig);
+  const spans = extractSpans(node, nodePos, blockStyle.font, fontConfig, fontModifiers);
 
   // ── 2. Empty node fallback ────────────────────────────────────────────────
   // An empty paragraph has no spans. We create a virtual zero-width-space span
@@ -187,14 +190,15 @@ function extractSpans(
   node: Node,
   nodePos: number,
   baseFont: string,
-  _fontConfig: FontConfig
+  _fontConfig: FontConfig,
+  fontModifiers?: Map<string, import("../extensions/types").FontModifier>
 ): InputSpan[] {
   const spans: InputSpan[] = [];
 
   node.forEach((child, offset) => {
     if (!child.isText || !child.text) return;
 
-    const font = resolveFont(baseFont, child.marks);
+    const font = resolveFont(baseFont, child.marks, fontModifiers);
     spans.push({
       text: child.text,
       font,

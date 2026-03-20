@@ -33,6 +33,8 @@ export interface PageLayoutOptions {
    * Defaults to 1 on first layout.
    */
   previousVersion?: number;
+  /** Optional font modifier map from the ExtensionManager. Enables extensions to declare font effects. */
+  fontModifiers?: Map<string, import("../extensions/types").FontModifier>;
 }
 
 /** A4 at 96dpi with 1-inch margins */
@@ -60,6 +62,7 @@ export function layoutDocument(
 ): DocumentLayout {
   const { pageConfig, measurer } = options;
   const fontConfig = options.fontConfig ?? defaultFontConfig;
+  const { fontModifiers } = options;
   const version = (options.previousVersion ?? 0) + 1;
 
   const { pageWidth, pageHeight, margins } = pageConfig;
@@ -100,6 +103,7 @@ export function layoutDocument(
       page: currentPage.pageNumber,
       measurer,
       fontConfig,
+      ...(fontModifiers ? { fontModifiers } : {}),
       // map intentionally omitted — PageRenderer populates it
     });
 
@@ -127,6 +131,7 @@ export function layoutDocument(
         page: currentPage.pageNumber,
         measurer,
         fontConfig,
+        ...(fontModifiers ? { fontModifiers } : {}),
       });
 
       currentPage.blocks.push(reflow);

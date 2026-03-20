@@ -4,7 +4,7 @@ import { keymap } from "prosemirror-keymap";
 import type { Plugin, Command } from "prosemirror-state";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import type { Extension } from "./Extension";
-import type { MarkDecorator, ResolvedExtension } from "./types";
+import type { MarkDecorator, ResolvedExtension, FontModifier, ToolbarItemSpec, InputHandler } from "./types";
 
 /**
  * ExtensionManager — orchestrates all registered extensions.
@@ -72,18 +72,26 @@ export class ExtensionManager {
    */
   buildPlugins(): Plugin[] {
     const plugins: Plugin[] = [];
-    const mergedKeymap: Record<string, Command> = {};
-
     for (const ext of this.resolved) {
       plugins.push(...ext.plugins);
-      Object.assign(mergedKeymap, ext.keymap);
     }
-
-    if (Object.keys(mergedKeymap).length > 0) {
-      plugins.push(keymap(mergedKeymap));
+    const km = this.buildKeymap();
+    if (Object.keys(km).length > 0) {
+      plugins.push(keymap(km));
     }
-
     return plugins;
+  }
+
+  /**
+   * Returns the merged keymap from all extensions.
+   * Used by the Editor to dispatch key events without a ProseMirror EditorView.
+   */
+  buildKeymap(): Record<string, Command> {
+    const merged: Record<string, Command> = {};
+    for (const ext of this.resolved) {
+      Object.assign(merged, ext.keymap);
+    }
+    return merged;
   }
 
   // ── Commands ───────────────────────────────────────────────────────────────
@@ -133,5 +141,38 @@ export class ExtensionManager {
       }
     }
     return decorators;
+  }
+
+  /**
+   * Returns a map of mark name → FontModifier from all extensions.
+   * Pass this to layoutDocument so resolveFont uses extension-declared modifiers.
+   */
+  buildFontModifiers(): Map<string, FontModifier> {
+    const merged = new Map<string, FontModifier>();
+    for (const ext of this.resolved) {
+      for (const [name, modifier] of ext.fontModifiers) {
+        merged.set(name, modifier);
+      }
+    }
+    return merged;
+  }
+
+  /**
+   * Returns all toolbar item specs from all extensions, in registration order.
+   */
+  buildToolbarItems(): ToolbarItemSpec[] {
+    return this.resolved.flatMap((ext) => ext.toolbarItems);
+  }
+
+  /**
+   * Returns the merged input handler map from all extensions.
+   * Later extensions override earlier ones on key conflicts.
+   */
+  buildInputHandlers(): Record<string, InputHandler> {
+    const merged: Record<string, InputHandler> = {};
+    for (const ext of this.resolved) {
+      Object.assign(merged, ext.inputHandlers);
+    }
+    return merged;
   }
 }

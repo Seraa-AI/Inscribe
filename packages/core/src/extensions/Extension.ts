@@ -77,6 +77,9 @@ export class Extension<Options extends object = object> {
       // Phase 3/4: options available, no schema needed
       layoutHandler: config.addLayoutHandler?.call(p1) ?? null,
       markDecorators: new Map(Object.entries(config.addMarkDecorators?.call(p1) ?? {})),
+      fontModifiers: config.addFontModifiers?.call(p1) ?? new Map(),
+      toolbarItems: config.addToolbarItems?.call(p1) ?? [],
+      inputHandlers: config.addInputHandlers?.call(p1) ?? {},
     };
   }
 }

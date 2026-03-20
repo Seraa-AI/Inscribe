@@ -16,6 +16,28 @@
 import type { NodeSpec, MarkSpec, Schema } from "prosemirror-model";
 import type { Command, Plugin } from "prosemirror-state";
 import type { BlockStrategy } from "../layout/BlockRegistry";
+import type { ParsedFont } from "../layout/StyleResolver";
+
+/**
+ * Declares how a mark extension modifies the CSS font string.
+ * Called by resolveFont for each mark on a text node.
+ */
+export type FontModifier = (parsed: ParsedFont, attrs: Record<string, unknown>) => void;
+
+/**
+ * Describes a toolbar button declared by an extension.
+ * Core data only — no React, no DOM.
+ */
+export interface ToolbarItemSpec {
+  /** The command name to call on editor.commands */
+  command: string;
+  /** Display content, e.g. "B" or "I" */
+  label: string;
+  /** Tooltip text, e.g. "Bold (⌘B)" */
+  title: string;
+  /** Returns true when this item should appear active/pressed */
+  isActive: (activeMarks: string[]) => boolean;
+}
 
 // ── Mark decorator ─────────────────────────────────────────────────────────────
 
@@ -48,6 +70,26 @@ export interface MarkDecorator {
   decoratePre?(ctx: CanvasRenderingContext2D, rect: SpanRect): void;
   decoratePost?(ctx: CanvasRenderingContext2D, rect: SpanRect): void;
 }
+
+// ── Input handler ─────────────────────────────────────────────────────────────
+
+/**
+ * Narrow interface for editor-level navigation.
+ * Extensions import this instead of the full Editor class to avoid circular deps.
+ */
+export interface EditorNavigator {
+  moveLeft(extend?: boolean): void;
+  moveRight(extend?: boolean): void;
+  moveUp(extend?: boolean): void;
+  moveDown(extend?: boolean): void;
+}
+
+/**
+ * Handler for an editor-level key event.
+ * Receives a navigator (the Editor) and the raw KeyboardEvent.
+ * Return true when handled — the caller will preventDefault().
+ */
+export type InputHandler = (nav: EditorNavigator, e: KeyboardEvent) => boolean;
 
 // ── Extension context ─────────────────────────────────────────────────────────
 
@@ -132,6 +174,32 @@ export interface ExtensionConfig<Options = object> {
    * changing the font string. Use decorators for visual-only effects.
    */
   addMarkDecorators?(this: Phase1Context<Options>): Record<string, MarkDecorator>;
+
+  /**
+   * Declares how this extension's marks modify the font string.
+   * Keys are mark type names, values are FontModifier functions.
+   *
+   * Only implement for mark extensions that affect text metrics (bold, italic,
+   * font size, font family). Visual-only effects use addMarkDecorators instead.
+   */
+  addFontModifiers?(this: Phase1Context<Options>): Map<string, FontModifier>;
+
+  /**
+   * Toolbar buttons this extension contributes.
+   * Data only — the UI layer renders them however it wants.
+   */
+  addToolbarItems?(this: Phase1Context<Options>): ToolbarItemSpec[];
+
+  /**
+   * Editor-level input handlers — for keys that need access to the editor
+   * instance rather than just the ProseMirror state.
+   *
+   * Use this for navigation (arrow keys, Home/End) where visual line positions
+   * from CharacterMap are needed. For document mutations, use addKeymap() instead.
+   *
+   * Return true to indicate the key was handled (prevents default + stops propagation).
+   */
+  addInputHandlers?(this: Phase1Context<Options>): Record<string, InputHandler>;
 }
 
 // ── Resolved extension (internal — produced by Extension.resolve()) ───────────
@@ -145,4 +213,7 @@ export interface ResolvedExtension {
   commands: Record<string, (...args: unknown[]) => Command>;
   layoutHandler: BlockStrategy | null;
   markDecorators: Map<string, MarkDecorator>;
+  fontModifiers: Map<string, FontModifier>;
+  toolbarItems: ToolbarItemSpec[];
+  inputHandlers: Record<string, InputHandler>;
 }

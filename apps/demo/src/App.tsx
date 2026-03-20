@@ -8,7 +8,7 @@ import {
   layoutDocument,
   defaultPageConfig,
 } from "@canvas-editor/core";
-import type { EditorState, SelectionSnapshot } from "@canvas-editor/core";
+import type { EditorState, SelectionSnapshot, ToolbarItemSpec } from "@canvas-editor/core";
 import { PageView } from "./PageView";
 import { Toolbar } from "./Toolbar";
 import { useVirtualPages } from "./useVirtualPages";
@@ -25,9 +25,12 @@ const charMap = new CharacterMap();
 
 // Initial layout — use the same schema that the Editor will build
 const _initManager = new ExtensionManager(extensions);
+const _fontModifiers = _initManager.buildFontModifiers();
+const _toolbarItems: ToolbarItemSpec[] = _initManager.buildToolbarItems();
 const initialLayout = layoutDocument(_initManager.createState().doc, {
   pageConfig: defaultPageConfig,
   measurer,
+  fontModifiers: _fontModifiers,
   previousVersion: 0,
 });
 
@@ -54,6 +57,7 @@ export function App() {
     const next = layoutDocument(state.doc, {
       pageConfig: defaultPageConfig,
       measurer,
+      fontModifiers: _fontModifiers,
       previousVersion: versionRef.current,
     });
     versionRef.current = next.version;
@@ -130,9 +134,9 @@ export function App() {
       </header>
 
       <Toolbar
+        items={_toolbarItems}
         activeMarks={selection.activeMarks}
-        onToggleBold={() => editorRef.current?.commands["toggleBold"]?.()}
-        onToggleItalic={() => editorRef.current?.commands["toggleItalic"]?.()}
+        onCommand={(cmd) => editorRef.current?.commands[cmd]?.()}
       />
 
       <div style={styles.body}>

@@ -1,5 +1,7 @@
 import { toggleMark } from "prosemirror-commands";
 import { Extension } from "../Extension";
+import type { ParsedFont } from "../../layout/StyleResolver";
+import type { FontModifier } from "../types";
 
 interface ItalicOptions {
   shortcut: boolean;
@@ -36,5 +38,20 @@ export const Italic = Extension.create<ItalicOptions>({
     return {
       toggleItalic: () => toggleMark(this.schema.marks["italic"]!),
     };
+  },
+
+  addFontModifiers() {
+    return new Map<string, FontModifier>([
+      ["italic", (parsed: ParsedFont) => { parsed.style = "italic"; }],
+    ]);
+  },
+
+  addToolbarItems() {
+    return [{
+      command: "toggleItalic",
+      label: "I",
+      title: "Italic (⌘I)",
+      isActive: (marks: string[]) => marks.includes("italic"),
+    }];
   },
 });

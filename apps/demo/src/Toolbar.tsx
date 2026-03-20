@@ -1,38 +1,35 @@
+import type { ToolbarItemSpec } from "@canvas-editor/core";
+
 interface ToolbarProps {
+  items: ToolbarItemSpec[];
   activeMarks: string[];
-  onToggleBold: () => void;
-  onToggleItalic: () => void;
+  onCommand: (cmd: string) => void;
 }
 
 /**
- * Toolbar — bold / italic toggle buttons.
+ * Toolbar — data-driven toolbar buttons contributed by extensions.
  *
  * Uses onMouseDown + e.preventDefault() so clicks do NOT blur the hidden
  * textarea. Without preventDefault the textarea would lose focus, the
  * blink timer would stop, and keyboard input would stop working.
  */
-export function Toolbar({ activeMarks, onToggleBold, onToggleItalic }: ToolbarProps) {
-  const boldActive = activeMarks.includes("bold");
-  const italicActive = activeMarks.includes("italic");
-
+export function Toolbar({ items, activeMarks, onCommand }: ToolbarProps) {
   return (
     <div style={styles.bar}>
-      <button
-        style={{ ...styles.btn, ...(boldActive ? styles.btnActive : {}) }}
-        onMouseDown={(e) => { e.preventDefault(); onToggleBold(); }}
-        title="Bold (⌘B)"
-        aria-pressed={boldActive}
-      >
-        <strong>B</strong>
-      </button>
-      <button
-        style={{ ...styles.btn, ...(italicActive ? styles.btnActive : {}) }}
-        onMouseDown={(e) => { e.preventDefault(); onToggleItalic(); }}
-        title="Italic (⌘I)"
-        aria-pressed={italicActive}
-      >
-        <em>I</em>
-      </button>
+      {items.map((item) => {
+        const active = item.isActive(activeMarks);
+        return (
+          <button
+            key={item.command}
+            style={{ ...styles.btn, ...(active ? styles.btnActive : {}) }}
+            onMouseDown={(e) => { e.preventDefault(); onCommand(item.command); }}
+            title={item.title}
+            aria-pressed={active}
+          >
+            {item.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -62,7 +59,7 @@ const styles = {
   },
   btnActive: {
     background: "#dbeafe",
-    borderColor: "#3b82f6",
+    border: "1px solid #3b82f6",
     color: "#1d4ed8",
   },
 } as const;

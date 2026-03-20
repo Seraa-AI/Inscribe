@@ -1,16 +1,35 @@
 import { EditorState, Transaction, TextSelection } from "prosemirror-state";
+import type { Command } from "prosemirror-state";
+import type { InputHandler } from "./extensions/types";
 import type { Schema } from "prosemirror-model";
 import { ExtensionManager } from "./extensions/ExtensionManager";
 import { StarterKit } from "./extensions/StarterKit";
 import type { Extension } from "./extensions/Extension";
 import { CursorManager } from "./renderer/CursorManager";
 import { CharacterMap } from "./layout/CharacterMap";
-import {
-  insertText,
-  deleteBackward,
-  deleteForward,
-  splitBlock,
-} from "./model/commands";
+import { insertText } from "./model/commands";
+
+/**
+ * Convert a DOM KeyboardEvent into a ProseMirror key string.
+ *
+ * Format: [Mod-][Alt-][Shift-]key
+ *   - "Mod" = Cmd on Mac, Ctrl on Windows/Linux
+ *   - Single-character keys are lowercased (Shift is already in the prefix)
+ *   - Special keys keep their DOM name: "Enter", "Backspace", "Delete", "Tab"
+ *
+ * Examples: Cmd+B → "Mod-b", Cmd+Shift+Z → "Mod-Shift-z", Enter → "Enter"
+ */
+function keyEventToString(e: KeyboardEvent): string {
+  let key = e.key;
+  let prefix = "";
+  if (e.metaKey || e.ctrlKey) prefix += "Mod-";
+  if (e.altKey)  prefix += "Alt-";
+  if (e.shiftKey) prefix += "Shift-";
+  // Single-character keys: lowercase so "Mod-b" matches whether or not Shift
+  // is also held (e.g. Cmd+Shift+Z gives e.key="Z" — we want "Mod-Shift-z").
+  if (key.length === 1) key = key.toLowerCase();
+  return prefix + key;
+}
 
 export type EditorChangeHandler = (state: EditorState) => void;
 
@@ -107,6 +126,11 @@ export class Editor {
    */
   readonly commands: Record<string, (...args: unknown[]) => void>;
 
+  /** Merged keymap from all extensions — consulted on every keydown. */
+  private readonly keymap: Record<string, Command>;
+  /** Merged input handlers from all extensions — consulted before the keymap. */
+  private readonly inputHandlers: Record<string, InputHandler>;
+
   constructor({ extensions = [StarterKit], onChange, onFocusChange, onCursorTick, charMap }: EditorOptions) {
     this.manager = new ExtensionManager(extensions);
     this.onChange = onChange;
@@ -121,6 +145,8 @@ export class Editor {
       plugins: this.manager.buildPlugins(),
     });
 
+    this.keymap = this.manager.buildKeymap();
+    this.inputHandlers = this.manager.buildInputHandlers();
     this.commands = this.buildCommands();
   }
 
@@ -370,77 +396,16 @@ export class Editor {
   };
 
   private handleKeydown = (e: KeyboardEvent): void => {
-    const mod = e.metaKey || e.ctrlKey;
-
-    if (e.key === "ArrowLeft") {
+    // Input handlers first — editor-level actions (navigation, etc.)
+    // declared by extensions via addInputHandlers().
+    if (this.tryInputHandler(e)) {
       e.preventDefault();
-      this.moveLeft(e.shiftKey);
       return;
     }
-
-    if (e.key === "ArrowRight") {
+    // Then document-level commands declared by extensions via addKeymap().
+    if (this.tryKeymapCommand(e)) {
       e.preventDefault();
-      this.moveRight(e.shiftKey);
-      return;
-    }
-
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      this.moveUp(e.shiftKey);
-      return;
-    }
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      this.moveDown(e.shiftKey);
-      return;
-    }
-
-    if (mod && e.key === "b") {
-      e.preventDefault();
-      this.commands["toggleBold"]?.();
-      return;
-    }
-
-    if (mod && e.key === "i") {
-      e.preventDefault();
-      this.commands["toggleItalic"]?.();
-      return;
-    }
-
-    if (mod && e.key === "z" && !e.shiftKey) {
-      e.preventDefault();
-      this.commands["undo"]?.();
       this.clearTextarea();
-      return;
-    }
-
-    if (mod && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
-      e.preventDefault();
-      this.commands["redo"]?.();
-      this.clearTextarea();
-      return;
-    }
-
-    if (e.key === "Backspace") {
-      e.preventDefault();
-      this.dispatch(deleteBackward(this.state));
-      this.clearTextarea();
-      return;
-    }
-
-    if (e.key === "Delete") {
-      e.preventDefault();
-      this.dispatch(deleteForward(this.state));
-      this.clearTextarea();
-      return;
-    }
-
-    if (e.key === "Enter") {
-      e.preventDefault();
-      this.dispatch(splitBlock(this.state));
-      this.clearTextarea();
-      return;
     }
   };
 
@@ -458,6 +423,27 @@ export class Editor {
     this.dispatch(insertText(this.state, text));
     this.clearTextarea();
   };
+
+  /**
+   * Look up the key event in the extension input handlers and run it if found.
+   * Returns true when a handler was executed.
+   */
+  private tryInputHandler(e: KeyboardEvent): boolean {
+    const handler = this.inputHandlers[e.key];
+    if (!handler) return false;
+    return handler(this, e);
+  }
+
+  /**
+   * Look up the key event in the extension keymap and run the command if found.
+   * Returns true when a command was executed (so the caller can preventDefault).
+   */
+  private tryKeymapCommand(e: KeyboardEvent): boolean {
+    const key = keyEventToString(e);
+    const cmd = this.keymap[key];
+    if (!cmd) return false;
+    return cmd(this.state, (tr) => this.dispatch(tr));
+  }
 
   private handlePaste = (e: ClipboardEvent): void => {
     e.preventDefault();

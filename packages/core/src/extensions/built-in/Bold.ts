@@ -1,5 +1,7 @@
 import { toggleMark } from "prosemirror-commands";
 import { Extension } from "../Extension";
+import type { ParsedFont } from "../../layout/StyleResolver";
+import type { FontModifier } from "../types";
 
 interface BoldOptions {
   /** Set to false to disable Mod-b shortcut. Default: true */
@@ -44,5 +46,20 @@ export const Bold = Extension.create<BoldOptions>({
     return {
       toggleBold: () => toggleMark(this.schema.marks["bold"]!),
     };
+  },
+
+  addFontModifiers() {
+    return new Map<string, FontModifier>([
+      ["bold", (parsed: ParsedFont) => { parsed.weight = "bold"; }],
+    ]);
+  },
+
+  addToolbarItems() {
+    return [{
+      command: "toggleBold",
+      label: "B",
+      title: "Bold (⌘B)",
+      isActive: (marks: string[]) => marks.includes("bold"),
+    }];
   },
 });
