@@ -105,4 +105,13 @@ export const Highlight = Extension.create<HighlightOptions>({
       highlight: decorator,
     };
   },
+
+  addToolbarItems() {
+    return [{
+      command: "toggleHighlight",
+      label: "H",
+      title: "Highlight (⌘⇧H)",
+      isActive: (marks: string[]) => marks.includes("highlight"),
+    }];
+  },
 });

@@ -1,6 +1,6 @@
 import { EditorState, Transaction, TextSelection } from "prosemirror-state";
 import type { Command } from "prosemirror-state";
-import type { InputHandler } from "./extensions/types";
+import type { InputHandler, FontModifier, MarkDecorator, ToolbarItemSpec } from "./extensions/types";
 import type { Schema } from "prosemirror-model";
 import { ExtensionManager } from "./extensions/ExtensionManager";
 import { StarterKit } from "./extensions/StarterKit";
@@ -25,6 +25,15 @@ function keyEventToString(e: KeyboardEvent): string {
   if (e.metaKey || e.ctrlKey) prefix += "Mod-";
   if (e.altKey)  prefix += "Alt-";
   if (e.shiftKey) prefix += "Shift-";
+
+  // On macOS, Option (Alt) transforms e.key into special characters
+  // (e.g. Option+1 → "¡", Option+b → "∫"). When that happens, fall back to
+  // e.code so that Mod-Alt-1 and similar bindings resolve correctly.
+  if (e.altKey && key.length === 1 && !/^[a-zA-Z0-9]$/.test(key)) {
+    if (e.code.startsWith("Digit")) key = e.code.slice(5);      // "Digit1" → "1"
+    else if (e.code.startsWith("Key")) key = e.code.slice(3);   // "KeyB"   → "B"
+  }
+
   // Single-character keys: lowercase so "Mod-b" matches whether or not Shift
   // is also held (e.g. Cmd+Shift+Z gives e.key="Z" — we want "Mod-Shift-z").
   if (key.length === 1) key = key.toLowerCase();
@@ -54,6 +63,15 @@ export interface SelectionSnapshot {
    * Use this to show toolbar button active states without importing ProseMirror.
    */
   activeMarks: string[];
+  /**
+   * Attributes of each active mark, keyed by mark name.
+   * e.g. { color: { color: "#dc2626" }, font_size: { size: 18 } }
+   */
+  activeMarkAttrs: Record<string, Record<string, unknown>>;
+  /** The ProseMirror node type name of the block containing the cursor: "paragraph", "heading", etc. */
+  blockType: string;
+  /** Attributes of that block node — e.g. { level: 1, align: "left" } for a heading */
+  blockAttrs: Record<string, unknown>;
 }
 
 export interface EditorOptions {
@@ -62,7 +80,11 @@ export interface EditorOptions {
    * Defaults to [StarterKit] — paragraph, heading, bold, italic, history.
    */
   extensions?: Extension[];
-  onChange: EditorChangeHandler;
+  /**
+   * Called on every state change. Optional when using the React adapter —
+   * the Canvas component subscribes internally via editor.subscribe().
+   */
+  onChange?: EditorChangeHandler;
   /**
    * Called when the editor gains or loses focus.
    * Use this to show/hide the cursor overlay.
@@ -112,12 +134,34 @@ export class Editor {
   private state: EditorState;
   private textarea: HTMLTextAreaElement | null = null;
   private container: HTMLElement | null = null;
-  private readonly onChange: EditorChangeHandler;
+  private readonly onChange: EditorChangeHandler | undefined;
   private readonly onFocusChange: ((focused: boolean) => void) | undefined;
   private readonly charMap: CharacterMap | undefined;
 
+  /** Subscriber set — notified on every state change, focus change, and cursor tick. */
+  private readonly listeners = new Set<() => void>();
+  private _isFocused = false;
+
   /** Owns the cursor blink timer. Public so adapters can read isVisible. */
   readonly cursorManager: CursorManager;
+
+  /**
+   * Font modifier map built from all extensions.
+   * Pass to layoutDocument — computed once at construction.
+   */
+  readonly fontModifiers: Map<string, FontModifier>;
+
+  /**
+   * Mark decorator map built from all extensions.
+   * Pass to renderPage — computed once at construction.
+   */
+  readonly markDecorators: Map<string, MarkDecorator>;
+
+  /**
+   * Toolbar item specs from all extensions, in registration order.
+   * Data-only — no React. Computed once at construction.
+   */
+  readonly toolbarItems: ToolbarItemSpec[];
 
   /**
    * Bound command map — each entry calls the extension command with the
@@ -136,8 +180,12 @@ export class Editor {
     this.onChange = onChange;
     this.onFocusChange = onFocusChange;
     this.charMap = charMap;
+    this.fontModifiers = this.manager.buildFontModifiers();
+    this.markDecorators = this.manager.buildMarkDecorators();
+    this.toolbarItems = this.manager.buildToolbarItems();
     this.cursorManager = new CursorManager(() => {
       onCursorTick?.(this.cursorManager.isVisible);
+      this.notifyListeners();
     });
 
     this.state = EditorState.create({
@@ -275,6 +323,93 @@ export class Editor {
     });
   }
 
+  /**
+   * Attributes of each active mark at the current cursor/selection.
+   * Keys are mark names; values are the mark's attrs object.
+   * For a range selection, only marks active across the entire range are included.
+   */
+  getActiveMarkAttrs(): Record<string, Record<string, unknown>> {
+    const { selection, storedMarks } = this.state;
+    const { from, to, empty } = selection;
+    const result: Record<string, Record<string, unknown>> = {};
+
+    if (empty) {
+      const marks = storedMarks ?? selection.$from.marks();
+      for (const mark of marks) {
+        result[mark.type.name] = mark.attrs as Record<string, unknown>;
+      }
+    } else {
+      for (const name of this.getActiveMarks()) {
+        const markType = this.schema.marks[name]!;
+        // Collect attrs from the first text node that has this mark
+        this.state.doc.nodesBetween(from, to, (node) => {
+          if (node.isText && !(name in result)) {
+            const found = markType.isInSet(node.marks);
+            if (found) result[name] = found.attrs as Record<string, unknown>;
+          }
+        });
+      }
+    }
+
+    return result;
+  }
+
+  getBlockInfo(): { blockType: string; blockAttrs: Record<string, unknown> } {
+    const { $from } = this.state.selection;
+    return {
+      blockType: $from.parent.type.name,
+      blockAttrs: $from.parent.attrs as Record<string, unknown>,
+    };
+  }
+
+  /** Whether the editor's textarea currently has focus. */
+  get isFocused(): boolean {
+    return this._isFocused;
+  }
+
+  /**
+   * Subscribe to all editor notifications: state changes, focus, cursor ticks.
+   * Returns an unsubscribe function. Used by useSyncExternalStore in React adapters.
+   *
+   * @example
+   * const unsubscribe = editor.subscribe(() => forceUpdate());
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * Returns the current ProseMirror EditorState.
+   * ProseMirror states are immutable — reference equality detects changes.
+   * Used as the getSnapshot function for useSyncExternalStore.
+   */
+  getSnapshot(): EditorState {
+    return this.state;
+  }
+
+  /**
+   * Returns true when the named mark or block type is active at the cursor.
+   * Mirrors TipTap's editor.isActive() — same call signature.
+   *
+   * @example
+   * editor.isActive('bold')               // mark active?
+   * editor.isActive('heading', { level: 1 }) // h1 active?
+   */
+  isActive(name: string, attrs?: Record<string, unknown>): boolean {
+    if (this.schema.marks[name]) {
+      const active = this.getActiveMarks().includes(name);
+      if (!active || !attrs) return active;
+      const ma = this.getActiveMarkAttrs()[name];
+      if (!ma) return false;
+      return Object.entries(attrs).every(([k, v]) => ma[k] === v);
+    }
+    const { blockType, blockAttrs } = this.getBlockInfo();
+    if (blockType !== name) return false;
+    if (!attrs) return true;
+    return Object.entries(attrs).every(([k, v]) => blockAttrs[k] === v);
+  }
+
   /** Move down one line preserving x. Pass extend=true for Shift+↓. */
   moveDown(extend = false): void {
     if (!this.charMap) return;
@@ -306,11 +441,16 @@ export class Editor {
     );
   }
 
+  private notifyListeners(): void {
+    this.listeners.forEach((l) => l());
+  }
+
   private dispatch(tr: Transaction | null): void {
     if (!tr) return;
     this.state = this.state.apply(tr);
     this.cursorManager.reset();
-    this.onChange(this.state);
+    this.notifyListeners();
+    this.onChange?.(this.state);
   }
 
   /**
@@ -386,12 +526,16 @@ export class Editor {
   }
 
   private handleFocus = (): void => {
+    this._isFocused = true;
     this.cursorManager.start();
+    this.notifyListeners();
     this.onFocusChange?.(true);
   };
 
   private handleBlur = (): void => {
+    this._isFocused = false;
     this.cursorManager.stop();
+    this.notifyListeners();
     this.onFocusChange?.(false);
   };
 

@@ -335,3 +335,108 @@ describe("Editor — CursorManager", () => {
     cleanup();
   });
 });
+
+// ── Heading commands ─────────────────────────────────────────────────────────
+
+describe("Editor — heading commands", () => {
+  it("setHeading1 converts the current paragraph to h1", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["setHeading1"]?.();
+    const info = editor.getBlockInfo();
+    expect(info.blockType).toBe("heading");
+    expect(info.blockAttrs["level"]).toBe(1);
+    cleanup();
+  });
+
+  it("setParagraph converts a heading back to paragraph", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.commands["setHeading1"]?.();
+    editor.commands["setParagraph"]?.();
+    const info = editor.getBlockInfo();
+    expect(info.blockType).toBe("paragraph");
+    cleanup();
+  });
+
+  it("getBlockInfo returns paragraph for plain text", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    const info = editor.getBlockInfo();
+    expect(info.blockType).toBe("paragraph");
+    cleanup();
+  });
+});
+
+// ── Underline / Strikethrough ─────────────────────────────────────────────────
+
+describe("Editor — underline and strikethrough", () => {
+  it("toggleUnderline adds underline mark", () => {
+    const { editor, cleanup } = makeEditor();
+    editor.commands["toggleUnderline"]?.();
+    expect(editor.getActiveMarks()).toContain("underline");
+    cleanup();
+  });
+
+  it("toggleStrikethrough adds strikethrough mark", () => {
+    const { editor, cleanup } = makeEditor();
+    editor.commands["toggleStrikethrough"]?.();
+    expect(editor.getActiveMarks()).toContain("strikethrough");
+    cleanup();
+  });
+
+  it("typing after toggleUnderline produces text with underline mark", () => {
+    const { editor, type, cleanup } = makeEditor();
+    editor.commands["toggleUnderline"]?.();
+    type("Hello");
+    let foundUnderline = false;
+    editor.getState().doc.descendants((node) => {
+      if (node.isText) {
+        if (node.marks.some((m) => m.type.name === "underline")) foundUnderline = true;
+      }
+    });
+    expect(foundUnderline).toBe(true);
+    cleanup();
+  });
+
+  it("typing after toggleStrikethrough produces text with strikethrough mark", () => {
+    const { editor, type, cleanup } = makeEditor();
+    editor.commands["toggleStrikethrough"]?.();
+    type("Hello");
+    let foundStrikethrough = false;
+    editor.getState().doc.descendants((node) => {
+      if (node.isText) {
+        if (node.marks.some((m) => m.type.name === "strikethrough")) foundStrikethrough = true;
+      }
+    });
+    expect(foundStrikethrough).toBe(true);
+    cleanup();
+  });
+
+  it("toggling underline on a selection marks all text nodes", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.setSelection(1, 6);
+    editor.commands["toggleUnderline"]?.();
+    let allUnderlined = true;
+    editor.getState().doc.descendants((node) => {
+      if (node.isText && node.text) {
+        if (!node.marks.some((m) => m.type.name === "underline")) allUnderlined = false;
+      }
+    });
+    expect(allUnderlined).toBe(true);
+    cleanup();
+  });
+
+  it("toggling strikethrough off removes the mark", () => {
+    const { editor, type, cleanup } = makeEditor();
+    type("Hello");
+    editor.setSelection(1, 6);
+    editor.commands["toggleStrikethrough"]?.();
+    // toggleStrikethrough again should remove it
+    editor.setSelection(1, 6);
+    editor.commands["toggleStrikethrough"]?.();
+    expect(editor.getActiveMarks()).not.toContain("strikethrough");
+    cleanup();
+  });
+});

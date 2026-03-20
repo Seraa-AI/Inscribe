@@ -203,6 +203,10 @@ function extractSpans(
       text: child.text,
       font,
       docPos: nodePos + 1 + offset,
+      marks: child.marks.map((m) => ({
+        name: m.type.name,
+        attrs: m.attrs as Record<string, unknown>,
+      })),
     });
   });
 

@@ -31,12 +31,24 @@ export type FontModifier = (parsed: ParsedFont, attrs: Record<string, unknown>) 
 export interface ToolbarItemSpec {
   /** The command name to call on editor.commands */
   command: string;
+  /** Extra arguments passed verbatim to the command when this item is activated */
+  args?: unknown[];
   /** Display content, e.g. "B" or "I" */
   label: string;
   /** Tooltip text, e.g. "Bold (⌘B)" */
   title: string;
-  /** Returns true when this item should appear active/pressed */
-  isActive: (activeMarks: string[]) => boolean;
+  /** Inline style applied to the label element — useful for color swatches */
+  labelStyle?: Record<string, string | number>;
+  /**
+   * Returns true when this item should appear active/pressed.
+   * The 4th param (activeMarkAttrs) is optional — existing 3-param functions still work.
+   */
+  isActive: (
+    activeMarks: string[],
+    blockType: string,
+    blockAttrs: Record<string, unknown>,
+    activeMarkAttrs?: Record<string, Record<string, unknown>>
+  ) => boolean;
 }
 
 // ── Mark decorator ─────────────────────────────────────────────────────────────
@@ -68,6 +80,13 @@ export interface SpanRect {
  */
 export interface MarkDecorator {
   decoratePre?(ctx: CanvasRenderingContext2D, rect: SpanRect): void;
+  /**
+   * Returns a CSS color string to use as fillStyle when drawing this span's text,
+   * or undefined to keep the default. Called after decoratePre, before fillText.
+   * Multiple marks on the same span may implement this; the last non-undefined
+   * value wins.
+   */
+  decorateFill?(rect: SpanRect): string | undefined;
   decoratePost?(ctx: CanvasRenderingContext2D, rect: SpanRect): void;
 }
 

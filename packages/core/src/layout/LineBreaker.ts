@@ -10,6 +10,8 @@ export interface InputSpan {
   font: string;
   /** ProseMirror doc position of the first character in this span */
   docPos: number;
+  /** Mark info for canvas decorators (underline, strikethrough, highlight) */
+  marks?: Array<{ name: string; attrs: Record<string, unknown> }>;
 }
 
 /**
@@ -23,6 +25,7 @@ export interface LayoutSpan {
   width: number;
   /** ProseMirror doc position of the first character */
   docPos: number;
+  marks?: Array<{ name: string; attrs: Record<string, unknown> }>;
 }
 
 export interface LayoutLine {
@@ -106,6 +109,7 @@ export class LineBreaker {
         x: currentWidth,
         width: wordWidth,
         docPos: word.docPos,
+        ...(word.marks !== undefined ? { marks: word.marks } : {}),
       });
 
       currentWidth += wordWidth;
@@ -147,6 +151,7 @@ export class LineBreaker {
         text: word.text.slice(start, end),
         font: word.font,
         docPos: word.docPos + start,
+        ...(word.marks !== undefined ? { marks: word.marks } : {}),
       });
       start = end;
     }
@@ -210,6 +215,7 @@ interface Token {
   text: string;
   font: string;
   docPos: number;
+  marks?: Array<{ name: string; attrs: Record<string, unknown> }>;
 }
 
 /**
@@ -238,6 +244,7 @@ function tokenise(spans: InputSpan[]): Token[] {
         text: part,
         font: span.font,
         docPos: span.docPos + offset,
+        ...(span.marks !== undefined ? { marks: span.marks } : {}),
       });
       offset += part.length;
     }

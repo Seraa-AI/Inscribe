@@ -7,12 +7,12 @@ import {
   CharacterMap,
   layoutDocument,
   defaultPageConfig,
-} from "@canvas-editor/core";
-import type { EditorState, SelectionSnapshot, ToolbarItemSpec } from "@canvas-editor/core";
+} from "@inscribe/core";
+import type { EditorState, SelectionSnapshot, ToolbarItemSpec } from "@inscribe/core";
 import { PageView } from "./PageView";
 import { Toolbar } from "./Toolbar";
 import { useVirtualPages } from "./useVirtualPages";
-import type { LayoutPage } from "@canvas-editor/core";
+import type { LayoutPage } from "@inscribe/core";
 
 const PAGE_GAP = 24;
 
@@ -27,6 +27,7 @@ const charMap = new CharacterMap();
 const _initManager = new ExtensionManager(extensions);
 const _fontModifiers = _initManager.buildFontModifiers();
 const _toolbarItems: ToolbarItemSpec[] = _initManager.buildToolbarItems();
+const _markDecorators = _initManager.buildMarkDecorators();
 const initialLayout = layoutDocument(_initManager.createState().doc, {
   pageConfig: defaultPageConfig,
   measurer,
@@ -43,6 +44,7 @@ export function App() {
   const [layout, setLayout] = useState(initialLayout);
   const [selection, setSelection] = useState<SelectionSnapshot>({
     anchor: 0, head: 0, from: 0, to: 0, empty: true, activeMarks: [],
+    activeMarkAttrs: {}, blockType: "paragraph", blockAttrs: {},
   });
   const [isFocused, setIsFocused] = useState(false);
   const [cursorVisible, setCursorVisible] = useState(true);
@@ -63,6 +65,7 @@ export function App() {
     versionRef.current = next.version;
     setLayout(next);
     const editor = editorRef.current;
+    const blockInfo = editor ? editor.getBlockInfo() : { blockType: "paragraph", blockAttrs: {} };
     setSelection({
       anchor: state.selection.anchor,
       head: state.selection.head,
@@ -70,6 +73,9 @@ export function App() {
       to: state.selection.to,
       empty: state.selection.empty,
       activeMarks: editor ? editor.getActiveMarks() : [],
+      activeMarkAttrs: editor ? editor.getActiveMarkAttrs() : {},
+      blockType: blockInfo.blockType,
+      blockAttrs: blockInfo.blockAttrs,
     });
   }, []);
 
@@ -127,7 +133,7 @@ export function App() {
   return (
     <div style={styles.shell}>
       <header style={styles.header}>
-        <span style={styles.title}>canvas-editor</span>
+        <span style={styles.title}>inscribe</span>
         <span style={styles.badge}>Phase 2 — interactive</span>
         <span style={styles.stat}>pages: {stats.pages}</span>
         <span style={styles.stat}>v{stats.version}</span>
@@ -136,7 +142,10 @@ export function App() {
       <Toolbar
         items={_toolbarItems}
         activeMarks={selection.activeMarks}
-        onCommand={(cmd) => editorRef.current?.commands[cmd]?.()}
+        activeMarkAttrs={selection.activeMarkAttrs}
+        blockType={selection.blockType}
+        blockAttrs={selection.blockAttrs}
+        onCommand={(cmd, args) => editorRef.current?.commands[cmd]?.(...(args ?? []))}
       />
 
       <div style={styles.body}>
@@ -156,6 +165,7 @@ export function App() {
                 currentVersion={getCurrentVersion}
                 measurer={measurer}
                 map={charMap}
+                markDecorators={_markDecorators}
                 isVisible={visiblePages.has(page.pageNumber)}
                 observeRef={observePage(page.pageNumber)}
                 gap={PAGE_GAP}

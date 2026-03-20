@@ -10,6 +10,10 @@ export { Bold } from "./built-in/Bold";
 export { Italic } from "./built-in/Italic";
 export { History } from "./built-in/History";
 export { Highlight } from "./built-in/Highlight";
+export { Underline } from "./built-in/Underline";
+export { Strikethrough } from "./built-in/Strikethrough";
+export { Color } from "./built-in/Color";
+export { FontSize } from "./built-in/FontSize";
 
 export type {
   ExtensionConfig,

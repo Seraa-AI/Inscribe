@@ -1,9 +1,12 @@
-import type { ToolbarItemSpec } from "@canvas-editor/core";
+import type { ToolbarItemSpec } from "@inscribe/core";
 
 interface ToolbarProps {
   items: ToolbarItemSpec[];
   activeMarks: string[];
-  onCommand: (cmd: string) => void;
+  activeMarkAttrs: Record<string, Record<string, unknown>>;
+  blockType: string;
+  blockAttrs: Record<string, unknown>;
+  onCommand: (cmd: string, args?: unknown[]) => void;
 }
 
 /**
@@ -13,20 +16,20 @@ interface ToolbarProps {
  * textarea. Without preventDefault the textarea would lose focus, the
  * blink timer would stop, and keyboard input would stop working.
  */
-export function Toolbar({ items, activeMarks, onCommand }: ToolbarProps) {
+export function Toolbar({ items, activeMarks, activeMarkAttrs, blockType, blockAttrs, onCommand }: ToolbarProps) {
   return (
     <div style={styles.bar}>
       {items.map((item) => {
-        const active = item.isActive(activeMarks);
+        const active = item.isActive(activeMarks, blockType, blockAttrs, activeMarkAttrs);
         return (
           <button
-            key={item.command}
+            key={`${item.command}:${JSON.stringify(item.args)}`}
             style={{ ...styles.btn, ...(active ? styles.btnActive : {}) }}
-            onMouseDown={(e) => { e.preventDefault(); onCommand(item.command); }}
+            onMouseDown={(e) => { e.preventDefault(); onCommand(item.command, item.args); }}
             title={item.title}
             aria-pressed={active}
           >
-            {item.label}
+            <span style={item.labelStyle}>{item.label}</span>
           </button>
         );
       })}

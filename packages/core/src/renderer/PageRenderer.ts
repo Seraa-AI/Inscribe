@@ -3,6 +3,7 @@ import { LayoutBlock } from "../layout/BlockLayout";
 import { CharacterMap } from "../layout/CharacterMap";
 import { TextMeasurer } from "../layout/TextMeasurer";
 import { clearCanvas } from "./canvas";
+import type { MarkDecorator } from "../extensions/types";
 
 export interface RenderPageOptions {
   ctx: CanvasRenderingContext2D;
@@ -20,6 +21,8 @@ export interface RenderPageOptions {
   map: CharacterMap;
   /** Draw margin guides — useful during development */
   showMarginGuides?: boolean;
+  /** Mark decorators from extensions — draws underlines, strikethroughs, highlights */
+  markDecorators?: Map<string, MarkDecorator>;
 }
 
 /**
@@ -45,6 +48,7 @@ export function renderPage(options: RenderPageOptions): void {
     measurer,
     map,
     showMarginGuides = false,
+    markDecorators,
   } = options;
 
   const { pageWidth, pageHeight, margins } = pageConfig;
@@ -80,7 +84,7 @@ export function renderPage(options: RenderPageOptions): void {
   // and posAtCoords can't distinguish lines in different paragraphs.
   let lineIndexOffset = 0;
   for (const block of page.blocks) {
-    lineIndexOffset = drawBlock(ctx, block, measurer, map, page.pageNumber, lineIndexOffset);
+    lineIndexOffset = drawBlock(ctx, block, measurer, map, page.pageNumber, lineIndexOffset, markDecorators);
   }
 }
 
@@ -99,7 +103,8 @@ function drawBlock(
   measurer: TextMeasurer,
   map: CharacterMap,
   pageNumber: number,
-  lineIndexOffset: number
+  lineIndexOffset: number,
+  markDecorators?: Map<string, MarkDecorator>
 ): number {
   const contentWidth = block.availableWidth;
 
@@ -113,17 +118,53 @@ function drawBlock(
     const baseline = lineY + line.ascent;
 
     for (const span of line.spans) {
+      const spanX = block.x + lineOffsetX + span.x;
+      const run = measurer.measureRun(span.text, span.font);
+      const spanRect = {
+        x: spanX,
+        y: baseline,
+        width: run.totalWidth,
+        ascent: line.ascent,
+        descent: line.descent,
+        markAttrs: {} as Record<string, unknown>,
+      };
+
+      // decoratePre for all marks
+      if (markDecorators && span.marks) {
+        for (const markInfo of span.marks) {
+          const dec = markDecorators.get(markInfo.name);
+          if (dec?.decoratePre) dec.decoratePre(ctx, { ...spanRect, markAttrs: markInfo.attrs });
+        }
+      }
+
       ctx.font = span.font;
-      ctx.fillStyle = "#1e293b";
-      ctx.fillText(span.text, block.x + lineOffsetX + span.x, baseline);
+
+      // Allow marks to override text fill color (e.g. Color extension).
+      let fillColor = "#1e293b";
+      if (markDecorators && span.marks) {
+        for (const markInfo of span.marks) {
+          const dec = markDecorators.get(markInfo.name);
+          if (dec?.decorateFill) {
+            const override = dec.decorateFill({ ...spanRect, markAttrs: markInfo.attrs });
+            if (override !== undefined) fillColor = override;
+          }
+        }
+      }
+      ctx.fillStyle = fillColor;
+      ctx.fillText(span.text, spanX, baseline);
+
+      // decoratePost for all marks
+      if (markDecorators && span.marks) {
+        for (const markInfo of span.marks) {
+          const dec = markDecorators.get(markInfo.name);
+          if (dec?.decoratePost) dec.decoratePost(ctx, { ...spanRect, markAttrs: markInfo.attrs });
+        }
+      }
 
       // ── Populate CharacterMap (just-in-time, on first render of this page) ─
       if (!map.hasGlyph(span.docPos)) {
-        const run = measurer.measureRun(span.text, span.font);
-
         for (let ci = 0; ci < span.text.length; ci++) {
-          const charX =
-            block.x + lineOffsetX + span.x + run.charPositions[ci]!;
+          const charX = spanX + run.charPositions[ci]!;
           const charWidth =
             ci < span.text.length - 1
               ? run.charPositions[ci + 1]! - run.charPositions[ci]!

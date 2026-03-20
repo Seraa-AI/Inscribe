@@ -1,5 +1,5 @@
 {
-  "name": "@canvas-editor/demo",
+  "name": "@inscribe/demo",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -11,10 +11,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@canvas-editor/core": "workspace:*",
-    "@canvas-editor/plugins": "workspace:*",
-    "@canvas-editor/export": "workspace:*",
-    "@canvas-editor/react": "workspace:*",
+    "@inscribe/core": "workspace:*",
+    "@inscribe/plugins": "workspace:*",
+    "@inscribe/export": "workspace:*",
+    "@inscribe/react": "workspace:*",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },

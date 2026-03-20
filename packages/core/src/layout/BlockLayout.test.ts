@@ -37,6 +37,25 @@ function boldParagraph(text: string) {
   ]);
 }
 
+function underlineParagraph(text: string) {
+  return schema.node("paragraph", null, [
+    schema.text(text, [schema.marks["underline"]!.create()]),
+  ]);
+}
+
+function strikethroughParagraph(text: string) {
+  return schema.node("paragraph", null, [
+    schema.text(text, [schema.marks["strikethrough"]!.create()]),
+  ]);
+}
+
+function mixedParagraph(plain: string, underlined: string) {
+  return schema.node("paragraph", null, [
+    schema.text(plain),
+    schema.text(underlined, [schema.marks["underline"]!.create()]),
+  ]);
+}
+
 function heading(level: number, text: string) {
   return schema.node("heading", { level }, [schema.text(text)]);
 }
@@ -131,6 +150,61 @@ describe("layoutBlock — mark resolution", () => {
 
     const fontUsed = spy.mock.calls[0]?.[1];
     expect(fontUsed).toContain("bold");
+  });
+});
+
+// ── Mark propagation ──────────────────────────────────────────────────────────
+
+describe("layoutBlock — mark propagation to LayoutSpan", () => {
+  it("underline mark appears on layout spans", () => {
+    const block = layoutBlock(underlineParagraph("Hello"), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: measurer(),
+    });
+    const span = block.lines[0]?.spans[0];
+    expect(span?.marks).toBeDefined();
+    expect(span?.marks?.some((m) => m.name === "underline")).toBe(true);
+  });
+
+  it("strikethrough mark appears on layout spans", () => {
+    const block = layoutBlock(strikethroughParagraph("Hello"), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: measurer(),
+    });
+    const span = block.lines[0]?.spans[0];
+    expect(span?.marks?.some((m) => m.name === "strikethrough")).toBe(true);
+  });
+
+  it("plain text has empty marks array", () => {
+    const block = layoutBlock(paragraph("Hello"), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: measurer(),
+    });
+    const span = block.lines[0]?.spans[0];
+    expect(span?.marks).toHaveLength(0);
+  });
+
+  it("mixed paragraph: plain span has no underline, underlined span does", () => {
+    const block = layoutBlock(mixedParagraph("Hello ", "World"), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: measurer(),
+    });
+    // Two children → two spans on the line
+    const spans = block.lines[0]?.spans ?? [];
+    expect(spans.length).toBeGreaterThanOrEqual(2);
+    const plainSpan = spans.find((s) => s.text === "Hello ");
+    const underlinedSpan = spans.find((s) => s.text === "World");
+    expect(plainSpan?.marks?.some((m) => m.name === "underline")).toBe(false);
+    expect(underlinedSpan?.marks?.some((m) => m.name === "underline")).toBe(true);
+  });
+
+  it("marks survive word-wrap: multi-word underlined text passes marks to all spans", () => {
+    // "Hello world" with underline, narrow width forces a line break
+    const block = layoutBlock(underlineParagraph("Hello world"), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 80, page: 1, measurer: measurer(),
+    });
+    expect(block.lines.length).toBeGreaterThan(1);
+    for (const line of block.lines) {
+      for (const span of line.spans) {
+        expect(span.marks?.some((m) => m.name === "underline")).toBe(true);
+      }
+    }
   });
 });
 

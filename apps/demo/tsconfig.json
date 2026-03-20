@@ -4,10 +4,10 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "paths": {
-      "@canvas-editor/core": ["../../packages/core/src/index.ts"],
-      "@canvas-editor/plugins": ["../../packages/plugins/src/index.ts"],
-      "@canvas-editor/export": ["../../packages/export/src/index.ts"],
-      "@canvas-editor/react": ["../../packages/react/src/index.ts"]
+      "@inscribe/core": ["../../packages/core/src/index.ts"],
+      "@inscribe/plugins": ["../../packages/plugins/src/index.ts"],
+      "@inscribe/export": ["../../packages/export/src/index.ts"],
+      "@inscribe/react": ["../../packages/react/src/index.ts"]
     }
   },
   "include": ["src"]

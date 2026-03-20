@@ -1,16 +1,11 @@
+import { setBlockType } from "prosemirror-commands";
 import { Extension } from "../Extension";
+import type { ToolbarItemSpec } from "../types";
 
 interface HeadingOptions {
-  /** Which heading levels to support. Default: all six. */
   levels: number[];
 }
 
-/**
- * Heading — h1 through h6 block nodes.
- *
- * @example
- * Heading.configure({ levels: [1, 2, 3] })
- */
 export const Heading = Extension.create<HeadingOptions>({
   name: "heading",
 
@@ -35,5 +30,40 @@ export const Heading = Extension.create<HeadingOptions>({
         toDOM: (node) => [`h${node.attrs.level}`, 0],
       },
     };
+  },
+
+  addKeymap() {
+    const km: Record<string, ReturnType<typeof setBlockType>> = {};
+    for (const level of this.options.levels) {
+      km[`Mod-Alt-${level}`] = setBlockType(this.schema.nodes["heading"]!, { level });
+    }
+    km["Mod-Alt-0"] = setBlockType(this.schema.nodes["paragraph"]!);
+    return km;
+  },
+
+  addCommands() {
+    const cmds: Record<string, () => ReturnType<typeof setBlockType>> = {};
+    for (const level of this.options.levels) {
+      cmds[`setHeading${level}`] = () => setBlockType(this.schema.nodes["heading"]!, { level });
+    }
+    cmds["setParagraph"] = () => setBlockType(this.schema.nodes["paragraph"]!);
+    return cmds;
+  },
+
+  addToolbarItems(): ToolbarItemSpec[] {
+    const items: ToolbarItemSpec[] = this.options.levels.slice(0, 3).map((level) => ({
+      command: `setHeading${level}`,
+      label: `H${level}`,
+      title: `Heading ${level} (⌘⌥${level})`,
+      isActive: (_marks: string[], blockType: string, blockAttrs: Record<string, unknown>) =>
+        blockType === "heading" && blockAttrs["level"] === level,
+    }));
+    items.push({
+      command: "setParagraph",
+      label: "¶",
+      title: "Paragraph (⌘⌥0)",
+      isActive: (_marks: string[], blockType: string) => blockType === "paragraph",
+    });
+    return items;
   },
 });
