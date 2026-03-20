@@ -232,7 +232,7 @@ function extractSpans(
 
 /**
  * Computes the x offset to apply to a line for text alignment.
- * justify is not yet implemented — falls back to left.
+ * Justify uses per-space expansion (see computeJustifySpaceBonus) — returns 0 here.
  */
 export function computeAlignmentOffset(
   align: BlockStyle["align"],
@@ -249,6 +249,34 @@ export function computeAlignmentOffset(
     default:
       return 0;
   }
+}
+
+/**
+ * Returns the extra width added to each space character for justify alignment.
+ *
+ * The last line of a block stays left-aligned (standard CSS justify behaviour).
+ * Returns 0 for any other alignment or when there are no expandable spaces.
+ */
+export function computeJustifySpaceBonus(
+  align: BlockStyle["align"],
+  spans: LayoutLine["spans"],
+  availableWidth: number,
+  lineWidth: number,
+  isLastLine: boolean,
+): number {
+  if (align !== "justify" || isLastLine) return 0;
+  const extraSpace = availableWidth - lineWidth;
+  if (extraSpace <= 0) return 0;
+
+  let spaceCount = 0;
+  for (let si = 0; si < spans.length; si++) {
+    // Trailing spaces on the last span don't get expanded
+    const text = si === spans.length - 1 ? spans[si]!.text.trimEnd() : spans[si]!.text;
+    for (const ch of text) {
+      if (ch === " ") spaceCount++;
+    }
+  }
+  return spaceCount > 0 ? extraSpace / spaceCount : 0;
 }
 
 /**
@@ -273,11 +301,11 @@ export function populateCharMap(
   for (let li = 0; li < block.lines.length; li++) {
     const line = block.lines[li]!;
     const globalLineIndex = lineIndexOffset + li;
+    const isLastLine = li === block.lines.length - 1;
 
-    const lineOffsetX = computeAlignmentOffset(
-      block.align,
-      block.availableWidth,
-      line.width,
+    const lineOffsetX = computeAlignmentOffset(block.align, block.availableWidth, line.width);
+    const spaceBonus = computeJustifySpaceBonus(
+      block.align, line.spans, block.availableWidth, line.width, isLastLine,
     );
 
     map.registerLine({
@@ -291,12 +319,15 @@ export function populateCharMap(
         (line.spans[line.spans.length - 1]?.text.length ?? 0),
     });
 
+    let spacesBeforeSpan = 0;
     for (const span of line.spans) {
       const run = measurer.measureRun(span.text, span.font);
+      let spacesWithinSpan = 0;
 
       for (let ci = 0; ci < span.text.length; ci++) {
         const charX =
-          block.x + lineOffsetX + span.x + run.charPositions[ci]!;
+          block.x + lineOffsetX + span.x + run.charPositions[ci]! +
+          (spacesBeforeSpan + spacesWithinSpan) * spaceBonus;
         const charWidth =
           ci < span.text.length - 1
             ? run.charPositions[ci + 1]! - run.charPositions[ci]!
@@ -311,9 +342,19 @@ export function populateCharMap(
           page,
           lineIndex: globalLineIndex,
         });
+
+        if (span.text[ci] === " ") spacesWithinSpan++;
       }
+
+      spacesBeforeSpan += countSpaces(span.text);
     }
 
     lineY += line.lineHeight;
   }
+}
+
+function countSpaces(text: string): number {
+  let n = 0;
+  for (const ch of text) if (ch === " ") n++;
+  return n;
 }

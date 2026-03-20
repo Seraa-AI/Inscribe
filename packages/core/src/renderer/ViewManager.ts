@@ -50,7 +50,7 @@ export class ViewManager {
     options: ViewManagerOptions = {},
   ) {
     this.gap = options.gap ?? 24;
-    this.showMarginGuides = options.showMarginGuides ?? true;
+    this.showMarginGuides = options.showMarginGuides ?? false;
 
     this.pagesContainer = document.createElement("div");
     Object.assign(this.pagesContainer.style, {

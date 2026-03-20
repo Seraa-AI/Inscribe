@@ -13,6 +13,7 @@ import { layoutDocument, defaultPageConfig } from "./layout/PageLayout";
 import type { PageConfig, DocumentLayout } from "./layout/PageLayout";
 import { populateCharMap } from "./layout/BlockLayout";
 import { insertText } from "./model/commands";
+import { PasteTransformer } from "./input/PasteTransformer";
 
 /**
  * Convert a DOM KeyboardEvent into a ProseMirror key string.
@@ -214,6 +215,7 @@ export class Editor {
 
   /** Merged keymap from all extensions — consulted on every keydown. */
   private readonly keymap: Record<string, Command>;
+  private pasteTransformer!: PasteTransformer;
   /** Merged input handlers from all extensions — consulted before the keymap. */
   private readonly inputHandlers: Record<string, InputHandler>;
 
@@ -250,6 +252,7 @@ export class Editor {
     this.keymap = this.manager.buildKeymap();
     this.inputHandlers = this.manager.buildInputHandlers();
     this.commands = this.buildCommands();
+    this.pasteTransformer = new PasteTransformer(this.manager.schema);
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -811,9 +814,9 @@ export class Editor {
 
   private handlePaste = (e: ClipboardEvent): void => {
     e.preventDefault();
-    const text = e.clipboardData?.getData("text/plain");
-    if (!text) return;
-    this.dispatch(insertText(this.state, text));
+    if (!e.clipboardData) return;
+    const tr = this.pasteTransformer.transform(e.clipboardData, this.state);
+    if (tr) this.dispatch(tr);
   };
 
   private clearTextarea(): void {

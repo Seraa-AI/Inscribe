@@ -13,6 +13,9 @@ import { Color } from "./built-in/Color";
 import { FontSize } from "./built-in/FontSize";
 import { List } from "./built-in/List";
 import { Alignment } from "./built-in/Alignment";
+import { CodeBlock, insertCodeIndent } from "./built-in/CodeBlock";
+import { HorizontalRule } from "./built-in/HorizontalRule";
+import { chainCommands } from "prosemirror-commands";
 import type { Command } from "prosemirror-state";
 import type { NodeSpec, MarkSpec } from "prosemirror-model";
 import type { FontModifier, MarkDecorator, ToolbarItemSpec } from "./types";
@@ -34,6 +37,8 @@ interface StarterKitOptions {
   fontSize?: false | { sizes?: number[] };
   list?: false;
   alignment?: false;
+  codeBlock?: false;
+  horizontalRule?: false;
 }
 
 /**
@@ -66,6 +71,12 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     }
     if (opts.list !== false) {
       Object.assign(nodes, List.resolve().nodes);
+    }
+    if (opts.codeBlock !== false) {
+      Object.assign(nodes, CodeBlock.resolve().nodes);
+    }
+    if (opts.horizontalRule !== false) {
+      Object.assign(nodes, HorizontalRule.resolve().nodes);
     }
 
     return nodes;
@@ -139,8 +150,26 @@ export const StarterKit = Extension.create<StarterKitOptions>({
       const ext = typeof opts.heading === "object" ? Heading.configure(opts.heading) : Heading;
       Object.assign(km, ext.resolve(this.schema).keymap);
     }
+    // Tab: chain codeBlock (spaces) → list (indent), so both work
+    {
+      const tabCmds: Command[] = [];
+      if (opts.codeBlock !== false) tabCmds.push(insertCodeIndent());
+      if (opts.list !== false) {
+        const listTab = List.resolve(this.schema).keymap["Tab"];
+        if (listTab) tabCmds.push(listTab);
+      }
+      if (tabCmds.length > 0) km["Tab"] = chainCommands(...tabCmds);
+    }
+
+    // Merge remaining List keymaps except Tab (already handled above)
     if (opts.list !== false) {
-      Object.assign(km, List.resolve(this.schema).keymap);
+      const { Tab: _tab, ...restListKm } = List.resolve(this.schema).keymap;
+      Object.assign(km, restListKm);
+    }
+
+    if (opts.codeBlock !== false) {
+      const { Tab: _tab, ...restCodeKm } = CodeBlock.resolve(this.schema).keymap;
+      Object.assign(km, restCodeKm);
     }
     if (opts.alignment !== false) {
       Object.assign(km, Alignment.resolve(this.schema).keymap);
@@ -203,6 +232,12 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     if (opts.alignment !== false) {
       Object.assign(cmds, Alignment.resolve(this.schema).commands);
     }
+    if (opts.codeBlock !== false) {
+      Object.assign(cmds, CodeBlock.resolve(this.schema).commands);
+    }
+    if (opts.horizontalRule !== false) {
+      Object.assign(cmds, HorizontalRule.resolve(this.schema).commands);
+    }
 
     return cmds;
   },
@@ -264,6 +299,12 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     if (opts.list !== false) {
       Object.assign(handlers, List.resolve().layoutHandlers);
     }
+    if (opts.codeBlock !== false) {
+      Object.assign(handlers, CodeBlock.resolve().layoutHandlers);
+    }
+    if (opts.horizontalRule !== false) {
+      Object.assign(handlers, HorizontalRule.resolve().layoutHandlers);
+    }
     return handlers;
   },
 
@@ -279,6 +320,12 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     }
     if (opts.list !== false) {
       Object.assign(styles, List.resolve().blockStyles);
+    }
+    if (opts.codeBlock !== false) {
+      Object.assign(styles, CodeBlock.resolve().blockStyles);
+    }
+    if (opts.horizontalRule !== false) {
+      Object.assign(styles, HorizontalRule.resolve().blockStyles);
     }
     return styles;
   },
@@ -322,6 +369,12 @@ export const StarterKit = Extension.create<StarterKitOptions>({
     }
     if (opts.list !== false) {
       items.push(...List.resolve().toolbarItems);
+    }
+    if (opts.codeBlock !== false) {
+      items.push(...CodeBlock.resolve().toolbarItems);
+    }
+    if (opts.horizontalRule !== false) {
+      items.push(...HorizontalRule.resolve().toolbarItems);
     }
 
     return items;

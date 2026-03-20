@@ -258,6 +258,186 @@ describe("Editor — paste", () => {
   });
 });
 
+// ── HTML paste ───────────────────────────────────────────────────────────────
+
+describe("Editor — HTML paste", () => {
+  function pasteHtml(container: HTMLElement, html: string, plain = "") {
+    const ta = container.querySelector("textarea")!;
+    const event = new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: new DataTransfer(),
+    });
+    event.clipboardData!.setData("text/html", html);
+    if (plain) event.clipboardData!.setData("text/plain", plain);
+    ta.dispatchEvent(event);
+  }
+
+  it("pastes bold text from HTML", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    pasteHtml(container, "<b>Hello</b>");
+    expect(editor.getState().doc.textContent).toBe("Hello");
+    let hasBold = false;
+    editor.getState().doc.descendants((node) => {
+      if (node.isText && node.marks.some((m) => m.type.name === "bold")) hasBold = true;
+    });
+    expect(hasBold).toBe(true);
+    cleanup();
+  });
+
+  it("pastes a heading from HTML", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    pasteHtml(container, "<h2>My Heading</h2>");
+    expect(editor.getState().doc.textContent).toBe("My Heading");
+    let foundHeading = false;
+    editor.getState().doc.descendants((node) => {
+      if (node.type.name === "heading" && node.attrs["level"] === 2) foundHeading = true;
+    });
+    expect(foundHeading).toBe(true);
+    cleanup();
+  });
+
+  it("pastes a bullet list from HTML", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    pasteHtml(container, "<ul><li>Alpha</li><li>Beta</li></ul>");
+    expect(editor.getState().doc.textContent).toBe("AlphaBeta");
+    let foundList = false;
+    editor.getState().doc.descendants((node) => {
+      if (node.type.name === "bulletList") foundList = true;
+    });
+    expect(foundList).toBe(true);
+    cleanup();
+  });
+
+  it("strips unsupported tags and preserves text", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    pasteHtml(container, "<meta charset='utf-8'><p>Clean text</p>");
+    expect(editor.getState().doc.textContent).toBe("Clean text");
+    cleanup();
+  });
+
+  it("HTML takes priority over plain text", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    pasteHtml(container, "<b>Rich</b>", "plain fallback");
+    // Should use HTML path — bold mark present
+    let hasBold = false;
+    editor.getState().doc.descendants((node) => {
+      if (node.isText && node.marks.some((m) => m.type.name === "bold")) hasBold = true;
+    });
+    expect(hasBold).toBe(true);
+    cleanup();
+  });
+});
+
+// ── Markdown paste ────────────────────────────────────────────────────────────
+
+describe("Editor — Markdown paste", () => {
+  function paste(container: HTMLElement, text: string) {
+    const ta = container.querySelector("textarea")!;
+    const event = new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: new DataTransfer(),
+    });
+    event.clipboardData!.setData("text/plain", text);
+    ta.dispatchEvent(event);
+  }
+
+  it("pastes a markdown heading as a heading node", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    paste(container, "# Hello World");
+    expect(editor.getState().doc.textContent).toBe("Hello World");
+    let foundHeading = false;
+    editor.getState().doc.descendants((node) => {
+      if (node.type.name === "heading" && node.attrs["level"] === 1) foundHeading = true;
+    });
+    expect(foundHeading).toBe(true);
+    cleanup();
+  });
+
+  it("pastes markdown h2 correctly", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    paste(container, "## Subtitle");
+    let level = 0;
+    editor.getState().doc.descendants((node) => {
+      if (node.type.name === "heading") level = node.attrs["level"] as number;
+    });
+    expect(level).toBe(2);
+    cleanup();
+  });
+
+  it("pastes **bold** as bold mark", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    paste(container, "- **bold item**");
+    let hasBold = false;
+    editor.getState().doc.descendants((node) => {
+      if (node.isText && node.marks.some((m) => m.type.name === "bold")) hasBold = true;
+    });
+    expect(hasBold).toBe(true);
+    cleanup();
+  });
+
+  it("pastes a bullet list as bulletList node", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    paste(container, "- Alpha\n- Beta\n- Gamma");
+    expect(editor.getState().doc.textContent).toBe("AlphaBetaGamma");
+    let listItemCount = 0;
+    editor.getState().doc.descendants((node) => {
+      if (node.type.name === "listItem") listItemCount++;
+    });
+    expect(listItemCount).toBe(3);
+    cleanup();
+  });
+
+  it("pastes an ordered list as orderedList node", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    paste(container, "1. First\n2. Second");
+    let foundOrderedList = false;
+    editor.getState().doc.descendants((node) => {
+      if (node.type.name === "orderedList") foundOrderedList = true;
+    });
+    expect(foundOrderedList).toBe(true);
+    cleanup();
+  });
+
+  it("does NOT parse plain text without markdown patterns as markdown", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    paste(container, "This is a normal sentence with no markdown.");
+    expect(editor.getState().doc.textContent).toBe("This is a normal sentence with no markdown.");
+    // No heading or list nodes — just a paragraph
+    let hasSpecialNode = false;
+    editor.getState().doc.descendants((node) => {
+      if (node.type.name === "heading" || node.type.name === "bulletList") hasSpecialNode = true;
+    });
+    expect(hasSpecialNode).toBe(false);
+    cleanup();
+  });
+
+  it("mid-sentence asterisks are NOT treated as markdown", () => {
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    paste(container, "Section 4* applies here. See also clause 2*.");
+    // No bold marks created
+    let hasBold = false;
+    editor.getState().doc.descendants((node) => {
+      if (node.isText && node.marks.some((m) => m.type.name === "bold")) hasBold = true;
+    });
+    expect(hasBold).toBe(false);
+    cleanup();
+  });
+});
+
 // ── getActiveMarks ───────────────────────────────────────────────────────────
 
 describe("Editor.getActiveMarks", () => {
