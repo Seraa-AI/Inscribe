@@ -20,8 +20,8 @@
  */
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
-import { ySyncPlugin, yUndoPlugin } from "y-prosemirror";
-import type { Plugin } from "prosemirror-state";
+import { ySyncPlugin, yUndoPlugin, yUndoPluginKey, undo, redo } from "y-prosemirror";
+import type { Plugin, Command } from "prosemirror-state";
 import { Extension } from "../Extension";
 import type { IEditor } from "../types";
 import { collaborationRegistry } from "../collaborationState";
@@ -44,6 +44,25 @@ interface InstanceState {
 }
 const instanceState = new WeakMap<object, InstanceState>();
 
+/**
+ * Y.js-aware undo/redo commands.
+ *
+ * y-prosemirror's undo/redo operate on the Y.js UndoManager directly (not via
+ * ProseMirror dispatch), so they only revert the local client's own changes —
+ * remote peers' changes are never undone.
+ */
+const yUndo: Command = (state) => {
+  const pluginState = yUndoPluginKey.getState(state);
+  if (!pluginState?.undoManager || pluginState.undoManager.undoStack.length === 0) return false;
+  return undo(state);
+};
+
+const yRedo: Command = (state) => {
+  const pluginState = yUndoPluginKey.getState(state);
+  if (!pluginState?.undoManager || pluginState.undoManager.redoStack.length === 0) return false;
+  return redo(state);
+};
+
 export const Collaboration = Extension.create<CollaborationOptions>({
   name: "collaboration",
 
@@ -63,6 +82,21 @@ export const Collaboration = Extension.create<CollaborationOptions>({
     return [syncPlugin, yUndoPlugin()];
   },
 
+  addKeymap() {
+    return {
+      "Mod-z": yUndo,
+      "Mod-y": yRedo,
+      "Mod-Shift-z": yRedo,
+    };
+  },
+
+  addCommands() {
+    return {
+      undo: () => yUndo,
+      redo: () => yRedo,
+    };
+  },
+
   onEditorReady(editor: IEditor) {
     const inst = instanceState.get(this.options);
     if (!inst) return;
@@ -79,11 +113,8 @@ export const Collaboration = Extension.create<CollaborationOptions>({
      * Minimal EditorView shim — enough for ySyncPlugin's view to function.
      *
      * YSyncPluginView only needs:
-     *   • view.state      — to read plugin state on each Y.js change
-     *   • view.dispatch() — to apply Y.js changes as ProseMirror transactions
-     *
-     * Our getter always returns the latest EditorState so the view stays
-     * consistent without needing real EditorView lifecycle calls.
+     *   • view.state      — latest EditorState (via getter, always current)
+     *   • view.dispatch() — to apply incoming Y.js changes as PM transactions
      */
     const shim = {
       get state() {
@@ -97,7 +128,8 @@ export const Collaboration = Extension.create<CollaborationOptions>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pluginView = syncPlugin.spec.view?.(shim as any);
 
-    // Keep the shim's state reference current after every local dispatch
+    // Keep the shim current after every local dispatch so the plugin view sees
+    // the latest state when it next needs to apply a Y.js change
     const unsubscribe = editor.subscribe(() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       pluginView?.update?.(shim as any, shim.state);
