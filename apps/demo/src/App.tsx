@@ -3,12 +3,35 @@ import {
   Canvas,
   useEditorState,
   StarterKit,
+  Collaboration,
+  CollaborationCursor,
   defaultPageConfig,
 } from "@inscribe/react";
 import type { EditorStateContext } from "@inscribe/react";
 import { Toolbar } from "./Toolbar";
 
-const EXTENSIONS = [StarterKit];
+// ── Room + user identity from URL params ──────────────────────────────────────
+// Open the same URL in two tabs to collaborate.
+//   ?room=my-doc           — share document named "my-doc"
+//   ?room=my-doc&user=Bob  — custom display name
+//   ?color=%23ef4444       — custom cursor colour (URL-encoded hex)
+
+const COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899"];
+
+function getParam(key: string): string | null {
+  return new URLSearchParams(window.location.search).get(key);
+}
+
+const room = getParam("room") ?? "default";
+const userName = getParam("user") ?? `User ${Math.floor(Math.random() * 100)}`;
+const userColor = getParam("color") ?? COLORS[Math.floor(Math.random() * COLORS.length)]!;
+const wsUrl = (import.meta as unknown as { env: Record<string, string> }).env.VITE_WS_URL ?? "ws://localhost:1234";
+
+const EXTENSIONS = [
+  StarterKit.configure({ history: false }), // Y.js undo replaces PM history
+  Collaboration.configure({ url: wsUrl, name: room }),
+  CollaborationCursor.configure({ user: { name: userName, color: userColor } }),
+];
 
 interface ToolbarSlice {
   activeMarks: string[];
@@ -45,6 +68,10 @@ export function App() {
       <header style={styles.header}>
         <span style={styles.title}>inscribe</span>
         <span style={styles.badge}>dev</span>
+        <span style={styles.room}>
+          <span style={{ ...styles.dot, background: userColor }} />
+          {userName} · {room}
+        </span>
       </header>
 
       <Toolbar
@@ -80,6 +107,21 @@ const styles = {
     flexShrink: 0,
   },
   title: { fontFamily: "monospace", fontSize: 15, fontWeight: 600 },
+  room: {
+    marginLeft: "auto",
+    fontSize: 12,
+    color: "#94a3b8",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontFamily: "monospace",
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    display: "inline-block",
+  },
   badge: {
     fontSize: 11,
     background: "#1e40af",

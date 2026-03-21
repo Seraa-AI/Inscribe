@@ -14,11 +14,54 @@
  */
 
 import type { NodeSpec, MarkSpec, Schema, Node } from "prosemirror-model";
-import type { Command, Plugin } from "prosemirror-state";
+import type { Command, Plugin, Transaction, EditorState } from "prosemirror-state";
 import type { InputRule } from "prosemirror-inputrules";
+import type { CharacterMap } from "../layout/CharacterMap";
+import type { PageConfig } from "../layout/PageLayout";
 import type { BlockStrategy } from "../layout/BlockRegistry";
 import type { BlockStyle } from "../layout/FontConfig";
 import type { ParsedFont } from "../layout/StyleResolver";
+
+// ── Overlay render handler ─────────────────────────────────────────────────────
+
+/**
+ * A function registered via editor.addOverlayRenderHandler() that draws
+ * additional content on the overlay canvas for a specific page.
+ *
+ * Called once per visible page after the built-in cursor/selection are drawn.
+ * The ctx is already scaled by dpr — draw in logical CSS pixels.
+ *
+ * @example
+ * // CollaborationCursor uses this to draw remote users' cursors
+ * editor.addOverlayRenderHandler((ctx, pageNumber, pageConfig, charMap) => { ... });
+ */
+export type OverlayRenderHandler = (
+  ctx: CanvasRenderingContext2D,
+  pageNumber: number,
+  pageConfig: PageConfig,
+  charMap: CharacterMap,
+) => void;
+
+// ── Minimal editor interface (avoids circular import Editor ↔ extensions) ─────
+
+/**
+ * The subset of Editor that extension lifecycle hooks and collaboration
+ * providers need.  Editor implements this — extensions receive IEditor in
+ * onEditorReady() so they can subscribe, register overlay handlers, and apply
+ * remote transactions without importing the full Editor class.
+ */
+export interface IEditor {
+  /** Subscribe to all editor notifications (state change, focus, cursor tick). */
+  subscribe(listener: () => void): () => void;
+  /** Register a canvas draw function for the overlay layer. Returns unregister. */
+  addOverlayRenderHandler(handler: OverlayRenderHandler): () => void;
+  /** Current ProseMirror state. */
+  getState(): EditorState;
+  /** Apply a transaction from an external source (e.g. Y.js remote sync). */
+  _applyTransaction(tr: Transaction): void;
+  /** Trigger a redraw without a state change (e.g. on awareness update). */
+  redraw(): void;
+}
 
 /**
  * Declares how a mark extension modifies the CSS font string.
@@ -355,6 +398,25 @@ export interface ExtensionConfig<Options = object> {
   addMarkdownSerializerRules?(this: Phase1Context<Options>): MarkdownSerializerRules;
 
   /**
+   * Runtime lifecycle hook — called once after the Editor is fully initialised
+   * (EditorState created, initial layout done, all plugins active).
+   *
+   * Use this for setup that requires the live editor instance: connecting
+   * collaboration providers, registering overlay render handlers, subscribing
+   * to state changes, initialising plugin views without a ProseMirror EditorView.
+   *
+   * Return a cleanup function that will be called when editor.destroy() runs.
+   *
+   * @example
+   * onEditorReady(editor) {
+   *   const unsub = editor.subscribe(() => broadcastCursor());
+   *   const unreg = editor.addOverlayRenderHandler(drawRemoteCursors);
+   *   return () => { unsub(); unreg(); };
+   * }
+   */
+  onEditorReady?(this: Phase1Context<Options>, editor: IEditor): (() => void) | void;
+
+  /**
    * Editor-level input handlers — for keys that need access to the editor
    * instance rather than just the ProseMirror state.
    *
@@ -387,4 +449,6 @@ export interface ResolvedExtension {
   inputRules: InputRule[];
   markdownParserTokens: Record<string, MarkdownParserTokenSpec>;
   markdownSerializerRules: MarkdownSerializerRules;
+  /** Runtime lifecycle callback — undefined when extension has no onEditorReady. */
+  editorReadyCallback?: (editor: IEditor) => (() => void) | void;
 }

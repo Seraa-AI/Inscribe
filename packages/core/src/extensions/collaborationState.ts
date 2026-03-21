@@ -1,0 +1,17 @@
+/**
+ * Module-level WeakMap that shares state between the Collaboration extension
+ * (which creates the Y.Doc and provider) and the CollaborationCursor extension
+ * (which reads awareness from the same provider).
+ *
+ * Keyed by the editor instance — garbage collected when the editor is destroyed.
+ */
+import type { HocuspocusProvider } from "@hocuspocus/provider";
+import type * as Y from "yjs";
+
+export interface CollabState {
+  ydoc: Y.Doc;
+  provider: HocuspocusProvider;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const collaborationRegistry = new WeakMap<object, CollabState>();

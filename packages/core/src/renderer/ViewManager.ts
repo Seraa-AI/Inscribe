@@ -283,6 +283,9 @@ export class ViewManager {
         renderCursor(ctx, coords);
       }
     }
+
+    // Extension overlay handlers (e.g. CollaborationCursor for remote cursors)
+    this.editor.runOverlayHandlers(ctx, page.pageNumber, pageConfig);
   }
 
   // ── Mouse events ───────────────────────────────────────────────────────────

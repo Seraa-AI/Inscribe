@@ -236,9 +236,9 @@ describe("CharacterMap — posAbove / posBelow (vertical navigation)", () => {
     it("posAbove crosses from first line of page 2 to last line of page 1", () => {
       const crossMap = new CharacterMap();
       crossMap.registerGlyph({ docPos: 1, x: 0, y: 60, width: 10, height: 20, page: 1, lineIndex: 0 });
-      crossMap.registerLine({ page: 1, lineIndex: 0, y: 60, height: 20, startDocPos: 1, endDocPos: 2 });
+      crossMap.registerLine({ page: 1, lineIndex: 0, x: 0, contentWidth: 400, y: 60, height: 20, startDocPos: 1, endDocPos: 2 });
       crossMap.registerGlyph({ docPos: 5, x: 0, y: 60, width: 10, height: 20, page: 2, lineIndex: 0 });
-      crossMap.registerLine({ page: 2, lineIndex: 0, y: 60, height: 20, startDocPos: 5, endDocPos: 6 });
+      crossMap.registerLine({ page: 2, lineIndex: 0, x: 0, contentWidth: 400, y: 60, height: 20, startDocPos: 5, endDocPos: 6 });
 
       const pos = crossMap.posAbove(5, 0);
       expect(pos).toBeGreaterThanOrEqual(1);

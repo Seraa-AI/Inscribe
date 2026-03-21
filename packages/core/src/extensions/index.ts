@@ -16,6 +16,8 @@ export { Color } from "./built-in/Color";
 export { FontSize } from "./built-in/FontSize";
 export { Alignment } from "./built-in/Alignment";
 export { List } from "./built-in/List";
+export { Collaboration } from "./built-in/Collaboration";
+export { CollaborationCursor } from "./built-in/CollaborationCursor";
 
 export type {
   ExtensionConfig,

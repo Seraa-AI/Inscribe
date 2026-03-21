@@ -6,6 +6,7 @@ import type { Plugin, Command } from "prosemirror-state";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import type { Extension } from "./Extension";
 import type { MarkDecorator, ResolvedExtension, FontModifier, ToolbarItemSpec, InputHandler, MarkdownBlockRule, MarkdownParserTokenSpec, MarkdownSerializerRules, MarkdownNodeSerializer, MarkdownMarkSerializer } from "./types";
+import type { IEditor } from "./types";
 import { BlockRegistry } from "../layout/BlockRegistry";
 import type { FontConfig } from "../layout/FontConfig";
 
@@ -218,6 +219,17 @@ export class ExtensionManager {
       Object.assign(merged, ext.markdownParserTokens);
     }
     return merged;
+  }
+
+  /**
+   * Returns the onEditorReady callbacks from all extensions that define one.
+   * Called by Editor at the end of construction to let extensions do runtime
+   * setup (collaboration providers, overlay handlers, etc.).
+   */
+  buildEditorReadyCallbacks(): Array<(editor: IEditor) => (() => void) | void> {
+    return this.resolved
+      .filter((ext) => ext.editorReadyCallback !== undefined)
+      .map((ext) => ext.editorReadyCallback!);
   }
 
   /**

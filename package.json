@@ -5,6 +5,7 @@
   "description": "Inscribe — canvas-based document editor",
   "scripts": {
     "dev": "pnpm --filter @inscribe/demo dev",
+    "server": "pnpm --filter @inscribe/server dev",
     "build": "pnpm -r --filter './packages/**' run build",
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest run",

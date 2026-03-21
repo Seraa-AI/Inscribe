@@ -1,6 +1,6 @@
 import { EditorState, Transaction, TextSelection } from "prosemirror-state";
 import type { Command } from "prosemirror-state";
-import type { InputHandler, FontModifier, MarkDecorator, ToolbarItemSpec } from "./extensions/types";
+import type { InputHandler, FontModifier, MarkDecorator, ToolbarItemSpec, OverlayRenderHandler, IEditor } from "./extensions/types";
 import type { Schema } from "prosemirror-model";
 import { MarkdownSerializer } from "prosemirror-markdown";
 import { ExtensionManager } from "./extensions/ExtensionManager";
@@ -220,6 +220,15 @@ export class Editor {
   /** Merged input handlers from all extensions — consulted before the keymap. */
   private readonly inputHandlers: Record<string, InputHandler>;
 
+  /**
+   * Overlay render handlers registered by extensions (e.g. CollaborationCursor).
+   * Called by ViewManager.paintOverlay() for each visible page.
+   */
+  private readonly overlayRenderHandlers = new Set<OverlayRenderHandler>();
+
+  /** Cleanup functions returned by onEditorReady() callbacks — called on destroy(). */
+  private editorReadyCleanup: Array<() => void> = [];
+
   constructor({ extensions = [StarterKit], pageConfig, onChange, onFocusChange, onCursorTick }: EditorOptions) {
     this.manager = new ExtensionManager(extensions);
     this.onChange = onChange;
@@ -258,6 +267,14 @@ export class Editor {
       this.manager.buildMarkdownRules(),
       this.manager.buildMarkdownParserTokens(),
     );
+
+    // Invoke onEditorReady() for all extensions that define it.
+    // Runs after everything is initialised so extensions can safely subscribe,
+    // read state, register overlay handlers, etc.
+    const readyCallbacks = this.manager.buildEditorReadyCallbacks();
+    this.editorReadyCleanup = readyCallbacks
+      .map((cb) => cb(this))
+      .filter((fn): fn is () => void => typeof fn === "function");
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -366,12 +383,63 @@ export class Editor {
   }
 
   destroy(): void {
+    for (const cleanup of this.editorReadyCleanup) cleanup();
+    this.editorReadyCleanup = [];
+    this.overlayRenderHandlers.clear();
     this.cursorManager.stop();
     this.unmount();
   }
 
   focus(): void {
     this.textarea?.focus();
+  }
+
+  /**
+   * Register a canvas draw function on the overlay layer.
+   * Called by ViewManager.paintOverlay() after the local cursor and selection.
+   * Returns an unregister function.
+   *
+   * @example
+   * const unregister = editor.addOverlayRenderHandler((ctx, pageNum, config, charMap) => {
+   *   // draw remote cursors…
+   * });
+   */
+  addOverlayRenderHandler(handler: OverlayRenderHandler): () => void {
+    this.overlayRenderHandlers.add(handler);
+    return () => this.overlayRenderHandlers.delete(handler);
+  }
+
+  /**
+   * Invoke all registered overlay render handlers for a given page.
+   * Called by ViewManager.paintOverlay() — not intended for external use.
+   */
+  runOverlayHandlers(
+    ctx: CanvasRenderingContext2D,
+    pageNumber: number,
+    pageConfig: PageConfig,
+  ): void {
+    for (const handler of this.overlayRenderHandlers) {
+      handler(ctx, pageNumber, pageConfig, this.charMap);
+    }
+  }
+
+  /**
+   * Apply a transaction from an external source (Y.js remote sync, etc.).
+   * Bypasses input-bridge positioning that is only relevant for local edits.
+   *
+   * @internal — prefixed with underscore to signal it's infrastructure-facing.
+   */
+  _applyTransaction(tr: Transaction): void {
+    this.dispatch(tr);
+  }
+
+  /**
+   * Trigger a UI redraw without a document/selection change.
+   * Use when external state (e.g. Y.js awareness) changes and the overlay
+   * needs to be repainted with fresh remote cursor positions.
+   */
+  redraw(): void {
+    this.notifyListeners();
   }
 
   /**
