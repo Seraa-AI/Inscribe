@@ -6,10 +6,14 @@ import {
   Collaboration,
   CollaborationCursor,
   defaultPageConfig,
+  LinkPopover,
+  SlashMenu,
 } from "@inscribe/react";
 import type { EditorStateContext } from "@inscribe/react";
 import { PdfExport } from "@inscribe/export";
 import { Toolbar } from "./Toolbar";
+import { BubbleMenuBar } from "./BubbleMenuBar";
+import { FloatingMenuBar } from "./FloatingMenuBar";
 
 // ── Room + user identity from URL params ──────────────────────────────────────
 // Open the same URL in two tabs to collaborate.
@@ -88,6 +92,11 @@ export function App() {
       <main style={styles.main}>
         <Canvas editor={editor} style={styles.canvas} />
       </main>
+
+      <BubbleMenuBar editor={editor} />
+      <FloatingMenuBar editor={editor} />
+      <SlashMenu editor={editor} />
+      <LinkPopover editor={editor} />
     </div>
   );
 }

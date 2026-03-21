@@ -59,6 +59,12 @@ export interface IEditor {
   getState(): EditorState;
   /** Current document layout (lazily recomputed when dirty). */
   get layout(): DocumentLayout;
+  /**
+   * Convert a doc position range to a viewport DOMRect.
+   * Returns null if the positions are not in the CharacterMap yet or if no
+   * page element lookup has been registered (i.e. editor not mounted).
+   */
+  getViewportRect(from: number, to: number): DOMRect | null;
   /** Apply a transaction from an external source (e.g. Y.js remote sync). */
   _applyTransaction(tr: Transaction): void;
   /** Trigger a redraw without a state change (e.g. on awareness update). */

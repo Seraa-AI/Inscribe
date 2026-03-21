@@ -304,6 +304,43 @@ export class Editor {
   }
 
   /**
+   * Convert a doc position range to a viewport DOMRect.
+   *
+   * Uses the CharacterMap for pixel-accurate canvas coordinates, then offsets
+   * by the page element's viewport position (registered by the rendering adapter
+   * via setPageElementLookup). Returns null if either position is not in the
+   * CharacterMap or if no adapter has registered a page element lookup.
+   *
+   * The returned rect spans from the `from` position to the `to` position.
+   * If both positions are on different lines, the rect uses the `from` line's
+   * y/height and extends to the right edge of the available content width.
+   */
+  getViewportRect(from: number, to: number): DOMRect | null {
+    if (!this.pageElementLookup) return null;
+    this.ensureLayout();
+
+    const fromCoords = this.charMap.coordsAtPos(from);
+    if (!fromCoords) return null;
+
+    const pageEl = this.pageElementLookup(fromCoords.page);
+    if (!pageEl) return null;
+
+    const pageRect = pageEl.getBoundingClientRect();
+    const toCoords = this.charMap.coordsAtPos(to);
+
+    const left   = pageRect.left + fromCoords.x;
+    const top    = pageRect.top  + fromCoords.y;
+    const height = fromCoords.height;
+
+    // Width: span to toCoords if on same line, otherwise use a minimal 1px width
+    const sameLine = toCoords && toCoords.page === fromCoords.page &&
+      Math.abs(toCoords.y - fromCoords.y) < 2;
+    const width = sameLine && toCoords ? (toCoords.x - fromCoords.x) : 1;
+
+    return new DOMRect(left, top, Math.max(1, width), height);
+  }
+
+  /**
    * Guarantees the layout reflects the current EditorState.
    * Cheap when layout is already current (dirty === false).
    *

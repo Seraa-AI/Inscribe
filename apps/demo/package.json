@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@inscribe/core": "workspace:*",
-    "@inscribe/plugins": "workspace:*",
     "@inscribe/export": "workspace:*",
+    "@inscribe/plugins": "workspace:*",
     "@inscribe/react": "workspace:*",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"

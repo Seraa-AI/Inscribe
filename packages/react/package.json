@@ -18,6 +18,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@floating-ui/dom": "^1.7.6",
     "@inscribe/core": "workspace:*"
   },
   "peerDependencies": {
