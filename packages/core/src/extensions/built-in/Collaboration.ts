@@ -21,7 +21,7 @@
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { ySyncPlugin, yUndoPlugin, yUndoPluginKey, undo, redo } from "y-prosemirror";
-import type { Plugin, Command } from "prosemirror-state";
+import type { Plugin, Command, Transaction, EditorState } from "prosemirror-state";
 import { Extension } from "../Extension";
 import type { IEditor } from "../types";
 import { collaborationRegistry } from "../collaborationState";
@@ -43,6 +43,24 @@ interface InstanceState {
   syncPlugin: Plugin;
 }
 const instanceState = new WeakMap<object, InstanceState>();
+
+/**
+ * The structural subset of EditorView that ySyncPlugin actually uses:
+ *   • view.state      — read on every Y.js update to access plugin state
+ *   • view.dispatch() — called to push Y.js changes into ProseMirror
+ *
+ * Defining this explicitly lets us pass our lightweight shim without `any`.
+ * The single cast on the plugin.spec.view call is the only trust boundary.
+ */
+interface SyncViewShim {
+  readonly state: EditorState;
+  dispatch(tr: Transaction): void;
+}
+
+interface SyncPluginView {
+  update?(view: SyncViewShim, prevState: EditorState): void;
+  destroy?(): void;
+}
 
 /**
  * Y.js-aware undo/redo commands.
@@ -109,30 +127,24 @@ export const Collaboration = Extension.create<CollaborationOptions>({
     // Store provider so CollaborationCursor can read awareness
     collaborationRegistry.set(editor as object, { ydoc, provider });
 
-    /**
-     * Minimal EditorView shim — enough for ySyncPlugin's view to function.
-     *
-     * YSyncPluginView only needs:
-     *   • view.state      — latest EditorState (via getter, always current)
-     *   • view.dispatch() — to apply incoming Y.js changes as PM transactions
-     */
-    const shim = {
-      get state() {
-        return (editor as unknown as { getState(): ReturnType<IEditor["getState"]> }).getState();
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      dispatch: (tr: any) => editor._applyTransaction(tr),
+    // Lightweight shim satisfying the SyncViewShim contract
+    const shim: SyncViewShim = {
+      get state() { return editor.getState(); },
+      dispatch: (tr: Transaction) => editor._applyTransaction(tr),
     };
 
-    // Manually initialise the plugin view (normally done by EditorView constructor)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pluginView = syncPlugin.spec.view?.(shim as any);
+    // Manually initialise the plugin view (normally done by EditorView constructor).
+    // One structural cast here: ySyncPlugin expects a full EditorView but only
+    // reads state + dispatch — our shim satisfies both.
+    const viewFactory = syncPlugin.spec.view as
+      | ((view: SyncViewShim) => SyncPluginView)
+      | undefined;
+    const pluginView = viewFactory?.(shim);
 
     // Keep the shim current after every local dispatch so the plugin view sees
     // the latest state when it next needs to apply a Y.js change
     const unsubscribe = editor.subscribe(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      pluginView?.update?.(shim as any, shim.state);
+      pluginView?.update?.(shim, shim.state);
     });
 
     return () => {
