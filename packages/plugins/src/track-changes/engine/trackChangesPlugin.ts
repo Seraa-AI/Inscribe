@@ -41,16 +41,11 @@ export const trackChangesPlugin = (options: TrackChangesOptions) => {
         !pluginState ||
         pluginState.status === TrackChangesStatus.disabled;
 
-      // AI suggestions bypass the enabled/disabled check — they always get tracked.
-      const hasAiSuggestion = trs.some(tx => tx.getMeta("aiSuggestAs"));
-
-      if (!pluginState) return null;
-
-      if (shouldSkipTracking && !pluginState.canAcceptReject && !hasAiSuggestion) {
+      if (shouldSkipTracking && !pluginState?.canAcceptReject) {
         return null;
       }
 
-      const { userID, changeSet } = pluginState;
+      const { userID, changeSet } = pluginState!;
       let createdTr: Transaction = newState.tr,
         docChanged = false;
 
@@ -70,16 +65,6 @@ export const trackChangesPlugin = (options: TrackChangesOptions) => {
         if (isCollabSync) {
           setAction(createdTr, TrackChangesAction.refreshChanges, true);
           docChanged = true;
-          return;
-        }
-
-        // AI suggestions: force-track with the specified author, ignoring plugin status.
-        const aiSuggestAuthor = tx.getMeta("aiSuggestAs") as string | undefined;
-        if (aiSuggestAuthor) {
-          createdTr =
-            trackChanges(tx, createdTr, oldState, aiSuggestAuthor, skipTrsWithMetas) ??
-            createdTr;
-          docChanged = docChanged || tx.docChanged;
           return;
         }
 

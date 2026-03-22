@@ -1,8 +1,9 @@
 import { Extension, renderTrackedInsert, renderTrackedDelete } from "@inscribe/core";
 import type { IEditor, OverlayRenderHandler } from "@inscribe/core";
 
-import { setAction, TrackChangesAction } from "./actions";
+import { setAction, skipTracking, TrackChangesAction } from "./actions";
 import { trackChangesPlugin, trackChangesPluginKey } from "./engine/trackChangesPlugin";
+import { addTrackIdIfDoesntExist, createNewDeleteAttrs, createNewInsertAttrs, createNewPendingAttrs } from "./helpers";
 import { CHANGE_OPERATION, CHANGE_STATUS, TrackChangesOptions, TrackChangesStatus } from "./types";
 
 /**
@@ -145,6 +146,59 @@ export const TrackChanges = Extension.create<TrackChangesOptions>({
           dispatch?.(
             setAction(state.tr, TrackChangesAction.refreshChanges, true),
           );
+          return true;
+        },
+
+      /**
+       * Insert text as a pending suggestion, regardless of the current tracking
+       * status. The inserted text gets a `tracked_insert` mark attributed to
+       * `authorID`, and any replaced selection gets a `tracked_delete` mark.
+       *
+       * This is the correct way for AI assistants to propose edits — they always
+       * show up as suggestions the user can accept or reject, never as direct edits.
+       *
+       * args: [text: string, from: number, to: number, authorID: string]
+       */
+      insertAsSuggestion:
+        (...args: unknown[]) =>
+        (state: import("prosemirror-state").EditorState, dispatch: ((tr: import("prosemirror-state").Transaction) => void) | undefined) => {
+          const [text, from, to, authorID] = args as [string, number, number, string];
+          const schema = state.schema;
+          const insertMarkType = schema.marks.tracked_insert;
+          const deleteMarkType = schema.marks.tracked_delete;
+          if (!insertMarkType) return false; // TrackChanges not in schema
+
+          const now = Date.now();
+          const baseAttrs = createNewPendingAttrs(now, authorID);
+
+          const insertMark = insertMarkType.create({
+            dataTracked: addTrackIdIfDoesntExist(createNewInsertAttrs(baseAttrs)),
+          });
+
+          // Sanitise the text — ProseMirror text nodes cannot contain raw newlines.
+          const safeText = text.replace(/\n/g, " ");
+          const textNode = schema.text(safeText, [insertMark]);
+
+          const tr = state.tr;
+
+          // If replacing a selection, mark the old text as deleted (it stays in the
+          // document so the user can see what would be removed).
+          if (from < to && deleteMarkType) {
+            const deleteMark = deleteMarkType.create({
+              dataTracked: addTrackIdIfDoesntExist(createNewDeleteAttrs(baseAttrs)),
+            });
+            tr.addMark(from, to, deleteMark);
+          }
+
+          // Insert the suggestion at `from` (before any "deleted" text).
+          tr.insert(from, textNode);
+
+          // Prevent appendTransaction from trying to re-track this transaction.
+          skipTracking(tr);
+          // Ensure the changeSet is rebuilt so the new marks are visible.
+          setAction(tr, TrackChangesAction.refreshChanges, true);
+
+          dispatch?.(tr);
           return true;
         },
     };

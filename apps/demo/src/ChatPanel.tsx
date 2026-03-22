@@ -71,11 +71,9 @@ export function ChatPanel({ editor }: ChatPanelProps) {
         const from = sel.from;
         const to = isReplace && sel.from !== sel.to ? sel.to : sel.from;
 
-        const tr = state.tr.insertText(p.output.text, from, to);
-        // Tag the transaction so trackChangesPlugin records it as an AI suggestion
-        // regardless of whether the user has enabled track changes.
-        tr.setMeta("aiSuggestAs", "AI Assistant");
-        ed._applyTransaction(tr);
+        // Route through TrackChanges.insertAsSuggestion so the edit always
+        // appears as a pending suggestion regardless of tracking mode.
+        ed.commands["insertAsSuggestion"]?.(p.output.text, from, to, "AI Assistant");
       }
     }
   }, [messages]);
