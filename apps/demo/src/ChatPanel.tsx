@@ -41,13 +41,53 @@ export function ChatPanel({ editor }: ChatPanelProps) {
 
   const [inputValue, setInputValue] = useState("");
 
+  // Track which tool call IDs have already been applied to the document.
+  const appliedToolCalls = useRef(new Set<string>());
+  // Capture the selection at the time the user hits Send, so we know where to insert.
+  const pendingSelection = useRef<{ from: number; to: number } | null>(null);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Auto-apply AI tool results as tracked changes the moment they arrive.
+  useEffect(() => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    for (const msg of messages) {
+      if (msg.role !== "assistant") continue;
+      for (const part of msg.parts) {
+        const p = part as { type: string; toolCallId?: string; output?: { text?: string } };
+        const isInsert = p.type === "tool-insert_text";
+        const isReplace = p.type === "tool-replace_selection";
+        if (!(isInsert || isReplace)) continue;
+        if (!p.output?.text || !p.toolCallId) continue;
+        if (appliedToolCalls.current.has(p.toolCallId)) continue;
+
+        appliedToolCalls.current.add(p.toolCallId);
+
+        const state = ed.getState();
+        const sel = pendingSelection.current ?? { from: state.selection.from, to: state.selection.from };
+        const from = sel.from;
+        const to = isReplace && sel.from !== sel.to ? sel.to : sel.from;
+
+        const tr = state.tr.insertText(p.output.text, from, to);
+        // Tag the transaction so trackChangesPlugin records it as an AI suggestion
+        // regardless of whether the user has enabled track changes.
+        tr.setMeta("aiSuggestAs", "AI Assistant");
+        ed._applyTransaction(tr);
+      }
+    }
   }, [messages]);
 
   function submit() {
     const text = inputValue.trim();
     if (!text || isLoading) return;
+    // Snapshot the current selection before sending — used when applying the suggestion.
+    if (editorRef.current) {
+      const s = editorRef.current.getState().selection;
+      pendingSelection.current = { from: s.from, to: s.to };
+    }
     sendMessage({ text });
     setInputValue("");
   }
@@ -74,7 +114,7 @@ export function ChatPanel({ editor }: ChatPanelProps) {
         )}
 
         {messages.map((msg) => (
-          <MessageRow key={msg.id} msg={msg} editor={editor} />
+          <MessageRow key={msg.id} msg={msg} />
         ))}
 
         {isLoading && (
@@ -111,7 +151,7 @@ export function ChatPanel({ editor }: ChatPanelProps) {
 
 // ── Per-message row ────────────────────────────────────────────────────────────
 
-function MessageRow({ msg, editor }: { msg: UIMessage; editor: Editor | null }) {
+function MessageRow({ msg }: { msg: UIMessage }) {
   if (msg.role === "user") {
     return (
       <div style={styles.userBubble}>
@@ -140,21 +180,13 @@ function MessageRow({ msg, editor }: { msg: UIMessage; editor: Editor | null }) 
         // Tool parts: type === 'tool-insert_text' | 'tool-replace_selection'
         if (part.type === "tool-insert_text" || part.type === "tool-replace_selection") {
           const isInsert = part.type === "tool-insert_text";
-          const output = (part as { type: string; output?: { text?: string } }).output;
-          const text = output?.text ?? "";
+          const p = part as { type: string; output?: { text?: string } };
+          const text = p.output?.text ?? "";
           return (
-            <ToolCard
+            <SuggestionCard
               key={i}
-              label={isInsert ? "Insert text" : "Replace selection"}
+              label={isInsert ? "Insert suggestion" : "Replace suggestion"}
               text={text}
-              onApply={() => {
-                if (!editor || !text) return;
-                const state = editor.getState();
-                const { from, to } = state.selection;
-                // replace_selection only acts when there's an actual selection
-                if (!isInsert && from === to) return;
-                editor._applyTransaction(state.tr.insertText(text, from, to));
-              }}
             />
           );
         }
@@ -165,17 +197,9 @@ function MessageRow({ msg, editor }: { msg: UIMessage; editor: Editor | null }) 
   );
 }
 
-// ── Tool card ──────────────────────────────────────────────────────────────────
+// ── Suggestion card ────────────────────────────────────────────────────────────
 
-function ToolCard({
-  label,
-  text,
-  onApply,
-}: {
-  label: string;
-  text: string;
-  onApply: () => void;
-}) {
+function SuggestionCard({ label, text }: { label: string; text: string }) {
   if (!text) {
     return (
       <div style={styles.toolPending}>
@@ -187,11 +211,11 @@ function ToolCard({
 
   return (
     <div style={styles.toolCard}>
-      <span style={styles.toolLabel}>{label}</span>
+      <div style={styles.toolCardHeader}>
+        <span style={styles.toolLabel}>{label}</span>
+        <span style={styles.suggestionBadge}>Added to document</span>
+      </div>
       <pre style={styles.toolText}>{text}</pre>
-      <button style={btnStyle("#15803d", "#fff")} onClick={onApply}>
-        Insert into document
-      </button>
     </div>
   );
 }
@@ -281,12 +305,26 @@ const styles = {
   },
   toolCard: {
     background: "#fff",
-    border: "1px solid #e2e8f0",
+    border: "1px solid #bbf7d0",
     borderRadius: 8,
     padding: "8px 10px",
     display: "flex",
     flexDirection: "column" as const,
     gap: 6,
+  },
+  toolCardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between" as const,
+  },
+  suggestionBadge: {
+    fontSize: 10,
+    background: "#dcfce7",
+    color: "#15803d",
+    padding: "2px 6px",
+    borderRadius: 4,
+    fontWeight: 600,
+    fontFamily: "monospace",
   },
   toolPending: {
     display: "flex",
@@ -348,15 +386,3 @@ const styles = {
   },
 } as const;
 
-function btnStyle(bg: string, color: string) {
-  return {
-    background: bg,
-    color,
-    border: "none",
-    borderRadius: 4,
-    padding: "4px 10px",
-    cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 600,
-  } as const;
-}

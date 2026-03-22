@@ -1,5 +1,7 @@
 export { Editor } from "./Editor";
 export type { EditorOptions, EditorChangeHandler, SelectionSnapshot } from "./Editor";
+export { ServerEditor } from "./ServerEditor";
+export type { ServerEditorOptions } from "./ServerEditor";
 export * from "./model";
 export * from "./layout";
 export * from "./renderer";

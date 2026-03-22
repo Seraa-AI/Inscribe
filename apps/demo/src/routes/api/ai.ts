@@ -13,11 +13,21 @@ export const Route = createFileRoute("/api/ai")({
           context?: string;
         };
 
+        const systemPrompt = [
+          "You are a writing assistant embedded in a document editor.",
+          "",
+          "## Tool usage rules (follow strictly)",
+          "- Whenever you draft, write, continue, or generate any document content → call `insert_text` with that content.",
+          "- Whenever the user asks you to rewrite, rephrase, fix, or improve SELECTED text → call `replace_selection`.",
+          "- You MAY include a short text message (1-2 sentences) explaining what you are doing.",
+          "- NEVER write the suggested content only in a text reply — always put it in the tool call.",
+          "- If the user is asking a general question (not requesting new content), reply with text only.",
+          ...(context ? ["", "## Current document context", "", context] : []),
+        ].join("\n");
+
         const result = streamText({
           model: anthropic("claude-sonnet-4-6"),
-          system: context
-            ? `You are a writing assistant embedded in a document editor.\n\nCurrent document context:\n\n${context}\n\nHelp the user write, edit, and improve their document. When you want to add or modify content, use the insert_text or replace_selection tools.`
-            : "You are a writing assistant embedded in a document editor. Help the user write, edit, and improve their document. When you want to add or modify content, use the insert_text or replace_selection tools.",
+          system: systemPrompt,
           messages: await convertToModelMessages(messages),
           stopWhen: stepCountIs(5),
           tools: {
