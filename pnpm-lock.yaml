@@ -26,6 +26,9 @@ importers:
 
   apps/demo:
     dependencies:
+      '@floating-ui/dom':
+        specifier: ^1.7.6
+        version: 1.7.6
       '@inscribe/core':
         specifier: workspace:*
         version: link:../../packages/core

@@ -11,9 +11,12 @@ import {
 } from "@inscribe/react";
 import type { EditorStateContext } from "@inscribe/react";
 import { PdfExport } from "@inscribe/export";
+import { TrackChanges } from "@inscribe/plugins";
 import { Toolbar } from "./Toolbar";
 import { BubbleMenuBar } from "./BubbleMenuBar";
 import { FloatingMenuBar } from "./FloatingMenuBar";
+import { ModeSwitcher } from "./ModeSwitcher";
+import { TrackChangesPopover } from "./TrackChangesPopover";
 
 // ── Room + user identity from URL params ──────────────────────────────────────
 // Open the same URL in two tabs to collaborate.
@@ -37,6 +40,7 @@ const EXTENSIONS = [
   Collaboration.configure({ url: wsUrl, name: room }),
   CollaborationCursor.configure({ user: { name: userName, color: userColor } }),
   PdfExport.configure({ filename: room }),
+  TrackChanges.configure({ userID: userName, canAcceptReject: true }),
 ];
 
 interface ToolbarSlice {
@@ -80,14 +84,19 @@ export function App() {
         </span>
       </header>
 
-      <Toolbar
-        items={editor?.toolbarItems ?? []}
-        activeMarks={toolbar.activeMarks}
-        activeMarkAttrs={toolbar.activeMarkAttrs}
-        blockType={toolbar.blockType}
-        blockAttrs={toolbar.blockAttrs}
-        onCommand={(cmd, args) => editor?.commands[cmd]?.(...(args ?? []))}
-      />
+      <div style={styles.toolbarRow}>
+        <Toolbar
+          items={editor?.toolbarItems ?? []}
+          activeMarks={toolbar.activeMarks}
+          activeMarkAttrs={toolbar.activeMarkAttrs}
+          blockType={toolbar.blockType}
+          blockAttrs={toolbar.blockAttrs}
+          onCommand={(cmd, args) => editor?.commands[cmd]?.(...(args ?? []))}
+        />
+        <div style={styles.modeSwitcherWrap}>
+          <ModeSwitcher editor={editor} />
+        </div>
+      </div>
 
       <main style={styles.main}>
         <Canvas editor={editor} style={styles.canvas} />
@@ -97,6 +106,7 @@ export function App() {
       <FloatingMenuBar editor={editor} />
       <SlashMenu editor={editor} />
       <LinkPopover editor={editor} />
+      <TrackChangesPopover editor={editor} />
     </div>
   );
 }
@@ -140,6 +150,20 @@ const styles = {
     padding: "2px 8px",
     borderRadius: 4,
     fontFamily: "monospace",
+  },
+  toolbarRow: {
+    display: "flex",
+    alignItems: "stretch",
+    flexShrink: 0,
+  },
+  modeSwitcherWrap: {
+    marginLeft: "auto",
+    padding: "0 8px",
+    display: "flex",
+    alignItems: "center",
+    background: "#fff",
+    borderBottom: "1px solid #e2e8f0",
+    flexShrink: 0,
   },
   main: {
     flex: 1,

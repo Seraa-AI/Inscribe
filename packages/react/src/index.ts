@@ -15,9 +15,11 @@ export { useEditorState, shallowEqual, deepEqual } from "./useEditorState";
 export type { UseEditorStateOptions, EditorStateContext } from "./useEditorState";
 
 // Re-export core types consumers need when building with this adapter
+// TODO: these re-exports force every @inscribe/react consumer to transitively
+// install @inscribe/core and @inscribe/plugins even if they don't use
+// Collaboration or AI. Fix by removing re-exports here and having consumers
+// import directly from @inscribe/core / @inscribe/plugins themselves.
 export type { Editor, SelectionSnapshot } from "@inscribe/core";
 export { StarterKit, Pagination, defaultPageConfig, ViewManager, FontFamily, Link } from "@inscribe/core";
 export type { PageConfig, DocumentLayout, Extension, ViewManagerOptions } from "@inscribe/core";
-
-// Re-export optional plugins
 export { Collaboration, CollaborationCursor } from "@inscribe/plugins";

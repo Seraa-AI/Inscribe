@@ -1,0 +1,153 @@
+import { EditorState, Plugin, PluginKey, Transaction } from "prosemirror-state";
+
+import {
+  getAction,
+  hasAction,
+  setAction,
+  TrackChangesAction,
+} from "../actions";
+import { ChangeSet } from "../ChangeSet";
+import { findChanges } from "../findChanges";
+import { trackChanges } from "./trackChanges";
+import { fixInconsistentChanges } from "../lib/fixInconsistentChanges";
+import { TrackChangesOptions, TrackChangesStatus } from "../types";
+import { trFromHistory } from "./transactionProcessing";
+import { updateChangesStatus } from "./updateChangesStatus";
+
+interface TrackChangesPluginState {
+  status: TrackChangesStatus;
+  changeSet: ChangeSet;
+  userID: string;
+  canAcceptReject: boolean;
+}
+
+export const trackChangesPluginKey = new PluginKey<TrackChangesPluginState>(
+  "track-changes",
+);
+
+export const trackChangesPlugin = (options: TrackChangesOptions) => {
+  const { userID, skipTrsWithMetas = [], canAcceptReject = true } = options;
+
+  return new Plugin({
+    key: trackChangesPluginKey,
+    props: {
+      editable: (state: EditorState) =>
+        trackChangesPluginKey.getState(state)?.status !==
+        TrackChangesStatus.viewSnapshots,
+    },
+    appendTransaction(trs, oldState, newState) {
+      const pluginState = trackChangesPluginKey.getState(newState);
+      const shouldSkipTracking =
+        !pluginState ||
+        pluginState.status === TrackChangesStatus.disabled;
+
+      if (shouldSkipTracking && !pluginState?.canAcceptReject) {
+        return null;
+      }
+
+      const { userID, changeSet } = pluginState;
+      let createdTr: Transaction = newState.tr,
+        docChanged = false;
+
+      trs.forEach(tx => {
+        const collabRebased = tx.getMeta("rebase");
+        if (collabRebased !== undefined) {
+          setAction(createdTr, TrackChangesAction.refreshChanges, true);
+          docChanged = true;
+          return;
+        }
+
+        const isCollabSync =
+          tx.getMeta("y-sync$") !== undefined ||
+          tx.getMeta("isRemote") !== undefined ||
+          tx.getMeta("pointer") !== undefined;
+
+        if (isCollabSync) {
+          setAction(createdTr, TrackChangesAction.refreshChanges, true);
+          docChanged = true;
+          return;
+        }
+
+        const setsChangeStatus = getAction(
+          tx,
+          TrackChangesAction.setChangeStatuses,
+        );
+        if (setsChangeStatus && pluginState.canAcceptReject) {
+          const { status, ids } = setsChangeStatus;
+          updateChangesStatus(
+            createdTr,
+            changeSet,
+            ids,
+            status,
+            userID,
+            oldState,
+          );
+          docChanged = true;
+        } else if (!shouldSkipTracking) {
+          createdTr =
+            trackChanges(tx, createdTr, oldState, userID, skipTrsWithMetas) ??
+            createdTr;
+        }
+        docChanged = docChanged || tx.docChanged;
+      });
+      const changed =
+        pluginState.changeSet.hasInconsistentData &&
+        fixInconsistentChanges(
+          pluginState.changeSet,
+          userID,
+          createdTr,
+          oldState.schema,
+        );
+      if (changed) {
+        console.warn("had to fix inconsistent changes in", createdTr);
+      }
+      if (docChanged || createdTr.docChanged || changed) {
+        createdTr.setMeta("origin", trackChangesPluginKey);
+        return setAction(createdTr, TrackChangesAction.refreshChanges, true);
+      }
+      return null;
+    },
+    state: {
+      init: (_config, state: EditorState) => {
+        return {
+          status: options.initialStatus || TrackChangesStatus.enabled,
+          userID,
+          changeSet: findChanges(state),
+          canAcceptReject,
+        };
+      },
+      apply: (tr, pluginState, _oldState, newState) => {
+        if (!tr.docChanged && !hasAction(tr)) {
+          return pluginState;
+        }
+        const setUserID = getAction(tr, TrackChangesAction.setUserID);
+        const setStatus = getAction(tr, TrackChangesAction.setPluginStatus);
+        if (setUserID) {
+          return { ...pluginState, userID: setUserID };
+        } else if (setStatus) {
+          return {
+            ...pluginState,
+            status: setStatus,
+            changeSet: findChanges(newState),
+          };
+        } else if (pluginState.status === TrackChangesStatus.disabled) {
+          return { ...pluginState, changeSet: findChanges(newState) };
+        }
+        const { changeSet, ...rest } = pluginState;
+        let nextChangeSet = changeSet;
+
+        if (
+          getAction(tr, TrackChangesAction.refreshChanges) ||
+          trFromHistory(tr)
+        ) {
+          nextChangeSet = findChanges(newState);
+        }
+
+        return {
+          changeSet: nextChangeSet,
+          ...rest,
+        };
+      },
+    },
+  });
+};
