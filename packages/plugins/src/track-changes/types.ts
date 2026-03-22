@@ -52,6 +52,12 @@ type InsertDeleteAttrs = {
   createdAt: number;
   updatedAt: number;
   moveNodeId?: string;
+  /**
+   * True when another author's mark overlaps this exact segment.
+   * Drives amber conflict rendering and the conflict popover.
+   * Set by splitRangeForNewMark when a second author touches the same range.
+   */
+  isConflict?: boolean;
 };
 
 export type UpdateAttrs = Omit<InsertDeleteAttrs, "operation"> & {

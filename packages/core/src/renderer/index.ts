@@ -10,6 +10,7 @@ export {
   renderAiCaret,
   renderTrackedInsert,
   renderTrackedDelete,
+  renderTrackedConflict,
 } from "./OverlayRenderer";
 export { CursorManager } from "./CursorManager";
 export { ViewManager } from "./ViewManager";

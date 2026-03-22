@@ -1,4 +1,4 @@
-import { Extension, renderTrackedInsert, renderTrackedDelete } from "@inscribe/core";
+import { Extension, renderTrackedInsert, renderTrackedDelete, renderTrackedConflict } from "@inscribe/core";
 import type { IEditor, OverlayRenderHandler } from "@inscribe/core";
 
 import { setAction, skipTracking, TrackChangesAction } from "./actions";
@@ -62,6 +62,10 @@ export const TrackChanges = Extension.create<TrackChangesOptions>({
           dataTracked: { default: null },
         },
         inclusive: false,
+        // Allow multiple tracked_insert marks on the same text node segment
+        // so that overlapping suggestions from different authors can coexist.
+        // Each mark instance still carries a single author in dataTracked.
+        excludes: "",
         parseDOM: [{ tag: "ins[data-tracked]" }],
         toDOM() {
           return ["ins", { "data-tracked": "insert" }, 0];
@@ -72,6 +76,8 @@ export const TrackChanges = Extension.create<TrackChangesOptions>({
           dataTracked: { default: null },
         },
         inclusive: false,
+        // Same as tracked_insert — allow stacking from multiple authors.
+        excludes: "",
         parseDOM: [{ tag: "del[data-tracked]" }],
         toDOM() {
           return ["del", { "data-tracked": "delete" }, 0];
@@ -227,6 +233,12 @@ export const TrackChanges = Extension.create<TrackChangesOptions>({
           renderTrackedInsert(ctx, glyphs, lines, insertColor(author));
         } else if (operation === CHANGE_OPERATION.delete) {
           renderTrackedDelete(ctx, glyphs, lines, deleteColor(author));
+        }
+
+        // Conflict indicator rendered on top of the normal change colour.
+        // Both marks on the segment will fire this, producing a layered amber glow.
+        if ((change.dataTracked as { isConflict?: boolean }).isConflict) {
+          renderTrackedConflict(ctx, glyphs, lines);
         }
       }
     };

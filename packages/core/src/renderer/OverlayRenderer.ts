@@ -188,6 +188,51 @@ export function renderTrackedDelete(
   ctx.restore();
 }
 
+/**
+ * Draws an amber conflict indicator over glyphs where two authors' marks
+ * overlap on the same segment. Rendered on top of the normal insert/delete
+ * colour — the underlying green/red is still visible through the amber wash.
+ *
+ * A dashed amber underline distinguishes this from a normal tracked change.
+ */
+export function renderTrackedConflict(
+  ctx: CanvasRenderingContext2D,
+  glyphs: GlyphEntry[],
+  lines: LineEntry[],
+): void {
+  if (glyphs.length === 0 && lines.length === 0) return;
+
+  const AMBER = "#f59e0b";
+
+  ctx.save();
+
+  // Amber wash on top of the existing change colour
+  ctx.fillStyle = hexToRgba(AMBER, 0.18);
+  for (const g of glyphs) {
+    ctx.fillRect(g.x, g.y, g.width, g.height);
+  }
+  const lineIndexesWithGlyphs = new Set(glyphs.map((g) => g.lineIndex));
+  for (const line of lines) {
+    if (!lineIndexesWithGlyphs.has(line.lineIndex)) {
+      ctx.fillRect(line.x, line.y, line.height, line.height);
+    }
+  }
+
+  // Dashed amber underline — visually distinct from the solid insert underline
+  ctx.strokeStyle = hexToRgba(AMBER, 0.9);
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3, 3]);
+  for (const g of glyphs) {
+    ctx.beginPath();
+    ctx.moveTo(g.x, g.y + g.height - 1);
+    ctx.lineTo(g.x + g.width, g.y + g.height - 1);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  ctx.restore();
+}
+
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 function hexToRgba(hex: string, alpha: number): string {
