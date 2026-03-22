@@ -16,5 +16,8 @@ export type { UseEditorStateOptions, EditorStateContext } from "./useEditorState
 
 // Re-export core types consumers need when building with this adapter
 export type { Editor, SelectionSnapshot } from "@inscribe/core";
-export { StarterKit, Pagination, defaultPageConfig, ViewManager, Collaboration, CollaborationCursor, FontFamily, Link } from "@inscribe/core";
+export { StarterKit, Pagination, defaultPageConfig, ViewManager, FontFamily, Link } from "@inscribe/core";
 export type { PageConfig, DocumentLayout, Extension, ViewManagerOptions } from "@inscribe/core";
+
+// Re-export optional plugins
+export { Collaboration, CollaborationCursor } from "@inscribe/plugins";

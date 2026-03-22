@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.6",
-    "@inscribe/core": "workspace:*"
+    "@inscribe/core": "workspace:*",
+    "@inscribe/plugins": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18.0.0",

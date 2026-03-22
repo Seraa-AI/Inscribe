@@ -193,6 +193,9 @@ importers:
       '@inscribe/core':
         specifier: workspace:*
         version: link:../core
+      '@inscribe/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       react:
         specifier: ^18.0.0
         version: 18.3.1
