@@ -102,9 +102,9 @@ export function renderTrackedInsert(
   if (glyphs.length === 0 && lines.length === 0) return;
 
   ctx.save();
-  // Underline + faint fill — distinguishable from selection blue
+  // Underline + subtle fill — faint enough not to obscure text
   ctx.fillStyle = color.startsWith("#")
-    ? hexToRgba(color, 0.15)
+    ? hexToRgba(color, 0.12)
     : color;
 
   // Pass 1 — glyph highlights

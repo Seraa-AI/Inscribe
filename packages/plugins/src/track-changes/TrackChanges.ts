@@ -1,5 +1,5 @@
 import { Extension, renderTrackedInsert, renderTrackedDelete, renderTrackedConflict } from "@inscribe/core";
-import type { IEditor, OverlayRenderHandler } from "@inscribe/core";
+import type { GlyphEntry, IEditor, LineEntry, OverlayRenderHandler } from "@inscribe/core";
 
 import { setAction, skipTracking, TrackChangesAction } from "./actions";
 import { trackChangesPlugin, trackChangesPluginKey } from "./engine/trackChangesPlugin";
@@ -7,15 +7,16 @@ import { addTrackIdIfDoesntExist, createNewDeleteAttrs, createNewInsertAttrs, cr
 import { CHANGE_OPERATION, CHANGE_STATUS, TrackChangesOptions, TrackChangesStatus } from "./types";
 
 /**
- * Insert palette — greens. Each author gets a distinct shade.
- * renderTrackedInsert uses these as hex so hexToRgba applies correctly.
+ * Insert palette — green family. Semantic: "adding content".
+ * Different shades let you distinguish authors at a glance while keeping
+ * the green = insert convention consistent.
  */
-const INSERT_COLORS = ["#15803d", "#0f766e", "#1d4ed8", "#7c3aed", "#0369a1", "#065f46"];
+const INSERT_COLORS = ["#16a34a", "#15803d", "#059669", "#10b981", "#0d9488", "#0891b2"];
 
 /**
- * Delete palette — reds/pinks. Each author gets a distinct shade.
+ * Delete palette — red/rose family. Semantic: "removing content".
  */
-const DELETE_COLORS = ["#b91c1c", "#be185d", "#c2410c", "#a16207", "#7f1d1d", "#9d174d"];
+const DELETE_COLORS = ["#dc2626", "#b91c1c", "#e11d48", "#be185d", "#c2410c", "#9a3412"];
 
 function authorIndex(authorID: string): number {
   let hash = 0;
@@ -218,28 +219,87 @@ export const TrackChanges = Extension.create<TrackChangesOptions>({
 
       const { changeSet } = pluginState;
 
+      // Deduplicate glyph rendering: multiple changes can cover the same glyphs
+      // (e.g. two authors' inserts at the same position). Rendering each change
+      // independently stacks fills at the same pixels, darkening them. Instead,
+      // collect the first-author color per glyph position and render each pixel once.
+      const insertGlyphs = new Map<number, { glyph: GlyphEntry; color: string }>();
+      const deleteGlyphs = new Map<number, { glyph: GlyphEntry; color: string }>();
+      const insertLines = new Map<number, { line: LineEntry; color: string }>();
+      const deleteLines = new Map<number, { line: LineEntry; color: string }>();
+      const conflictGlyphs: GlyphEntry[] = [];
+      const conflictLines: LineEntry[] = [];
+
       for (const change of changeSet.changes) {
         const { operation, authorID } = change.dataTracked;
         const author = authorID ?? "unknown";
+        const isConflict = !!(change.dataTracked as { isConflict?: boolean }).isConflict;
 
         const glyphs = charMap.glyphsInRange(change.from, change.to)
           .filter(g => g.page === pageNumber);
         const lines = charMap.linesInRange(change.from, change.to)
           .filter(l => l.page === pageNumber);
 
-        if (glyphs.length === 0 && lines.length === 0) continue;
-
         if (operation === CHANGE_OPERATION.insert || operation === CHANGE_OPERATION.move) {
-          renderTrackedInsert(ctx, glyphs, lines, insertColor(author));
+          const color = insertColor(author);
+          for (const g of glyphs) {
+            if (!insertGlyphs.has(g.docPos)) insertGlyphs.set(g.docPos, { glyph: g, color });
+          }
+          for (const l of lines) {
+            if (!insertLines.has(l.lineIndex)) insertLines.set(l.lineIndex, { line: l, color });
+          }
         } else if (operation === CHANGE_OPERATION.delete) {
-          renderTrackedDelete(ctx, glyphs, lines, deleteColor(author));
+          const color = deleteColor(author);
+          for (const g of glyphs) {
+            if (!deleteGlyphs.has(g.docPos)) deleteGlyphs.set(g.docPos, { glyph: g, color });
+          }
+          for (const l of lines) {
+            if (!deleteLines.has(l.lineIndex)) deleteLines.set(l.lineIndex, { line: l, color });
+          }
         }
 
-        // Conflict indicator rendered on top of the normal change colour.
-        // Both marks on the segment will fire this, producing a layered amber glow.
-        if ((change.dataTracked as { isConflict?: boolean }).isConflict) {
-          renderTrackedConflict(ctx, glyphs, lines);
+        if (isConflict) {
+          conflictGlyphs.push(...glyphs);
+          conflictLines.push(...lines);
         }
+      }
+
+      // Render inserts — each glyph rendered exactly once
+      if (insertGlyphs.size > 0 || insertLines.size > 0) {
+        // Group by color so we minimise ctx state changes
+        const byColor = new Map<string, { glyphs: GlyphEntry[]; lines: LineEntry[] }>();
+        for (const { glyph, color } of insertGlyphs.values()) {
+          if (!byColor.has(color)) byColor.set(color, { glyphs: [], lines: [] });
+          byColor.get(color)!.glyphs.push(glyph);
+        }
+        for (const { line, color } of insertLines.values()) {
+          if (!byColor.has(color)) byColor.set(color, { glyphs: [], lines: [] });
+          byColor.get(color)!.lines.push(line);
+        }
+        for (const [color, { glyphs, lines }] of byColor) {
+          renderTrackedInsert(ctx, glyphs, lines, color);
+        }
+      }
+
+      // Render deletes — each glyph rendered exactly once
+      if (deleteGlyphs.size > 0 || deleteLines.size > 0) {
+        const byColor = new Map<string, { glyphs: GlyphEntry[]; lines: LineEntry[] }>();
+        for (const { glyph, color } of deleteGlyphs.values()) {
+          if (!byColor.has(color)) byColor.set(color, { glyphs: [], lines: [] });
+          byColor.get(color)!.glyphs.push(glyph);
+        }
+        for (const { line, color } of deleteLines.values()) {
+          if (!byColor.has(color)) byColor.set(color, { glyphs: [], lines: [] });
+          byColor.get(color)!.lines.push(line);
+        }
+        for (const [color, { glyphs, lines }] of byColor) {
+          renderTrackedDelete(ctx, glyphs, lines, color);
+        }
+      }
+
+      // Conflict overlay — rendered on top of insert/delete colours
+      if (conflictGlyphs.length > 0 || conflictLines.length > 0) {
+        renderTrackedConflict(ctx, conflictGlyphs, conflictLines);
       }
     };
 
