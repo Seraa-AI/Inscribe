@@ -130,7 +130,7 @@ function insertImage(): Command {
 
     const { $head } = state.selection;
     const after = $head.after(1);
-    const node  = imageType.create({ src, alt: "", width: null, height: null });
+    const node  = imageType.create({ src, alt: "" }); // width and height use schema defaults (null → full width, 200px tall)
     const tr    = state.tr.insert(after, node).scrollIntoView();
     dispatch(tr);
     return true;

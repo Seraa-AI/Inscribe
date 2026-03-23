@@ -1,5 +1,4 @@
 import { Extension } from "../Extension";
-import { TextSelection } from "prosemirror-state";
 import type { Command } from "prosemirror-state";
 import { InputRule } from "prosemirror-inputrules";
 import type { BlockStrategy, BlockRenderContext } from "../../layout/BlockRegistry";
@@ -13,7 +12,7 @@ const HR_THICKNESS = 1.5;
 
 const HorizontalRuleStrategy: BlockStrategy = {
   render(block: LayoutBlock, renderCtx: BlockRenderContext, map: CharacterMap): number {
-    const { ctx, pageNumber, lineIndexOffset } = renderCtx;
+    const { ctx, lineIndexOffset } = renderCtx;
     const midY = block.y + block.height / 2;
 
     ctx.save();
@@ -25,22 +24,8 @@ const HorizontalRuleStrategy: BlockStrategy = {
     ctx.stroke();
     ctx.restore();
 
-    // Register line in charmap (guarded) so click-to-place cursor works near the rule
-    if (block.lines.length > 0 && !map.hasLine(pageNumber, lineIndexOffset)) {
-      const line = block.lines[0]!;
-      map.registerLine({
-        page: pageNumber,
-        lineIndex: lineIndexOffset,
-        y: block.y,
-        height: block.height,
-        x: block.x,
-        contentWidth: block.availableWidth,
-        startDocPos: line.spans[0]?.docPos ?? 0,
-        endDocPos: (line.spans[0]?.docPos ?? 0) + 1,
-      });
-    }
-
-    return lineIndexOffset + block.lines.length;
+    // Charmap registration is handled by layoutLeafBlock — nothing to do here.
+    return lineIndexOffset + 1;
   },
 };
 

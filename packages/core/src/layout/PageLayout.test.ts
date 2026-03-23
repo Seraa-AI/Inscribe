@@ -1,46 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { layoutDocument, defaultPageConfig, collapseMargins } from "./PageLayout";
-import { TextMeasurer } from "./TextMeasurer";
-import { schema } from "../model/schema";
+import { buildStarterKitContext, createMeasurer, paragraph as p, heading, doc, pageBreak } from "../test-utils";
 
-const CHAR_WIDTH = 8;
-const ASCENT = 12;
-const DESCENT = 3;
 // lineHeight = 18, contentHeight = 1123 - 72 - 72 = 979
 
-beforeEach(() => {
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
-    measureText: vi.fn((text: string) => ({
-      width: text.length * CHAR_WIDTH,
-      actualBoundingBoxAscent: ASCENT,
-      actualBoundingBoxDescent: DESCENT,
-      fontBoundingBoxAscent: ASCENT,
-      fontBoundingBoxDescent: DESCENT,
-    })),
-    font: "",
-  } as unknown as CanvasRenderingContext2D);
-});
-
-function measurer() {
-  return new TextMeasurer({ lineHeightMultiplier: 1.2 });
-}
-
-function doc(...blocks: ReturnType<typeof schema.node>[]) {
-  return schema.node("doc", null, blocks);
-}
-
-function p(text = "") {
-  return text
-    ? schema.node("paragraph", null, [schema.text(text)])
-    : schema.node("paragraph", null, []);
-}
 
 function h1(text: string) {
-  return schema.node("heading", { level: 1 }, [schema.text(text)]);
-}
-
-function pageBreak() {
-  return schema.node("page_break");
+  return heading(1, text);
 }
 
 // ── Basic structure ───────────────────────────────────────────────────────────
@@ -49,7 +15,7 @@ describe("layoutDocument — basic", () => {
   it("returns at least one page for an empty doc", () => {
     const layout = layoutDocument(doc(p()), {
       pageConfig: defaultPageConfig,
-      measurer: measurer(),
+      measurer: createMeasurer(),
     });
     expect(layout.pages.length).toBeGreaterThanOrEqual(1);
   });
@@ -57,7 +23,7 @@ describe("layoutDocument — basic", () => {
   it("places a short document on one page", () => {
     const layout = layoutDocument(doc(p("Hello world")), {
       pageConfig: defaultPageConfig,
-      measurer: measurer(),
+      measurer: createMeasurer(),
     });
     expect(layout.pages).toHaveLength(1);
     expect(layout.pages[0]?.blocks).toHaveLength(1);
@@ -66,7 +32,7 @@ describe("layoutDocument — basic", () => {
   it("increments the version from the previous version", () => {
     const layout = layoutDocument(doc(p()), {
       pageConfig: defaultPageConfig,
-      measurer: measurer(),
+      measurer: createMeasurer(),
       previousVersion: 5,
     });
     expect(layout.version).toBe(6);
@@ -75,7 +41,7 @@ describe("layoutDocument — basic", () => {
   it("block y coordinates are page-local (start from margins.top)", () => {
     const layout = layoutDocument(doc(p("Hello")), {
       pageConfig: defaultPageConfig,
-      measurer: measurer(),
+      measurer: createMeasurer(),
     });
     const block = layout.pages[0]!.blocks[0]!;
     // First block on page: no spaceBefore (paragraph), so y = margins.top
@@ -85,7 +51,7 @@ describe("layoutDocument — basic", () => {
   it("exposes pageConfig on the layout result", () => {
     const layout = layoutDocument(doc(p()), {
       pageConfig: defaultPageConfig,
-      measurer: measurer(),
+      measurer: createMeasurer(),
     });
     expect(layout.pageConfig).toBe(defaultPageConfig);
   });
@@ -97,7 +63,7 @@ describe("layoutDocument — multiple blocks", () => {
   it("stacks two paragraphs vertically", () => {
     const layout = layoutDocument(doc(p("First"), p("Second")), {
       pageConfig: defaultPageConfig,
-      measurer: measurer(),
+      measurer: createMeasurer(),
     });
     const blocks = layout.pages[0]!.blocks;
     expect(blocks).toHaveLength(2);
@@ -109,7 +75,7 @@ describe("layoutDocument — multiple blocks", () => {
     // h1: spaceAfter=12. paragraph: spaceBefore=0. collapsed gap = max(12,0) = 12
     const layout = layoutDocument(doc(h1("Title"), p("Body")), {
       pageConfig: defaultPageConfig,
-      measurer: measurer(),
+      measurer: createMeasurer(),
     });
     const [heading, para] = layout.pages[0]!.blocks;
     const gap = para!.y - (heading!.y + heading!.height);
@@ -123,7 +89,7 @@ describe("layoutDocument — page_break node", () => {
   it("forces content onto a new page", () => {
     const layout = layoutDocument(doc(p("Page 1"), pageBreak(), p("Page 2")), {
       pageConfig: defaultPageConfig,
-      measurer: measurer(),
+      measurer: createMeasurer(),
     });
     expect(layout.pages).toHaveLength(2);
     expect(layout.pages[0]!.blocks).toHaveLength(1);
@@ -133,7 +99,7 @@ describe("layoutDocument — page_break node", () => {
   it("resets y to margins.top on the new page", () => {
     const layout = layoutDocument(doc(p("A"), pageBreak(), p("B")), {
       pageConfig: defaultPageConfig,
-      measurer: measurer(),
+      measurer: createMeasurer(),
     });
     const blockOnPage2 = layout.pages[1]!.blocks[0]!;
     expect(blockOnPage2.y).toBe(defaultPageConfig.margins.top);
@@ -156,7 +122,7 @@ describe("layoutDocument — overflow", () => {
     const blocks = Array.from({ length: 12 }, (_, i) => p(`Paragraph ${i + 1}`));
     const layout = layoutDocument(doc(...blocks), {
       pageConfig: tinyPage,
-      measurer: measurer(),
+      measurer: createMeasurer(),
     });
 
     expect(layout.pages.length).toBeGreaterThanOrEqual(2);
@@ -171,12 +137,142 @@ describe("layoutDocument — overflow", () => {
     const blocks = Array.from({ length: 15 }, () => p("Text"));
     const layout = layoutDocument(doc(...blocks), {
       pageConfig: tinyPage,
-      measurer: measurer(),
+      measurer: createMeasurer(),
     });
 
     // First block on page 2 should start at margins.top
     const firstBlockPage2 = layout.pages[1]?.blocks[0];
     expect(firstBlockPage2?.y).toBe(10); // margins.top
+  });
+});
+
+// ── Horizontal rule ───────────────────────────────────────────────────────────
+
+describe("layoutDocument — horizontal rule", () => {
+  const { schema: fullSchema, fontConfig: fullFontConfig } = buildStarterKitContext();
+
+  function hr() {
+    return fullSchema.nodes["horizontalRule"]!.create();
+  }
+
+  function fullDoc(...blocks: ReturnType<typeof fullSchema.node>[]) {
+    return fullSchema.node("doc", null, blocks);
+  }
+
+  function fullP(text = "") {
+    return text
+      ? fullSchema.node("paragraph", null, [fullSchema.text(text)])
+      : fullSchema.node("paragraph", null, []);
+  }
+
+  // HR block style: font "8px Georgia, serif" → height = Math.round(8 × 1.5) = 12
+  // spaceBefore = 8, spaceAfter = 8
+  const HR_HEIGHT = 12;
+  const HR_SPACE  = 8;
+
+  it("HR block has correct height (derived from 8px font)", () => {
+    const layout = layoutDocument(fullDoc(hr()), {
+      pageConfig: defaultPageConfig,
+      measurer: createMeasurer(),
+      fontConfig: fullFontConfig,
+    });
+    const block = layout.pages[0]!.blocks[0]!;
+    expect(block.height).toBe(HR_HEIGHT);
+  });
+
+  it("HR is positioned at margins.top when it is the first block", () => {
+    const layout = layoutDocument(fullDoc(hr()), {
+      pageConfig: defaultPageConfig,
+      measurer: createMeasurer(),
+      fontConfig: fullFontConfig,
+    });
+    const block = layout.pages[0]!.blocks[0]!;
+    expect(block.y).toBe(defaultPageConfig.margins.top);
+  });
+
+  it("paragraph before HR: HR y accounts for para height and collapsed margin", () => {
+    // para: spaceAfter=10.  HR: spaceBefore=8.  collapsed gap = max(10, 8) = 10
+    const layout = layoutDocument(fullDoc(fullP("Hello"), hr()), {
+      pageConfig: defaultPageConfig,
+      measurer: createMeasurer(),
+      fontConfig: fullFontConfig,
+    });
+    const [para, hrBlock] = layout.pages[0]!.blocks;
+    const expectedGap = Math.max(10, HR_SPACE); // 10
+    expect(hrBlock!.y).toBe(para!.y + para!.height + expectedGap);
+  });
+
+  it("HR before paragraph: para y accounts for HR height and collapsed margin", () => {
+    // HR spaceAfter=8.  para: spaceBefore=0.  collapsed gap = max(8, 0) = 8
+    const layout = layoutDocument(fullDoc(hr(), fullP("Hello")), {
+      pageConfig: defaultPageConfig,
+      measurer: createMeasurer(),
+      fontConfig: fullFontConfig,
+    });
+    const [hrBlock, para] = layout.pages[0]!.blocks;
+    const expectedGap = Math.max(HR_SPACE, 0); // 8
+    expect(para!.y).toBe(hrBlock!.y + HR_HEIGHT + expectedGap);
+  });
+
+  it("HR block lines is empty (leaf node — no inline content)", () => {
+    const layout = layoutDocument(fullDoc(hr()), {
+      pageConfig: defaultPageConfig,
+      measurer: createMeasurer(),
+      fontConfig: fullFontConfig,
+    });
+    const block = layout.pages[0]!.blocks[0]!;
+    expect(block.lines).toHaveLength(0);
+  });
+});
+
+// ── List item spacing ─────────────────────────────────────────────────────────
+
+describe("layoutDocument — list item spacing", () => {
+  const { schema: fullSchema, fontConfig: fullFontConfig } = buildStarterKitContext();
+
+  function bulletList(...items: string[]) {
+    const listItems = items.map((text) =>
+      fullSchema.nodes["listItem"]!.create(null, [
+        fullSchema.node("paragraph", null, text ? [fullSchema.text(text)] : []),
+      ])
+    );
+    return fullSchema.nodes["bulletList"]!.create(null, listItems);
+  }
+
+  function fullDoc(...blocks: ReturnType<typeof fullSchema.node>[]) {
+    return fullSchema.node("doc", null, blocks);
+  }
+
+  function fullP(text = "") {
+    return text
+      ? fullSchema.node("paragraph", null, [fullSchema.text(text)])
+      : fullSchema.node("paragraph", null, []);
+  }
+
+  // list_item block style: spaceAfter=4 (vs paragraph spaceAfter=10)
+  // spaceBefore=0 for both, so collapsed gap between two list items = max(4,0) = 4
+  it("gap between two list items uses list_item spaceAfter (4), not paragraph spaceAfter (10)", () => {
+    const layout = layoutDocument(fullDoc(bulletList("First item", "Second item")), {
+      pageConfig: defaultPageConfig,
+      measurer: createMeasurer(),
+      fontConfig: fullFontConfig,
+    });
+    const [first, second] = layout.pages[0]!.blocks;
+    const gap = second!.y - (first!.y + first!.height);
+    // list_item: spaceAfter=4, spaceBefore=0 → collapsed = 4
+    expect(gap).toBe(4);
+  });
+
+  it("gap after last list item before a paragraph uses list_item spaceAfter (4)", () => {
+    // list_item spaceAfter=4, paragraph spaceBefore=0 → collapsed = 4
+    const layout = layoutDocument(fullDoc(bulletList("Only item"), fullP("After")), {
+      pageConfig: defaultPageConfig,
+      measurer: createMeasurer(),
+      fontConfig: fullFontConfig,
+    });
+    const [listBlock, paraBlock] = layout.pages[0]!.blocks;
+    const gap = paraBlock!.y - (listBlock!.y + listBlock!.height);
+    expect(gap).toBe(4);
   });
 });
 

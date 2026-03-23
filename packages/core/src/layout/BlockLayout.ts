@@ -6,6 +6,53 @@ import { CharacterMap } from "./CharacterMap";
 import { FontConfig, defaultFontConfig, getBlockStyle, BlockStyle } from "./FontConfig";
 import { resolveFont } from "./StyleResolver";
 
+/** Extracts px size from a CSS font string like "bold 14px Georgia, serif". Returns null if not found. */
+function parseFontSizePx(font: string): number | null {
+  const m = font.match(/(\d+(?:\.\d+)?)px/);
+  return m ? parseFloat(m[1]!) : null;
+}
+
+/**
+ * Resolves the rendered height and block spacing for a leaf block node.
+ *
+ * Priority for height:
+ *   1. `node.attrs.height` — explicit px height (images, embeds that store their own size)
+ *   2. Font size × 1.5 from the block style (non-image leaf nodes like HR)
+ *   3. `IMAGE_DEFAULT_HEIGHT` fallback when no fontConfig is available
+ *
+ * Priority for spacing:
+ *   1. `blockStyle.spaceBefore` / `blockStyle.spaceAfter` from fontConfig
+ *   2. `IMAGE_SPACE` default (used for images when no block style is registered)
+ *
+ * Exported so it can be used by tests and future embed/widget extensions
+ * that define their own leaf block nodes.
+ */
+export function resolveLeafBlockDimensions(
+  node: Node,
+  fontConfig: FontConfig | undefined,
+  imageDefaultHeight: number,
+  imageDefaultSpace: number,
+): { height: number; spaceBefore: number; spaceAfter: number } {
+  const blockStyle = fontConfig ? getBlockStyle(fontConfig, node.type.name) : null;
+
+  const attrH = node.attrs["height"];
+  let height: number;
+  if (typeof attrH === "number" && attrH > 0) {
+    height = attrH;
+  } else if (blockStyle) {
+    const fontSize = parseFontSizePx(blockStyle.font);
+    height = fontSize != null ? Math.round(fontSize * 1.5) : imageDefaultHeight;
+  } else {
+    height = imageDefaultHeight;
+  }
+
+  return {
+    height,
+    spaceBefore: blockStyle?.spaceBefore ?? imageDefaultSpace,
+    spaceAfter:  blockStyle?.spaceAfter  ?? imageDefaultSpace,
+  };
+}
+
 
 export interface LayoutBlock {
   /** The original ProseMirror node — used by BlockStrategy.render() */
@@ -82,10 +129,12 @@ const IMAGE_SPACE = 8;
  * the CharacterMap so click-to-place-cursor works near the block.
  */
 export function layoutLeafBlock(node: Node, options: BlockLayoutOptions): LayoutBlock {
-  const { nodePos, x, y, availableWidth, page, map, lineIndexOffset = 0 } = options;
+  const { nodePos, x, y, availableWidth, page, map, lineIndexOffset = 0, fontConfig } = options;
 
-  const attrH = node.attrs["height"];
-  const height = (typeof attrH === "number" && attrH > 0) ? attrH : IMAGE_DEFAULT_HEIGHT;
+  const { height, spaceBefore, spaceAfter } = resolveLeafBlockDimensions(
+    node, fontConfig, IMAGE_DEFAULT_HEIGHT, IMAGE_SPACE,
+  );
+
   const cursorDocPos = nodePos + 1; // inside the 2-token leaf block
 
   if (map) {
@@ -104,15 +153,17 @@ export function layoutLeafBlock(node: Node, options: BlockLayoutOptions): Layout
     }
   }
 
+  const blockStyle = fontConfig ? getBlockStyle(fontConfig, node.type.name) : null;
+
   return {
     node, x, y,
     width:     availableWidth,
     height,
     lines:     [],
-    spaceBefore: IMAGE_SPACE,
-    spaceAfter:  IMAGE_SPACE,
+    spaceBefore,
+    spaceAfter,
     blockType: node.type.name,
-    align:     "left" as const,
+    align:     blockStyle?.align ?? "left",
     availableWidth,
   };
 }

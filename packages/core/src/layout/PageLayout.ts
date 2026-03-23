@@ -92,11 +92,13 @@ export function layoutDocument(
       continue;
     }
 
-    const { node, nodePos, listMarker, indentLeft } = item;
+    const { node, nodePos, listMarker, indentLeft, styleKey } = item;
 
     // ── Margin collapsing ────────────────────────────────────────────────────
+    // Use styleKey when set (e.g. "list_item") so list item spacing comes from
+    // the list_item block style rather than the inner paragraph style.
     const level = node.attrs["level"] as number | undefined;
-    const blockStyle = getBlockStyle(fontConfig, node.type.name, level);
+    const blockStyle = getBlockStyle(fontConfig, styleKey ?? node.type.name, level);
     const isFirstOnPage = currentPage.blocks.length === 0;
     const gap = isFirstOnPage
       ? 0
@@ -158,12 +160,14 @@ export function layoutDocument(
 
       currentPage.blocks.push(reflow);
       y = margins.top + reflow.height;
-      prevSpaceAfter = reflow.spaceAfter;
+      // Use styleKey-resolved spaceAfter so list items use list_item spacing, not paragraph spacing
+      prevSpaceAfter = blockStyle.spaceAfter;
     } else {
       // ── Place on current page ──────────────────────────────────────────────
       currentPage.blocks.push(block);
       y = targetY + block.height;
-      prevSpaceAfter = block.spaceAfter;
+      // Use styleKey-resolved spaceAfter so list items use list_item spacing, not paragraph spacing
+      prevSpaceAfter = blockStyle.spaceAfter;
     }
   }
 
@@ -188,6 +192,12 @@ interface LayoutItem {
   indentLeft: number;
   /** Bullet character or ordered number, e.g. "•" or "1.". Undefined for non-list blocks. */
   listMarker?: string;
+  /**
+   * Override the FontConfig key used for block-style lookup.
+   * List items lay out their inner `paragraph` node but should use the
+   * `list_item` spacing defined in addBlockStyles(), not the paragraph style.
+   */
+  styleKey?: string;
 }
 
 const LIST_INDENT = 24;  // px — text starts this far right of the margin
@@ -225,6 +235,7 @@ function collectLayoutItems(doc: Node, _fontConfig: FontConfig): LayoutItem[] {
           nodePos: paraNodePos,
           indentLeft: LIST_INDENT,
           listMarker: marker,
+          styleKey: "list_item",
         });
 
         itemIndex++;

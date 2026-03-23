@@ -8,6 +8,9 @@ export default defineConfig({
     // Pick up tests from all packages
     include: ["packages/*/src/**/*.test.ts", "packages/*/src/**/*.spec.ts"],
 
+    // Global setup — runs once per test file before any tests execute
+    setupFiles: ["./packages/core/vitest.setup.ts"],
+
     // Global test utilities available without importing
     globals: true,
 

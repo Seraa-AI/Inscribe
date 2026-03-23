@@ -1,6 +1,6 @@
 export { TrackChanges } from "./TrackChanges";
-export { applyDiffAsSuggestion } from "./lib/applyDiffAsSuggestion";
-export type { ApplyDiffOptions } from "./lib/applyDiffAsSuggestion";
+export { applyDiffAsSuggestion, applyMultiBlockDiff } from "./lib/applyDiffAsSuggestion";
+export type { ApplyDiffOptions, MultiBlockDiffOptions, ApplyDiffResult } from "./lib/applyDiffAsSuggestion";
 export { buildParagraphContexts } from "./lib/buildParagraphContexts";
 export type { ParagraphContext } from "./lib/buildParagraphContexts";
 export { diffText } from "./lib/diffText";

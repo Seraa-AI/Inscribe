@@ -4,7 +4,7 @@ export { TextMeasurer } from "./TextMeasurer";
 export type { FontMetrics, RunMetrics } from "./TextMeasurer";
 export { LineBreaker } from "./LineBreaker";
 export type { InputSpan, LayoutSpan, LayoutLine } from "./LineBreaker";
-export { layoutBlock } from "./BlockLayout";
+export { layoutBlock, resolveLeafBlockDimensions } from "./BlockLayout";
 export type { LayoutBlock, BlockLayoutOptions } from "./BlockLayout";
 export { layoutDocument, defaultPageConfig, collapseMargins } from "./PageLayout";
 export type { PageConfig, LayoutPage, DocumentLayout, PageLayoutOptions } from "./PageLayout";

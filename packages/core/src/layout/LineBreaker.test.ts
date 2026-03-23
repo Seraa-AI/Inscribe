@@ -1,38 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { LineBreaker } from "./LineBreaker";
-import { TextMeasurer } from "./TextMeasurer";
 import { CharacterMap } from "./CharacterMap";
+import { createMeasurer, MOCK_CHAR_WIDTH, MOCK_ASCENT } from "../test-utils";
 
 /**
  * LineBreaker tests.
  *
  * TextMeasurer is created with a mocked canvas so measurements are predictable:
- *   - Every character is 8px wide
- *   - Font ascent: 12px, descent: 3px, lineHeight: (12+3) * 1.2 = 18px
+ *   - Every character is MOCK_CHAR_WIDTH (8px) wide
+ *   - Font ascent: MOCK_ASCENT (12px), descent: 3px, lineHeight: (12+3) * 1.2 = 18px
  *
  * This lets tests reason about exact pixel values without real font loading.
  */
 
-const CHAR_WIDTH = 8;
-const ASCENT = 12;
-const DESCENT = 3;
 
-beforeEach(() => {
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
-    measureText: vi.fn((text: string) => ({
-      width: text.length * CHAR_WIDTH,
-      actualBoundingBoxAscent: ASCENT,
-      actualBoundingBoxDescent: DESCENT,
-      fontBoundingBoxAscent: ASCENT,
-      fontBoundingBoxDescent: DESCENT,
-    })),
-    font: "",
-  } as unknown as CanvasRenderingContext2D);
-});
-
-function makeMeasurer() {
-  return new TextMeasurer({ lineHeightMultiplier: 1.2 });
-}
+function makeMeasurer() { return createMeasurer(); }
 
 // "Hello " = 6 chars × 8px = 48px
 // "world"  = 5 chars × 8px = 40px
@@ -46,7 +28,7 @@ describe("LineBreaker — basic wrapping", () => {
       200
     );
     expect(lines).toHaveLength(1);
-    expect(lines[0]?.width).toBe(11 * CHAR_WIDTH); // 88px
+    expect(lines[0]?.width).toBe(11 * MOCK_CHAR_WIDTH); // 88px
   });
 
   it("wraps onto a new line when text exceeds maxWidth", () => {
@@ -141,7 +123,7 @@ describe("LineBreaker — vertical metrics", () => {
       ],
       200
     );
-    expect(lines[0]?.ascent).toBe(ASCENT);
+    expect(lines[0]?.ascent).toBe(MOCK_ASCENT);
   });
 });
 
