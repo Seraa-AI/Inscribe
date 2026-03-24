@@ -286,9 +286,12 @@ export class ViewManager {
       renderSelection(ctx, lines, glyphs, selection.from, selection.to);
     }
 
-    if (this.editor.isFocused && this.editor.cursorManager.isVisible) {
-      const coords = this.editor.charMap.coordsAtPos(selection.head, true);
-      if (coords && coords.page === page.pageNumber) {
+    if (this.editor.isFocused && this.editor.cursorManager.isVisible &&
+        page.pageNumber === this.editor.cursorPage) {
+      // Scope the search to this page so the preceding-glyph fallback never
+      // returns coords from a different page's canvas.
+      const coords = this.editor.charMap.coordsAtPos(selection.head, page.pageNumber);
+      if (coords) {
         renderCursor(ctx, coords);
       }
     }

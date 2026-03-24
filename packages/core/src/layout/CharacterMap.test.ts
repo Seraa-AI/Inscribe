@@ -131,6 +131,34 @@ describe("CharacterMap", () => {
       const coords = map.coordsAtPos(0);
       expect(coords).toBeNull();
     });
+
+    it("scopeToPage: returns null instead of crossing to preceding glyph on a different page", () => {
+      // Simulates the lazy-charmap scenario: page 1 is populated, page 2 is not.
+      // The cursor is at the very first position on page 2 (docPos 100).
+      // Without scoping, coordsAtPos falls back to the last glyph on page 1 (docPos 4)
+      // and returns page=1 coords — causing the cursor to be drawn on the wrong canvas.
+      // With scopeToPage=2, the search is restricted to page 2's glyphs, returning null,
+      // so the cursor is simply not drawn on page 1's overlay (correct behaviour).
+      const crossMap = new CharacterMap();
+      // Page 1 has glyphs at docPos 1–4
+      crossMap.registerGlyph({ docPos: 1, x: 0, y: 60, width: 10, height: 20, page: 1, lineIndex: 0 });
+      crossMap.registerGlyph({ docPos: 4, x: 30, y: 60, width: 10, height: 20, page: 1, lineIndex: 0 });
+      // Page 2 has a glyph at docPos 101 but NOT at 100 (cursor is at the boundary)
+      crossMap.registerGlyph({ docPos: 101, x: 72, y: 72, width: 10, height: 20, page: 2, lineIndex: 0 });
+
+      // Unscoped: falls back to page 1's glyph at docPos 4
+      const unscoped = crossMap.coordsAtPos(100);
+      expect(unscoped?.page).toBe(1);
+
+      // Scoped to page 2: no preceding glyph on page 2 before docPos 100 → null
+      const scoped = crossMap.coordsAtPos(100, 2);
+      expect(scoped).toBeNull();
+
+      // Scoped to page 2: exact match at docPos 101 is found
+      const exact = crossMap.coordsAtPos(101, 2);
+      expect(exact?.page).toBe(2);
+      expect(exact?.x).toBe(72);
+    });
   });
 
   describe("glyphsInRange", () => {

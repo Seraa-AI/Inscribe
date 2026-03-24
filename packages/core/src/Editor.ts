@@ -175,6 +175,14 @@ export class Editor {
   private dirty = false;
 
   /**
+   * The 1-based page number that contains the current cursor.
+   * Computed once in ensureLayout() from the layout (no charmap needed) and
+   * cached here so ViewManager can read it cheaply on every overlay paint
+   * without re-walking the layout blocks.
+   */
+  private _cursorPage = 1;
+
+  /**
    * Set of page numbers whose CharacterMap entries have been populated.
    * Cleared on every ensureLayout() call (charMap is cleared too).
    * Makes ensurePagePopulated idempotent — ViewManager calls it before every
@@ -385,13 +393,42 @@ export class Editor {
       measureCache: this.measureCache,
       previousLayout,
     });
-    // Populate all pages eagerly — guarantees coordsAtPos always finds the
-    // cursor glyph regardless of which page it's on. The measureCache makes
-    // this cheap for unchanged blocks (O(1) cache hit per block). Phase 3
-    // (measureRun LRU) will make it cheap for changed blocks too.
+    // Populate only the cursor page ± 1.
+    // The cursor page is required for coordsAtPos (cursor draw + selection).
+    // Adjacent pages (± 1) are required for posAbove / posBelow at page
+    // boundaries (keyboard ↑/↓ crossing a page break).
+    // All other visible pages are populated on demand by ViewManager before
+    // each paint, so their charmap entries are always ready when needed.
+    this._cursorPage = this.cursorPageFromLayout();
+    this.ensurePagePopulated(this._cursorPage);
+    this.ensurePagePopulated(this._cursorPage - 1); // no-op when page < 1 or doesn't exist
+    this.ensurePagePopulated(this._cursorPage + 1); // no-op when page doesn't exist
+  }
+
+  /**
+   * The page number the cursor currently resides on.
+   * Computed once per layout cycle in ensureLayout() — free to read on every
+   * overlay paint without re-walking the layout.
+   */
+  get cursorPage(): number {
+    return this._cursorPage;
+  }
+
+  /**
+   * Finds which layout page the current cursor (selection.head) resides on.
+   * Walks layout blocks — pure integer arithmetic, no charmap needed.
+   * Falls back to the last page if the position is somehow out of range.
+   */
+  private cursorPageFromLayout(): number {
+    const head = this.state.selection.head;
     for (const page of this._layout.pages) {
-      this.ensurePagePopulated(page.pageNumber);
+      for (const block of page.blocks) {
+        if (head >= block.nodePos && head <= block.nodePos + block.node.nodeSize) {
+          return page.pageNumber;
+        }
+      }
     }
+    return this._layout.pages[this._layout.pages.length - 1]?.pageNumber ?? 1;
   }
 
   /**

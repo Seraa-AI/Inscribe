@@ -123,22 +123,27 @@ export class CharacterMap {
    *
    * If the position falls between two glyphs, returns the right edge of
    * the preceding glyph (i.e. the left edge of the gap).
+   *
+   * @param scopeToPage — when provided, both the exact and preceding-glyph
+   *   searches are restricted to glyphs on that page. Use this when rendering
+   *   the cursor overlay so the fallback can never land on a glyph from a
+   *   different page's canvas (which would cause the cursor to disappear or
+   *   jump). Callers that need cross-page data (posAbove, posBelow) omit this.
    */
-  coordsAtPos(docPos: number, _debug = false): CoordsResult | null {
+  coordsAtPos(docPos: number, scopeToPage?: number): CoordsResult | null {
+    const pool = scopeToPage !== undefined
+      ? this.glyphs.filter((g) => g.page === scopeToPage)
+      : this.glyphs;
+
     // Exact match — start of a glyph
-    const exact = this.glyphs.find((g) => g.docPos === docPos);
+    const exact = pool.find((g) => g.docPos === docPos);
     if (exact) {
-      if (_debug) console.log('[coordsAtPos] EXACT docPos=%d → x=%.1f y=%.1f h=%.1f page=%d', docPos, exact.x, exact.y, exact.height, exact.page);
       return { x: exact.x, y: exact.y, height: exact.height, page: exact.page };
     }
 
     // Position is after the last glyph on a line — draw cursor at its right edge
-    const preceding = [...this.glyphs]
-      .reverse()
-      .find((g) => g.docPos < docPos);
-
+    const preceding = [...pool].reverse().find((g) => g.docPos < docPos);
     if (preceding) {
-      if (_debug) console.log('[coordsAtPos] PRECEDING docPos=%d ← glyph@%d x=%.1f y=%.1f w=%.1f h=%.1f page=%d', docPos, preceding.docPos, preceding.x, preceding.y, preceding.width, preceding.height, preceding.page);
       return {
         x: preceding.x + preceding.width,
         y: preceding.y,
@@ -147,7 +152,6 @@ export class CharacterMap {
       };
     }
 
-    if (_debug) console.log('[coordsAtPos] NULL docPos=%d — no glyphs registered', docPos);
     return null;
   }
 
