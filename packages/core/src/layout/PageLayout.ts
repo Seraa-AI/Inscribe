@@ -145,6 +145,13 @@ export function layoutDocument(
    */
   const items = collectLayoutItems(doc, fontConfig);
 
+  // Phase 1b: early termination is only valid after we've seen at least one
+  // cache miss. A miss means the node was modified (ProseMirror creates a new
+  // Node object on every change). Until we've passed the edit point, cache
+  // hits might be UPSTREAM of the change and their placement in previousLayout
+  // may still be correct even though downstream blocks have changed.
+  let seenCacheMiss = false;
+
   for (const item of items) {
     // ── Hard page break ──────────────────────────────────────────────────────
     if (item.isPageBreak) {
@@ -181,6 +188,8 @@ export function layoutDocument(
     const prevNodePos = preCached?.nodePos;
     const preCachedTargetY = preCached?.placedTargetY;
     const preCachedPage = preCached?.placedPage;
+
+    if (!isHit) seenCacheMiss = true;
 
     // ── Measure block (cache-first; no CharacterMap — just dimensions) ────────
     const entry = resolveBlockEntry(
@@ -265,6 +274,7 @@ export function layoutDocument(
     // Copy remaining pages from previousLayout and exit the loop early.
     if (
       previousLayout &&
+      seenCacheMiss &&
       isHit &&
       preCachedTargetY !== undefined &&
       preCachedPage !== undefined &&
