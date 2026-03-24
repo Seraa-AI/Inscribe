@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { layoutDocument, defaultPageConfig, collapseMargins } from "./PageLayout";
+import type { MeasureCacheEntry } from "./PageLayout";
 import { buildStarterKitContext, createMeasurer, paragraph as p, heading, doc, pageBreak } from "../test-utils";
 
 // lineHeight = 18, contentHeight = 1123 - 72 - 72 = 979
@@ -273,6 +274,117 @@ describe("layoutDocument — list item spacing", () => {
     const [listBlock, paraBlock] = layout.pages[0]!.blocks;
     const gap = paraBlock!.y - (listBlock!.y + listBlock!.height);
     expect(gap).toBe(4);
+  });
+});
+
+// ── measureCache ─────────────────────────────────────────────────────────────
+
+describe("layoutDocument — measureCache", () => {
+  it("produces identical layout output when a cache is provided", () => {
+    const cache = new WeakMap<object, MeasureCacheEntry>();
+    const baseDoc = doc(p("Hello"), p("World"));
+    const opts = { pageConfig: defaultPageConfig, measurer: createMeasurer() };
+
+    const withoutCache = layoutDocument(baseDoc, opts);
+    const withCache    = layoutDocument(baseDoc, { ...opts, measureCache: cache });
+
+    expect(withCache.pages).toHaveLength(withoutCache.pages.length);
+    for (let pi = 0; pi < withoutCache.pages.length; pi++) {
+      const blocksA = withoutCache.pages[pi]!.blocks;
+      const blocksB = withCache.pages[pi]!.blocks;
+      expect(blocksB).toHaveLength(blocksA.length);
+      for (let bi = 0; bi < blocksA.length; bi++) {
+        expect(blocksB[bi]!.height).toBe(blocksA[bi]!.height);
+        expect(blocksB[bi]!.y).toBe(blocksA[bi]!.y);
+        expect(blocksB[bi]!.x).toBe(blocksA[bi]!.x);
+      }
+    }
+  });
+
+  it("populates the cache after the first layout run", () => {
+    const cache = new WeakMap<object, MeasureCacheEntry>();
+    const para = p("Cached paragraph");
+    const testDoc = doc(para);
+    layoutDocument(testDoc, { pageConfig: defaultPageConfig, measurer: createMeasurer(), measureCache: cache });
+    // The inner paragraph node is the cache key
+    const innerNode = testDoc.firstChild!;
+    expect(cache.has(innerNode)).toBe(true);
+    const entry = cache.get(innerNode)!;
+    expect(entry.height).toBeGreaterThan(0);
+    expect(entry.availableWidth).toBe(defaultPageConfig.pageWidth - defaultPageConfig.margins.left - defaultPageConfig.margins.right);
+  });
+
+  it("uses cached height — manually stale entry is reflected in layout y positions", () => {
+    // This test verifies the cache is actually consulted (not just populated).
+    // We manually inject a fake cache entry with a doubled height and confirm
+    // the second block's y-position shifts accordingly.
+    const cache = new WeakMap<object, MeasureCacheEntry>();
+    const firstPara = p("First paragraph");
+    const secondPara = p("Second paragraph");
+    const testDoc = doc(firstPara, secondPara);
+    const measurer = createMeasurer();
+    const opts = { pageConfig: defaultPageConfig, measurer, measureCache: cache };
+
+    // First run — establishes true layout
+    const trueLayout = layoutDocument(testDoc, opts);
+    const trueFirstHeight = trueLayout.pages[0]!.blocks[0]!.height;
+    const trueSecondY     = trueLayout.pages[0]!.blocks[1]!.y;
+
+    // Corrupt the first paragraph's cache entry — double the height
+    const firstNode = testDoc.firstChild!;
+    const realEntry = cache.get(firstNode)!;
+    cache.set(firstNode, { ...realEntry, height: realEntry.height * 2 });
+
+    // Second run with same doc — the first block should use the inflated height
+    const cachedLayout = layoutDocument(testDoc, opts);
+    const cachedFirstHeight = cachedLayout.pages[0]!.blocks[0]!.height;
+    const cachedSecondY     = cachedLayout.pages[0]!.blocks[1]!.y;
+
+    // Cache hit: first block height is now doubled
+    expect(cachedFirstHeight).toBe(trueFirstHeight * 2);
+    // Second block was pushed down by the extra height
+    expect(cachedSecondY).toBeGreaterThan(trueSecondY);
+  });
+
+  it("adjusts span docPos when a block shifts due to content inserted before it", () => {
+    // Simulates ProseMirror structural sharing: the second paragraph Node keeps
+    // the same JS object reference even after text is inserted into the first
+    // paragraph (shifting the second paragraph's absolute nodePos). Without the
+    // fix, cached span.docPos values would be stale (off by the insertion delta).
+    const para2 = p("Second");
+    const doc1 = doc(p("A"),       para2); // para2.nodePos = 3  (p("A").nodeSize = 3)
+    const doc2 = doc(p("AAAAAAA"), para2); // para2.nodePos = 9  (p("AAAAAAA").nodeSize = 9)
+
+    const cache = new WeakMap<object, MeasureCacheEntry>();
+    const measurer = createMeasurer();
+    const opts = { pageConfig: defaultPageConfig, measurer, measureCache: cache };
+
+    // First layout — populates the cache for para2 with nodePos=3
+    const layout1 = layoutDocument(doc1, opts);
+    const block2_1 = layout1.pages[0]!.blocks[1]!;
+    expect(block2_1.lines[0]!.spans[0]!.docPos).toBe(block2_1.nodePos + 1);
+
+    // Second layout — para2 is the same Node object (structural sharing) but its
+    // nodePos has shifted by 6 (from 3 to 9). The cache must return adjusted docPos.
+    const layout2 = layoutDocument(doc2, opts);
+    const block2_2 = layout2.pages[0]!.blocks[1]!;
+    expect(block2_2.nodePos).toBeGreaterThan(block2_1.nodePos);
+    expect(block2_2.lines[0]!.spans[0]!.docPos).toBe(block2_2.nodePos + 1);
+  });
+
+  it("re-measures when availableWidth changes (margin change)", () => {
+    const cache = new WeakMap<object, MeasureCacheEntry>();
+    const testDoc = doc(p("Text"));
+    const measurer = createMeasurer();
+    const narrow = { pageWidth: 400, pageHeight: 800, margins: { top: 20, right: 20, bottom: 20, left: 20 } };
+    const wide   = { pageWidth: 700, pageHeight: 800, margins: { top: 20, right: 20, bottom: 20, left: 20 } };
+
+    const layoutNarrow = layoutDocument(testDoc, { pageConfig: narrow, measurer, measureCache: cache });
+    const layoutWide   = layoutDocument(testDoc, { pageConfig: wide,   measurer, measureCache: cache });
+
+    // Both runs should succeed and the cached entry should reflect the wide config
+    expect(layoutNarrow.pages[0]!.blocks[0]!.availableWidth).toBe(360); // 400 - 20 - 20
+    expect(layoutWide.pages[0]!.blocks[0]!.availableWidth).toBe(660);   // 700 - 20 - 20
   });
 });
 

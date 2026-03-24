@@ -39,6 +39,39 @@ export interface RunMetrics {
   charPositions: number[];
 }
 
+/**
+ * Minimal LRU cache backed by a Map.
+ * JavaScript Maps maintain insertion order — deleting and re-inserting on
+ * access keeps the most-recently-used entry at the end and the least-recently-
+ * used at the front.  Eviction is O(1): `map.keys().next()` gives the oldest.
+ */
+class LRUCache<V> {
+  private map = new Map<string, V>();
+  constructor(private readonly maxSize: number) {}
+
+  get(key: string): V | undefined {
+    const val = this.map.get(key);
+    if (val === undefined) return undefined;
+    // Move to end (most recently used)
+    this.map.delete(key);
+    this.map.set(key, val);
+    return val;
+  }
+
+  set(key: string, val: V): void {
+    if (this.map.has(key)) this.map.delete(key);
+    this.map.set(key, val);
+    if (this.map.size > this.maxSize) {
+      // Evict least-recently-used (first entry)
+      this.map.delete(this.map.keys().next().value!);
+    }
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+}
+
 export class TextMeasurer {
   private ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -47,6 +80,14 @@ export class TextMeasurer {
 
   /** font → FontMetrics */
   private metricCache = new Map<string, FontMetrics>();
+
+  /**
+   * LRU cache for measureRun results.
+   * Key: `${font}\x00${text}` — null separator avoids collisions.
+   * 2 000 entries covers the vocabulary of a large document with room to spare.
+   * measureRun() is O(n) raw ctx.measureText calls; a cache hit is O(1).
+   */
+  private runCache = new LRUCache<RunMetrics>(2000);
 
   /** How much to multiply (ascent + descent) for final line height */
   private lineHeightMultiplier: number;
@@ -128,6 +169,10 @@ export class TextMeasurer {
       return { totalWidth: 0, charPositions: [] };
     }
 
+    const key = `${font}\x00${text}`;
+    const cached = this.runCache.get(key);
+    if (cached) return cached;
+
     this.ctx.font = font;
     const charPositions: number[] = new Array(text.length).fill(0) as number[];
 
@@ -138,8 +183,9 @@ export class TextMeasurer {
     }
 
     const totalWidth = this.ctx.measureText(text).width;
-
-    return { totalWidth, charPositions };
+    const result: RunMetrics = { totalWidth, charPositions };
+    this.runCache.set(key, result);
+    return result;
   }
 
   /**
@@ -156,9 +202,13 @@ export class TextMeasurer {
     if (font) {
       this.widthCache.delete(font);
       this.metricCache.delete(font);
+      // Run metrics include kerning data specific to each font — must flush too.
+      // Clearing the entire runCache is safe and simpler than per-font filtering.
+      this.runCache.clear();
     } else {
       this.widthCache.clear();
       this.metricCache.clear();
+      this.runCache.clear();
     }
   }
 

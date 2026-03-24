@@ -1,8 +1,14 @@
 import { Node } from "prosemirror-model";
 import type { FontModifier } from "../extensions/types";
 import { TextMeasurer } from "./TextMeasurer";
-import { FontConfig, defaultFontConfig, getBlockStyle } from "./FontConfig";
+import {
+  FontConfig,
+  defaultFontConfig,
+  getBlockStyle,
+  BlockStyle,
+} from "./FontConfig";
 import { layoutBlock, LayoutBlock } from "./BlockLayout";
+import type { LayoutLine } from "./LineBreaker";
 
 export interface PageConfig {
   pageWidth: number;
@@ -25,6 +31,32 @@ export interface DocumentLayout {
   version: number;
 }
 
+/**
+ * Cached measurement result for a single block node.
+ * Keyed by Node reference in a WeakMap — ProseMirror's structural sharing
+ * guarantees that unchanged nodes keep the same JS object identity across
+ * transactions, so pointer equality is a perfect cache key.
+ *
+ * All fields are position-independent: LayoutLine x-coordinates are relative
+ * to the line origin, not the page. The cached entry is valid as long as
+ * availableWidth matches (invalidated if margins change).
+ */
+export interface MeasureCacheEntry {
+  /** Content width the block was measured at — invalidates entry if margins change */
+  availableWidth: number;
+  /**
+   * The nodePos at which these lines were last measured. Span docPos values
+   * are absolute and must be adjusted when the block shifts in the document.
+   */
+  nodePos: number;
+  height: number;
+  lines: LayoutLine[];
+  spaceBefore: number;
+  spaceAfter: number;
+  blockType: string;
+  align: BlockStyle["align"];
+}
+
 export interface PageLayoutOptions {
   pageConfig: PageConfig;
   measurer: TextMeasurer;
@@ -36,6 +68,13 @@ export interface PageLayoutOptions {
   previousVersion?: number;
   /** Optional font modifier map from the ExtensionManager. Enables extensions to declare font effects. */
   fontModifiers?: Map<string, FontModifier>;
+  /**
+   * Block measurement cache keyed by Node reference.
+   * When provided, unchanged blocks (same ProseMirror Node object) skip the
+   * layoutBlock call entirely — O(1) cache hit instead of O(chars) re-measure.
+   * The Editor owns this WeakMap and passes it on every layoutDocument call.
+   */
+  measureCache?: WeakMap<Node, MeasureCacheEntry>;
 }
 
 /** A4 at 96dpi with 1-inch margins */
@@ -59,7 +98,7 @@ export const defaultPageConfig: PageConfig = {
  */
 export function layoutDocument(
   doc: Node,
-  options: PageLayoutOptions
+  options: PageLayoutOptions,
 ): DocumentLayout {
   const { pageConfig, measurer } = options;
   const fontConfig = options.fontConfig ?? defaultFontConfig;
@@ -74,6 +113,9 @@ export function layoutDocument(
   let currentPage: LayoutPage = { pageNumber: 1, blocks: [] };
   let y = margins.top;
   let prevSpaceAfter = 0;
+
+  // Destructured once — avoids repeated property access inside the hot loop.
+  const { measureCache } = options;
 
   /**
    * Collect the flat sequence of layoutable items from the doc.
@@ -98,7 +140,11 @@ export function layoutDocument(
     // Use styleKey when set (e.g. "list_item") so list item spacing comes from
     // the list_item block style rather than the inner paragraph style.
     const level = node.attrs["level"] as number | undefined;
-    const blockStyle = getBlockStyle(fontConfig, styleKey ?? node.type.name, level);
+    const blockStyle = getBlockStyle(
+      fontConfig,
+      styleKey ?? node.type.name,
+      level,
+    );
     const isFirstOnPage = currentPage.blocks.length === 0;
     const gap = isFirstOnPage
       ? 0
@@ -108,49 +154,60 @@ export function layoutDocument(
     const blockX = margins.left + indentLeft;
     const blockWidth = contentWidth - indentLeft;
 
-    // ── Measure block (no CharacterMap — just dimensions) ────────────────────
-    const block = layoutBlock(node, {
+    // ── Measure block (cache-first; no CharacterMap — just dimensions) ────────
+    const entry = resolveBlockEntry(
+      node,
       nodePos,
-      x: blockX,
-      y: targetY,
-      availableWidth: blockWidth,
-      page: currentPage.pageNumber,
+      blockX,
+      targetY,
+      blockWidth,
+      currentPage.pageNumber,
       measurer,
       fontConfig,
-      ...(fontModifiers ? { fontModifiers } : {}),
-      // map intentionally omitted — PageRenderer populates it
+      fontModifiers,
+      measureCache,
+    );
+
+    // Build a positioned LayoutBlock from the (possibly cached) measurements.
+    // Extracted so both the normal-placement and reflow paths share it.
+    const buildBlock = (x: number, y: number): LayoutBlock => ({
+      node,
+      nodePos,
+      x,
+      y,
+      width: blockWidth,
+      height: entry.height,
+      lines: entry.lines,
+      spaceBefore: entry.spaceBefore,
+      spaceAfter: entry.spaceAfter,
+      blockType: entry.blockType,
+      align: entry.align,
+      availableWidth: blockWidth,
     });
 
+    const block = buildBlock(blockX, targetY);
+
     if (listMarker !== undefined) {
-      const markerX = blockX - MARKER_RIGHT_GAP;
       block.listMarker = listMarker;
-      block.listMarkerX = markerX;
+      block.listMarkerX = blockX - MARKER_RIGHT_GAP;
       block.blockType = "list_item";
     }
 
     // ── Page overflow check ───────────────────────────────────────────────────
-    const blockBottom = targetY + block.height;
+    const blockBottom = targetY + entry.height;
     const pageBottom = margins.top + contentHeight;
     const overflows = blockBottom > pageBottom && !isFirstOnPage;
-    const tooTallForAnyPage = block.height > contentHeight;
+    const tooTallForAnyPage = entry.height > contentHeight;
 
     if (overflows && !tooTallForAnyPage) {
       // ── Move to next page ──────────────────────────────────────────────────
+      // The reflow block uses the same cached measurements; only y changes.
       pages.push(currentPage);
       currentPage = newPage(pages.length + 1);
       y = margins.top;
       prevSpaceAfter = 0;
 
-      const reflow = layoutBlock(node, {
-        nodePos,
-        x: blockX,
-        y: margins.top,
-        availableWidth: blockWidth,
-        page: currentPage.pageNumber,
-        measurer,
-        fontConfig,
-        ...(fontModifiers ? { fontModifiers } : {}),
-      });
+      const reflow = buildBlock(blockX, margins.top);
 
       if (listMarker !== undefined) {
         reflow.listMarker = listMarker;
@@ -159,13 +216,13 @@ export function layoutDocument(
       }
 
       currentPage.blocks.push(reflow);
-      y = margins.top + reflow.height;
+      y = margins.top + entry.height;
       // Use styleKey-resolved spaceAfter so list items use list_item spacing, not paragraph spacing
       prevSpaceAfter = blockStyle.spaceAfter;
     } else {
       // ── Place on current page ──────────────────────────────────────────────
       currentPage.blocks.push(block);
-      y = targetY + block.height;
+      y = targetY + entry.height;
       // Use styleKey-resolved spaceAfter so list items use list_item spacing, not paragraph spacing
       prevSpaceAfter = blockStyle.spaceAfter;
     }
@@ -200,8 +257,8 @@ interface LayoutItem {
   styleKey?: string;
 }
 
-const LIST_INDENT = 24;  // px — text starts this far right of the margin
-const MARKER_RIGHT_GAP = 6;  // px — gap between the marker's right edge and the text
+const LIST_INDENT = 24; // px — text starts this far right of the margin
+const MARKER_RIGHT_GAP = 6; // px — gap between the marker's right edge and the text
 
 /**
  * Walks the doc's top-level children and returns a flat array of layout items.
@@ -219,7 +276,7 @@ function collectLayoutItems(doc: Node, _fontConfig: FontConfig): LayoutItem[] {
 
     if (node.type.name === "bulletList" || node.type.name === "orderedList") {
       const isBullet = node.type.name === "bulletList";
-      let itemIndex = node.attrs["order"] as number ?? 1;
+      let itemIndex = (node.attrs["order"] as number) ?? 1;
 
       node.forEach((listItem, liOffset) => {
         // nodePos of the paragraph inside this listItem:
@@ -250,9 +307,80 @@ function collectLayoutItems(doc: Node, _fontConfig: FontConfig): LayoutItem[] {
 }
 
 /**
+ * Returns a `MeasureCacheEntry` for the given node, either from the cache or
+ * by calling `layoutBlock` once and writing the result back.
+ *
+ * Centralises all cache read/write logic so the main layout loop stays clean.
+ *
+ * LayoutLine x-coordinates are relative to the line origin — position-independent.
+ * However, LayoutSpan.docPos values are absolute ProseMirror positions. Because
+ * ProseMirror's structural sharing keeps the same Node reference for unchanged
+ * blocks even when text is inserted/deleted before them, a cached entry's docPos
+ * values can become stale. We fix this by storing the nodePos at measure-time and
+ * adjusting span docPos values by the delta on every cache hit.
+ */
+function resolveBlockEntry(
+  node: Node,
+  nodePos: number,
+  blockX: number,
+  targetY: number,
+  blockWidth: number,
+  pageNumber: number,
+  measurer: TextMeasurer,
+  fontConfig: FontConfig,
+  fontModifiers: Map<string, FontModifier> | undefined,
+  measureCache: WeakMap<Node, MeasureCacheEntry> | undefined,
+): MeasureCacheEntry {
+  const cached = measureCache?.get(node);
+  if (cached && cached.availableWidth === blockWidth) {
+    const delta = nodePos - cached.nodePos;
+    if (delta === 0) return cached;
+
+    // Block shifted in the document (text inserted/deleted before it).
+    // Adjust all span docPos values and update the cache entry.
+    const adjustedLines = cached.lines.map((line) => ({
+      ...line,
+      spans: line.spans.map((span) => ({ ...span, docPos: span.docPos + delta })),
+    }));
+    const updated: MeasureCacheEntry = { ...cached, nodePos, lines: adjustedLines };
+    measureCache!.set(node, updated);
+    return updated;
+  }
+
+  // Cache miss — measure and populate. map is intentionally omitted:
+  // CharacterMap population is deferred to Editor.ensurePagePopulated().
+  const measured = layoutBlock(node, {
+    nodePos,
+    x: blockX,
+    y: targetY,
+    availableWidth: blockWidth,
+    page: pageNumber,
+    measurer,
+    fontConfig,
+    ...(fontModifiers ? { fontModifiers } : {}),
+  });
+
+  const entry: MeasureCacheEntry = {
+    availableWidth: blockWidth,
+    nodePos,
+    height: measured.height,
+    lines: measured.lines,
+    spaceBefore: measured.spaceBefore,
+    spaceAfter: measured.spaceAfter,
+    blockType: measured.blockType,
+    align: measured.align,
+  };
+  measureCache?.set(node, entry);
+  return entry;
+}
+
+/**
  * CSS-style margin collapsing.
  * The gap between two adjacent blocks is the larger of their margins, not the sum.
  */
-export function collapseMargins(spaceAfter: number, spaceBefore: number): number {
+export function collapseMargins(
+  spaceAfter: number,
+  spaceBefore: number,
+): number {
   return Math.max(spaceAfter, spaceBefore);
 }

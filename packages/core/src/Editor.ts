@@ -2,6 +2,7 @@ import { EditorState, Transaction, TextSelection } from "prosemirror-state";
 import type { Command } from "prosemirror-state";
 import type { InputHandler, FontModifier, MarkDecorator, ToolbarItemSpec, OverlayRenderHandler, IEditor } from "./extensions/types";
 import type { Schema } from "prosemirror-model";
+import { Node } from "prosemirror-model";
 import { MarkdownSerializer } from "prosemirror-markdown";
 import { ExtensionManager } from "./extensions/ExtensionManager";
 import { StarterKit } from "./extensions/StarterKit";
@@ -11,7 +12,7 @@ import { CursorManager } from "./renderer/CursorManager";
 import { CharacterMap } from "./layout/CharacterMap";
 import { TextMeasurer } from "./layout/TextMeasurer";
 import { layoutDocument, defaultPageConfig } from "./layout/PageLayout";
-import type { PageConfig, DocumentLayout } from "./layout/PageLayout";
+import type { PageConfig, DocumentLayout, MeasureCacheEntry } from "./layout/PageLayout";
 import { populateCharMap } from "./layout/BlockLayout";
 import { insertText } from "./model/commands";
 import { PasteTransformer } from "./input/PasteTransformer";
@@ -174,6 +175,27 @@ export class Editor {
   private dirty = false;
 
   /**
+   * Set of page numbers whose CharacterMap entries have been populated.
+   * Cleared on every ensureLayout() call (charMap is cleared too).
+   * Makes ensurePagePopulated idempotent — ViewManager calls it before every
+   * paint, but each page is only populated once per layout cycle.
+   */
+  private readonly populatedPages = new Set<number>();
+
+  /**
+   * Block measurement cache — maps ProseMirror Node references to their last
+   * measured dimensions (height, lines, spacing). Persists across layout runs.
+   *
+   * ProseMirror's structural sharing ensures unchanged nodes keep the same JS
+   * object identity, so a WeakMap keyed on Node is a zero-cost invalidation
+   * scheme: edits automatically produce new Node objects for changed blocks,
+   * while unchanged blocks get instant cache hits and skip layoutBlock entirely.
+   *
+   * WeakMap prevents memory leaks — entries are GC'd when their Node is gone.
+   */
+  private readonly measureCache = new WeakMap<Node, MeasureCacheEntry>();
+
+  /**
    * Adapter-provided function that resolves a 1-based page number to the
    * corresponding DOM element. Used by syncInputBridge / scrollCursorIntoView.
    * Set via setPageElementLookup() — null until the rendering adapter provides it.
@@ -258,8 +280,10 @@ export class Editor {
       measurer: this.measurer,
       fontModifiers: this.fontModifiers,
       previousVersion: 0,
+      measureCache: this.measureCache,
     });
-    this.populateCharMapFromLayout();
+    // Populate page 1 eagerly — the document always starts on page 1.
+    this.ensurePagePopulated(1);
 
     this.keymap = this.manager.buildKeymap();
     this.inputHandlers = this.manager.buildInputHandlers();
@@ -351,22 +375,39 @@ export class Editor {
     if (!this.dirty) return;
     this.dirty = false;
     this.charMap.clear();
+    this.populatedPages.clear();
     this._layout = layoutDocument(this.state.doc, {
       pageConfig: this.pageConfig,
       measurer: this.measurer,
       fontModifiers: this.fontModifiers,
       previousVersion: this._layout.version,
+      measureCache: this.measureCache,
     });
-    this.populateCharMapFromLayout();
+    // Populate all pages eagerly — guarantees coordsAtPos always finds the
+    // cursor glyph regardless of which page it's on. The measureCache makes
+    // this cheap for unchanged blocks (O(1) cache hit per block). Phase 3
+    // (measureRun LRU) will make it cheap for changed blocks too.
+    for (const page of this._layout.pages) {
+      this.ensurePagePopulated(page.pageNumber);
+    }
   }
 
-  private populateCharMapFromLayout(): void {
-    for (const page of this._layout.pages) {
-      let lineOffset = 0;
-      for (const block of page.blocks) {
-        populateCharMap(block, this.charMap, page.pageNumber, lineOffset, this.measurer);
-        lineOffset += block.lines.length;
-      }
+  /**
+   * Ensures the CharacterMap is populated for the given page.
+   * Called eagerly for all pages in ensureLayout().
+   * Also called by ViewManager before painting — becomes a no-op when the
+   * page is already populated (idempotent via populatedPages set).
+   */
+  ensurePagePopulated(pageNumber: number): void {
+    if (this.populatedPages.has(pageNumber)) return;
+    this.populatedPages.add(pageNumber);
+    const page = this._layout.pages.find((p) => p.pageNumber === pageNumber);
+    if (!page) return;
+    let lineOffset = 0;
+    for (const block of page.blocks) {
+      console.log('[populate] page=%d type=%s nodePos=%d y=%.1f h=%.1f lines=%d', pageNumber, block.blockType, block.nodePos, block.y, block.height, block.lines.length);
+      populateCharMap(block, this.charMap, page.pageNumber, lineOffset, this.measurer);
+      lineOffset += block.lines.length;
     }
   }
 

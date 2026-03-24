@@ -57,6 +57,8 @@ export function resolveLeafBlockDimensions(
 export interface LayoutBlock {
   /** The original ProseMirror node — used by BlockStrategy.render() */
   node: Node;
+  /** ProseMirror position of this node in the document — used to map cursor positions to pages */
+  nodePos: number;
   /** Absolute x position — left margin, set by caller */
   x: number;
   /** Absolute y position — top of this block, set by PageLayout */
@@ -156,7 +158,7 @@ export function layoutLeafBlock(node: Node, options: BlockLayoutOptions): Layout
   const blockStyle = fontConfig ? getBlockStyle(fontConfig, node.type.name) : null;
 
   return {
-    node, x, y,
+    node, nodePos, x, y,
     width:     availableWidth,
     height,
     lines:     [],
@@ -283,6 +285,7 @@ export function layoutBlock(node: Node, options: BlockLayoutOptions): LayoutBloc
 
   return {
     node,
+    nodePos,
     x,
     y,
     width: availableWidth,

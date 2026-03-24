@@ -230,6 +230,11 @@ export class ViewManager {
   // ── Painting ───────────────────────────────────────────────────────────────
 
   private paintContent(entry: PageEntry, page: LayoutPage, layout: DocumentLayout): void {
+    // Ensure this page's CharacterMap entries exist before rendering.
+    // The cursor page is already populated by ensureLayout(); this covers
+    // all other visible pages on their first paint.
+    this.editor.ensurePagePopulated(page.pageNumber);
+
     const { pageConfig } = layout;
 
     const { dpr } = setupCanvas(entry.contentCanvas, {
@@ -261,6 +266,10 @@ export class ViewManager {
   private paintOverlay(entry: PageEntry, page: LayoutPage): void {
     if (!entry.canvasesAttached) return;
 
+    // paintOverlay runs every cursor blink — ensure page is populated even if
+    // paintContent was skipped (version unchanged) or not yet called.
+    this.editor.ensurePagePopulated(page.pageNumber);
+
     const { pageConfig } = this.editor.layout;
     const ctx = entry.overlayCanvas.getContext("2d")!;
     clearOverlay(ctx, pageConfig.pageWidth, pageConfig.pageHeight, entry.dpr);
@@ -278,8 +287,9 @@ export class ViewManager {
     }
 
     if (this.editor.isFocused && this.editor.cursorManager.isVisible) {
-      const coords = this.editor.charMap.coordsAtPos(selection.head);
+      const coords = this.editor.charMap.coordsAtPos(selection.head, true);
       if (coords && coords.page === page.pageNumber) {
+        console.log('[cursor draw] page=%d x=%.1f y=%.1f h=%.1f', coords.page, coords.x, coords.y, coords.height);
         renderCursor(ctx, coords);
       }
     }

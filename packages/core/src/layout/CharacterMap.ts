@@ -124,10 +124,11 @@ export class CharacterMap {
    * If the position falls between two glyphs, returns the right edge of
    * the preceding glyph (i.e. the left edge of the gap).
    */
-  coordsAtPos(docPos: number): CoordsResult | null {
+  coordsAtPos(docPos: number, _debug = false): CoordsResult | null {
     // Exact match — start of a glyph
     const exact = this.glyphs.find((g) => g.docPos === docPos);
     if (exact) {
+      if (_debug) console.log('[coordsAtPos] EXACT docPos=%d → x=%.1f y=%.1f h=%.1f page=%d', docPos, exact.x, exact.y, exact.height, exact.page);
       return { x: exact.x, y: exact.y, height: exact.height, page: exact.page };
     }
 
@@ -137,6 +138,7 @@ export class CharacterMap {
       .find((g) => g.docPos < docPos);
 
     if (preceding) {
+      if (_debug) console.log('[coordsAtPos] PRECEDING docPos=%d ← glyph@%d x=%.1f y=%.1f w=%.1f h=%.1f page=%d', docPos, preceding.docPos, preceding.x, preceding.y, preceding.width, preceding.height, preceding.page);
       return {
         x: preceding.x + preceding.width,
         y: preceding.y,
@@ -145,6 +147,7 @@ export class CharacterMap {
       };
     }
 
+    if (_debug) console.log('[coordsAtPos] NULL docPos=%d — no glyphs registered', docPos);
     return null;
   }
 
