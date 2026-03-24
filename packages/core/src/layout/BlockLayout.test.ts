@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { layoutBlock, resolveLeafBlockDimensions } from "./BlockLayout";
+import { layoutBlock, populateCharMap, resolveLeafBlockDimensions } from "./BlockLayout";
 import { CharacterMap } from "./CharacterMap";
 import { defaultFontConfig } from "./FontConfig";
 import type { FontConfig } from "./FontConfig";
@@ -388,5 +388,141 @@ describe("resolveLeafBlockDimensions", () => {
     const { spaceBefore, spaceAfter } = resolveLeafBlockDimensions(node, undefined, IMAGE_DEFAULT, IMAGE_SPACE);
     expect(spaceBefore).toBe(IMAGE_SPACE);
     expect(spaceAfter).toBe(IMAGE_SPACE);
+  });
+});
+
+// ── End-of-line caret sentinel ─────────────────────────────────────────────────
+//
+// Without the sentinel, coordsAtPos(endDocPos) falls back to a
+// reversed-registration-order search that can return a glyph from the wrong
+// page when multiple pages are registered in non-docPos order (cursor page is
+// always registered first). The sentinel provides an exact-match glyph so the
+// fallback is never reached.
+
+describe("layoutBlock — end-of-line caret sentinel (via layoutBlock map)", () => {
+  it("registers sentinel glyph at docPos just past the last character", () => {
+    const map = new CharacterMap();
+    // "Hi" at nodePos=0 → chars at docPos 1,2 → sentinel at 3
+    layoutBlock(paragraph("Hi"), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
+      measurer: createMeasurer(), map, lineIndexOffset: 0,
+    });
+    expect(map.hasGlyph(3)).toBe(true);
+  });
+
+  it("sentinel x equals right edge of last character", () => {
+    const map = new CharacterMap();
+    layoutBlock(paragraph("Hi"), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
+      measurer: createMeasurer(), map, lineIndexOffset: 0,
+    });
+    // 'i' is at docPos 2, sentinel at docPos 3
+    const iCoords   = map.coordsAtPos(2);
+    const sentCoords = map.coordsAtPos(3);
+    // sentinel.x = iCoords.x + iCoords.width (8px per char in mock)
+    expect(sentCoords?.x).toBeCloseTo(iCoords!.x + 8);
+  });
+
+  it("sentinel width is 0 (it has no visual extent)", () => {
+    const map = new CharacterMap();
+    layoutBlock(paragraph("Hi"), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
+      measurer: createMeasurer(), map, lineIndexOffset: 0,
+    });
+    // Access internal glyphs to verify width=0
+    const glyphs = map.glyphsInRange(3, 4);
+    expect(glyphs[0]?.width).toBe(0);
+  });
+
+  it("does NOT register a sentinel for an empty paragraph (ZWS)", () => {
+    const map = new CharacterMap();
+    layoutBlock(paragraph(""), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
+      measurer: createMeasurer(), map, lineIndexOffset: 0,
+    });
+    // ZWS at docPos 1 is registered; docPos 2 (past closing token) must NOT be
+    expect(map.hasGlyph(1)).toBe(true);
+    expect(map.hasGlyph(2)).toBe(false);
+  });
+
+  it("sentinel is only on the last line — intermediate lines are not corrupted", () => {
+    const map = new CharacterMap();
+    // "Hello world" wraps to 2 lines at width=80 (11 chars × 8px = 88 > 80)
+    layoutBlock(paragraph("Hello world"), {
+      nodePos: 0, x: 0, y: 0, availableWidth: 80, page: 1,
+      measurer: createMeasurer(), map, lineIndexOffset: 0,
+    });
+    // The first glyph of line 2 ('w' at docPos 7 if "Hello " is line 1)
+    // must be reachable via exact match — no sentinel at that position.
+    // Total glyphs = 11 chars + 1 sentinel (last line only), not 13.
+    const allGlyphs = map.glyphsInRange(0, 20);
+    expect(allGlyphs).toHaveLength(12); // 11 chars + 1 sentinel on last line
+  });
+});
+
+describe("populateCharMap — end-of-line caret sentinel", () => {
+  it("registers sentinel glyph at docPos past the last character", () => {
+    const block = layoutBlock(paragraph("Hi"), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+    });
+    const map = new CharacterMap();
+    populateCharMap(block, map, 1, 0, createMeasurer());
+    // "Hi" → chars at docPos 1,2 → sentinel at 3
+    expect(map.hasGlyph(3)).toBe(true);
+  });
+
+  it("sentinel glyph is on the correct page", () => {
+    const block = layoutBlock(paragraph("Hi"), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+    });
+    const map = new CharacterMap();
+    populateCharMap(block, map, 3, 0, createMeasurer()); // page 3
+    expect(map.coordsAtPos(3)?.page).toBe(3);
+  });
+
+  it("coordsAtPos(endDocPos) returns the sentinel page even when another page's glyphs were registered first", () => {
+    // Simulate the scroll-to-top bug scenario:
+    // page 3 (cursor page) is registered first; page 1 is registered second.
+    // Without sentinel, coordsAtPos(endDocPos_on_page1) would reverse-search
+    // and find a page-3 glyph (higher docPos, registered earlier → appears
+    // later in the reversed array), returning the wrong page.
+    // With sentinel, the exact-match path returns page 1 correctly.
+    const blockP3 = layoutBlock(paragraph("Page three text"), {
+      nodePos: 20, x: 72, y: 200, availableWidth: 400, page: 1, measurer: createMeasurer(),
+    });
+    const blockP1 = layoutBlock(paragraph("Hi"), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+    });
+    const map = new CharacterMap();
+
+    // Register page-3 block first (higher docPos) — mimics ensurePagePopulated(cursorPage)
+    populateCharMap(blockP3, map, 3, 0, createMeasurer());
+    // Then register page-1 block (lower docPos) — mimics ensurePagePopulated(cursorPage-2)
+    populateCharMap(blockP1, map, 1, 0, createMeasurer());
+
+    // docPos 3 = sentinel after "Hi" on page 1
+    const coords = map.coordsAtPos(3);
+    expect(coords?.page).toBe(1);
+  });
+
+  it("does NOT register sentinel for empty paragraph (ZWS only line)", () => {
+    const block = layoutBlock(paragraph(""), {
+      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+    });
+    const map = new CharacterMap();
+    populateCharMap(block, map, 1, 0, createMeasurer());
+    expect(map.hasGlyph(1)).toBe(true);  // ZWS cursor position
+    expect(map.hasGlyph(2)).toBe(false); // nothing past closing token
+  });
+
+  it("sentinel is only on the last line of a wrapped paragraph", () => {
+    const block = layoutBlock(paragraph("Hello world"), {
+      nodePos: 0, x: 0, y: 0, availableWidth: 80, page: 1, measurer: createMeasurer(),
+    });
+    expect(block.lines).toHaveLength(2);
+    const map = new CharacterMap();
+    populateCharMap(block, map, 1, 0, createMeasurer());
+    // 11 chars + 1 sentinel (last line only) = 12 total glyphs
+    expect(map.glyphsInRange(0, 20)).toHaveLength(12);
   });
 });

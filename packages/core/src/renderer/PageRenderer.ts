@@ -212,11 +212,33 @@ function drawBlock(
         height: line.lineHeight,
         x: block.x,
         contentWidth: block.availableWidth,
-        startDocPos: line.spans[0]?.docPos ?? 0,
+        startDocPos: line.spans[0]?.docPos ?? block.nodePos + 1,
         endDocPos:
-          (line.spans[line.spans.length - 1]?.docPos ?? 0) +
+          (line.spans[line.spans.length - 1]?.docPos ?? block.nodePos + 1) +
           (line.spans[line.spans.length - 1]?.text.length ?? 0),
       });
+    }
+
+    // Register end-of-line caret sentinel on the last line only.
+    // See populateCharMap for the full explanation. Guard with hasGlyph
+    // so we don't duplicate when populateCharMap ran first.
+    const isLastLine = li === block.lines.length - 1;
+    const lastSpan = line.spans[line.spans.length - 1];
+    if (isLastLine && lastSpan && lastSpan.text !== "\u200B") {
+      const endDocPos = lastSpan.docPos + lastSpan.text.length;
+      if (!map.hasGlyph(endDocPos)) {
+        const lastRun = measurer.measureRun(lastSpan.text, lastSpan.font);
+        const lastLineOffsetX = computeAlignmentOffset(block.align, contentWidth, line.width);
+        map.registerGlyph({
+          docPos: endDocPos,
+          x: block.x + lastLineOffsetX + lastSpan.x + lastRun.totalWidth,
+          y: lineY,
+          width: 0,
+          height: line.lineHeight,
+          page: pageNumber,
+          lineIndex: globalLineIndex,
+        });
+      }
     }
   }
 

@@ -42,6 +42,9 @@ function keyEventToString(e: KeyboardEvent): string {
     else if (e.code.startsWith("Key")) key = e.code.slice(3);   // "KeyB"   → "B"
   }
 
+  // Normalize space to "Space" — ProseMirror convention; extensions bind "Space", not " ".
+  if (key === " ") key = "Space";
+
   // Single-character keys: lowercase so "Mod-b" matches whether or not Shift
   // is also held (e.g. Cmd+Shift+Z gives e.key="Z" — we want "Mod-Shift-z").
   if (key.length === 1) key = key.toLowerCase();
@@ -513,7 +516,7 @@ export class Editor {
     // Width: span to toCoords if on same line, otherwise use a minimal 1px width
     const sameLine = toCoords && toCoords.page === fromCoords.page &&
       Math.abs(toCoords.y - fromCoords.y) < 2;
-    const width = sameLine && toCoords ? (toCoords.x - fromCoords.x) : 1;
+    const width = sameLine && toCoords ? Math.abs(toCoords.x - fromCoords.x) : 1;
 
     return new DOMRect(left, top, Math.max(1, width), height);
   }
@@ -680,7 +683,7 @@ export class Editor {
     const head = this.state.selection.head;
     for (const page of this._layout.pages) {
       for (const block of page.blocks) {
-        if (head >= block.nodePos && head <= block.nodePos + block.node.nodeSize) {
+        if (head >= block.nodePos && head < block.nodePos + block.node.nodeSize) {
           return page.pageNumber;
         }
       }
@@ -695,10 +698,11 @@ export class Editor {
    * page is already populated (idempotent via populatedPages set).
    */
   ensurePagePopulated(pageNumber: number): void {
+    if (pageNumber < 1) return;
     if (this.populatedPages.has(pageNumber)) return;
-    this.populatedPages.add(pageNumber);
     const page = this._layout.pages.find((p) => p.pageNumber === pageNumber);
-    if (!page) return;
+    if (!page) return;           // don't mark populated — layout may grow later
+    this.populatedPages.add(pageNumber);
     let lineOffset = 0;
     for (const block of page.blocks) {
       populateCharMap(block, this.charMap, page.pageNumber, lineOffset, this.measurer);
@@ -739,7 +743,10 @@ export class Editor {
     this.textarea = this.createHiddenTextarea();
     this.container.appendChild(this.textarea);
     this.attachListeners();
-    this.textarea.focus();
+    // preventScroll: true — belt-and-suspenders guard. The textarea is position:fixed
+    // so it has no scroll context, but some browsers still emit a scroll on .focus()
+    // for fixed elements if they are off-screen (top:-9999px). This suppresses that.
+    this.textarea.focus({ preventScroll: true });
   }
 
   /**
@@ -778,7 +785,7 @@ export class Editor {
   }
 
   focus(): void {
-    this.textarea?.focus();
+    this.textarea?.focus({ preventScroll: true });
   }
 
   /**
@@ -850,22 +857,18 @@ export class Editor {
    * near the textarea, so placing it at the cursor makes them usable.
    */
   syncInputBridge(): void {
-    if (!this.textarea || !this.container || !this.pageElementLookup) return;
+    if (!this.textarea) return;
 
     const { head } = this.state.selection;
-    const coords = this.charMap.coordsAtPos(head);
-    if (!coords) return;
-
-    const pageEl = this.pageElementLookup(coords.page);
-    if (!pageEl) return;
-
-    const containerRect = this.container.getBoundingClientRect();
-    const pageRect = pageEl.getBoundingClientRect();
+    // getViewportRect returns the cursor's exact position in viewport coordinates.
+    // The textarea is position:fixed so these map directly to its top/left.
+    const rect = this.getViewportRect(head, head);
+    if (!rect) return;
 
     Object.assign(this.textarea.style, {
-      top: `${(pageRect.top - containerRect.top) + coords.y}px`,
-      left: `${(pageRect.left - containerRect.left) + coords.x}px`,
-      height: `${coords.height}px`,
+      top: `${rect.top}px`,
+      left: `${rect.left}px`,
+      height: `${rect.height}px`,
     });
   }
 
@@ -888,17 +891,29 @@ export class Editor {
     const scrollParent = findScrollParent(this.container);
     if (!scrollParent) return;
 
-    const pageRect = pageEl.getBoundingClientRect();
-    const scrollRect = scrollParent.getBoundingClientRect();
+    // Use scrollTop-relative positions so the calculation is independent of the
+    // scroll container's viewport position and its padding.
+    //
+    // pageEl.getBoundingClientRect().top − scrollParent.getBoundingClientRect().top
+    //   gives the page's current offset relative to the container's outer edge.
+    // Adding scrollParent.scrollTop converts that to an absolute scroll-area position.
+    const containerRect = scrollParent.getBoundingClientRect();
+    const pageTop =
+      pageEl.getBoundingClientRect().top - containerRect.top + scrollParent.scrollTop;
 
-    const cursorTop = pageRect.top + coords.y;
-    const cursorBottom = cursorTop + coords.height;
+    const cursorAbsTop = pageTop + coords.y;
+    const cursorAbsBottom = cursorAbsTop + coords.height;
+
+    // clientHeight is the visible area height (includes padding, excludes scrollbar/border).
+    const visibleTop = scrollParent.scrollTop;
+    const visibleBottom = visibleTop + scrollParent.clientHeight;
     const buffer = 40;
 
-    if (cursorBottom > scrollRect.bottom - buffer) {
-      scrollParent.scrollTop += cursorBottom - scrollRect.bottom + buffer;
-    } else if (cursorTop < scrollRect.top + buffer) {
-      scrollParent.scrollTop -= scrollRect.top - cursorTop + buffer;
+    // Only scroll when cursor is outside (or within buffer of) the visible area.
+    if (cursorAbsBottom > visibleBottom - buffer) {
+      scrollParent.scrollTop = cursorAbsBottom - scrollParent.clientHeight + buffer;
+    } else if (cursorAbsTop < visibleTop + buffer) {
+      scrollParent.scrollTop = cursorAbsTop - buffer;
     }
   }
 
@@ -932,7 +947,8 @@ export class Editor {
     const head = this.state.selection.head;
     if (head <= 0) return;
     const $pos = this.state.doc.resolve(Math.max(0, head - 1));
-    this.applyMovement(TextSelection.near($pos, -1).head, extend);
+    const sel = TextSelection.findFrom($pos, -1);
+    if (sel) this.applyMovement(sel.head, extend);
   }
 
   /** Move right one position. Pass extend=true to grow the selection (Shift+→). */
@@ -941,7 +957,8 @@ export class Editor {
     const size = this.state.doc.content.size;
     if (head >= size) return;
     const $pos = this.state.doc.resolve(Math.min(size, head + 1));
-    this.applyMovement(TextSelection.near($pos, 1).head, extend);
+    const sel = TextSelection.findFrom($pos, 1);
+    if (sel) this.applyMovement(sel.head, extend);
   }
 
   /** Move up one line preserving x. Pass extend=true for Shift+↑. */
@@ -1191,7 +1208,7 @@ export class Editor {
     const ta = document.createElement("textarea");
 
     Object.assign(ta.style, {
-      position: "absolute",
+      position: "fixed",
       opacity: "0",
       width: "1px",
       height: "1px",
@@ -1202,8 +1219,8 @@ export class Editor {
       resize: "none",
       outline: "none",
       pointerEvents: "none",
-      top: "0",
-      left: "0",
+      top: "-9999px",
+      left: "-9999px",
     });
 
     ta.setAttribute("autocomplete", "off");
@@ -1281,8 +1298,11 @@ export class Editor {
   private handleCompositionEnd = (e: CompositionEvent): void => {
     const text = e.data;
     if (!text) return;
-    this.dispatch(insertText(this.state, text));
+    // Clear BEFORE dispatching: on Chrome/Edge the browser fires `input` with
+    // isComposing=false immediately after compositionend. If the textarea still
+    // has text at that point, handleInput would insert it a second time.
     this.clearTextarea();
+    this.dispatch(insertText(this.state, text));
   };
 
   /**
@@ -1290,7 +1310,11 @@ export class Editor {
    * Returns true when a handler was executed.
    */
   private tryInputHandler(e: KeyboardEvent): boolean {
-    const handler = this.inputHandlers[e.key];
+    // Try the fully-qualified key first (e.g. "Alt-ArrowLeft" for word-jump),
+    // then fall back to the bare key (e.g. "ArrowLeft") so that handlers which
+    // read modifier state directly (like BaseEditing's arrow handlers) still fire
+    // for modifier+arrow combos that have no explicit override registered.
+    const handler = this.inputHandlers[keyEventToString(e)] ?? this.inputHandlers[e.key];
     if (!handler) return false;
     return handler(this, e);
   }

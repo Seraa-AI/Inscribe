@@ -252,6 +252,8 @@ export function layoutBlock(node: Node, options: BlockLayoutOptions): LayoutBloc
           (line.spans[line.spans.length - 1]?.text.length ?? 0),
       });
 
+      let lastGlyph = { x: 0, width: 0, docPos: -1, isZws: false };
+
       for (const span of line.spans) {
         const run = measurer.measureRun(span.text, span.font);
 
@@ -276,7 +278,22 @@ export function layoutBlock(node: Node, options: BlockLayoutOptions): LayoutBloc
             page,
             lineIndex,
           });
+
+          lastGlyph = { x: charX, width: charWidth, docPos: span.docPos + ci, isZws: span.text[ci] === "\u200B" };
         }
+      }
+
+      // Sentinel on last line only (same reasoning as populateCharMap above)
+      if (li === lines.length - 1 && lastGlyph.docPos >= 0 && !lastGlyph.isZws) {
+        map.registerGlyph({
+          docPos: lastGlyph.docPos + 1,
+          x: lastGlyph.x + lastGlyph.width,
+          y: lineY,
+          width: 0,
+          height: line.lineHeight,
+          page,
+          lineIndex,
+        });
       }
 
       lineY += line.lineHeight;
@@ -422,11 +439,17 @@ export function populateCharMap(
       height: line.lineHeight,
       x: block.x,
       contentWidth: block.availableWidth,
-      startDocPos: line.spans[0]?.docPos ?? 0,
+      startDocPos: line.spans[0]?.docPos ?? block.nodePos + 1,
       endDocPos:
-        (line.spans[line.spans.length - 1]?.docPos ?? 0) +
+        (line.spans[line.spans.length - 1]?.docPos ?? block.nodePos + 1) +
         (line.spans[line.spans.length - 1]?.text.length ?? 0),
     });
+
+    // Track the last non-ZWS glyph so we can register a zero-width sentinel
+    // at endDocPos after the loop. Without this, coordsAtPos(endDocPos) falls
+    // back to the preceding-glyph search which can return a glyph from the
+    // wrong page and cause scrollCursorIntoView to scroll to the wrong place.
+    let lastGlyph = { x: 0, width: 0, docPos: -1, isZws: false };
 
     let spacesBeforeSpan = 0;
     for (const span of line.spans) {
@@ -452,10 +475,42 @@ export function populateCharMap(
           lineIndex: globalLineIndex,
         });
 
+        lastGlyph = { x: charX, width: charWidth, docPos: span.docPos + ci, isZws: span.text[ci] === "\u200B" };
+
         if (span.text[ci] === " ") spacesWithinSpan++;
       }
 
       spacesBeforeSpan += countSpaces(span.text);
+    }
+
+    // Register end-of-line caret sentinel at the position just past the last
+    // real character — but only on the LAST line of the block.
+    //
+    // Why only last line? For wrapped paragraphs, the endDocPos of an
+    // intermediate line equals the docPos of the first character on the next
+    // line — that glyph is registered when the next line is processed, so no
+    // sentinel is needed (and adding one would create a duplicate that
+    // corrupts coordsAtPos for the first char of the next line).
+    //
+    // Why at all? Without this, coordsAtPos(endDocPos) falls back to the
+    // preceding-glyph search which returns glyphs in registration order
+    // (reversed). Cursor-page glyphs are registered first, so other pages'
+    // glyphs appear last in the reversed search — causing coordsAtPos to
+    // return coords from the wrong page and scrollCursorIntoView to scroll
+    // to the wrong position.
+    //
+    // Skip ZWS lines (empty paragraphs): their only valid cursor position is
+    // the ZWS docPos itself, which is already registered as a glyph above.
+    if (lastGlyph.docPos >= 0 && !lastGlyph.isZws && isLastLine) {
+      map.registerGlyph({
+        docPos: lastGlyph.docPos + 1,
+        x: lastGlyph.x + lastGlyph.width,
+        y: lineY,
+        width: 0,
+        height: line.lineHeight,
+        page,
+        lineIndex: globalLineIndex,
+      });
     }
 
     lineY += line.lineHeight;

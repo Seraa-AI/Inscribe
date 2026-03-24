@@ -850,6 +850,22 @@ describe("Editor — keyboard event handling", () => {
     expect(event.defaultPrevented).toBe(true);
     cleanup();
   });
+
+  it("Space key resolves to 'Space' in keymap lookup (not ' ')", () => {
+    // Register a command under the ProseMirror-convention key "Space"
+    // and verify that pressing the space bar dispatches it.
+    const { editor, cleanup } = makeEditor();
+    const container = editor["container"] as HTMLElement;
+    let called = false;
+    // Inject a one-off "Space" binding directly into the private keymap
+    (editor["keymap"] as Record<string, unknown>)["Space"] = () => {
+      called = true;
+      return true;
+    };
+    pressKey(container, " ");
+    expect(called).toBe(true);
+    cleanup();
+  });
 });
 
 // ── Phase 2: lazy CharacterMap + cursorPage ───────────────────────────────────
