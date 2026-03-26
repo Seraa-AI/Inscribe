@@ -56,6 +56,25 @@ function makeEditor() {
   };
 }
 
+// ── Initial cursor placement ──────────────────────────────────────────────────
+
+describe("Editor — initial cursor placement", () => {
+  it("places the cursor at the start of the document on mount", () => {
+    const { editor, cleanup } = makeEditor();
+    const sel = editor.getState().selection;
+    // PM default: position 1 (inside the first paragraph, before any text)
+    expect(sel.head).toBe(1);
+    expect(sel.anchor).toBe(1);
+    cleanup();
+  });
+
+  it("cursor is collapsed (not a selection) on mount", () => {
+    const { editor, cleanup } = makeEditor();
+    expect(editor.getState().selection.empty).toBe(true);
+    cleanup();
+  });
+});
+
 // ── moveCursorTo ─────────────────────────────────────────────────────────────
 
 describe("Editor.moveCursorTo", () => {
