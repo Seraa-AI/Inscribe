@@ -1,0 +1,138 @@
+---
+title: Quick Start
+description: Build a minimal working Inscribe editor in a React application.
+---
+
+This guide walks you through mounting a fully functional canvas editor in a React component.
+You will use the two primitives from `@inscribe/react`:
+
+- **`useCanvasEditor`** — creates and manages an `Editor` instance.
+- **`<Canvas />`** — mounts the rendering engine on a DOM container.
+
+---
+
+## Minimal Example
+
+```tsx title="MyEditor.tsx"
+import { useCanvasEditor, Canvas, StarterKit } from '@inscribe/react';
+
+export function MyEditor() {
+  const editor = useCanvasEditor({
+    extensions: [StarterKit],
+  });
+
+  return (
+    <Canvas
+      editor={editor}
+      style={{ height: '100vh', background: '#f5f5f5' }}
+    />
+  );
+}
+```
+
+That's it. Drop `<MyEditor />` anywhere in your React tree and you have a paginated, canvas-rendered document editor.
+
+---
+
+## How It Works
+
+### 1. `useCanvasEditor`
+
+`useCanvasEditor` is a React hook that creates an `Editor` instance on mount and destroys it on unmount. The `editor` value is `null` on the very first render (before the effect runs) — `<Canvas />` handles this gracefully by rendering nothing until the editor is ready.
+
+```ts
+const editor = useCanvasEditor({
+  // Extensions to load. StarterKit includes paragraphs, headings,
+  // lists, bold, italic, links, history, and more.
+  extensions: [StarterKit],
+
+  // Optional: page dimensions and margins. Defaults to A4 / 1-inch margins.
+  pageConfig: {
+    width: 794,   // px at 96 dpi — A4
+    height: 1123,
+    margin: { top: 96, right: 96, bottom: 96, left: 96 },
+  },
+
+  // Lifecycle callbacks
+  onCreate: ({ editor }) => console.log('Editor ready', editor),
+  onUpdate: ({ editor }) => console.log('Document changed'),
+  onDestroy:  () => console.log('Editor destroyed'),
+});
+```
+
+### 2. `<Canvas />`
+
+`<Canvas />` is a thin React lifecycle wrapper around the core `ViewManager`. It mounts the
+rendering engine into a container `<div>` and handles cleanup automatically.
+
+```tsx
+<Canvas
+  editor={editor}
+  gap={24}          // gap in px between pages. Default: 24
+  overscan={500}    // virtual scroll overscan in px. Default: 500
+  className="my-editor"
+  style={{ height: '100%' }}
+/>
+```
+
+---
+
+## Listening to Content Changes
+
+Use the `onUpdate` callback to react to document changes — for example, to sync content to your backend:
+
+```tsx
+const editor = useCanvasEditor({
+  extensions: [StarterKit],
+  onUpdate: ({ editor }) => {
+    const markdown = editor.getMarkdown();
+    saveToServer(markdown);
+  },
+});
+```
+
+---
+
+## Reading Editor State in React
+
+Use the `useEditorState` hook to subscribe to specific slices of editor state without re-rendering
+the whole component tree on every keypress:
+
+```tsx
+import { useCanvasEditor, Canvas, useEditorState, StarterKit } from '@inscribe/react';
+
+export function EditorWithToolbar() {
+  const editor = useCanvasEditor({ extensions: [StarterKit] });
+
+  // Only re-renders when isBold changes
+  const isBold = useEditorState({
+    editor,
+    selector: ({ editor }) => editor?.isActive('bold') ?? false,
+  });
+
+  return (
+    <>
+      <button
+        onClick={() => editor?.commands.toggleBold()}
+        style={{ fontWeight: isBold ? 'bold' : 'normal' }}
+      >
+        Bold
+      </button>
+      <Canvas editor={editor} style={{ height: '80vh' }} />
+    </>
+  );
+}
+```
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="@inscribe/core" href="/docs/packages/core">
+    Explore all available extensions, commands, and the Editor API.
+  </Card>
+  <Card title="@inscribe/react" href="/docs/packages/react">
+    Learn about `useEditorState`, `BubbleMenu`, `FloatingMenu`, and `SlashMenu`.
+  </Card>
+</Cards>

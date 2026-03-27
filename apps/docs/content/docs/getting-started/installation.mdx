@@ -1,0 +1,85 @@
+---
+title: Installation
+description: Install Inscribe into your project and configure TypeScript.
+---
+
+## Prerequisites
+
+- **Node.js** ≥ 18 (LTS recommended)
+- A package manager — `pnpm`, `npm`, or `yarn`
+- A **React** application (React 18 or 19)
+
+<Callout type="info">
+  Inscribe is written in strict TypeScript. You don't need to install separate `@types/*` packages — type declarations are bundled with each package.
+</Callout>
+
+---
+
+## Install the Packages
+
+For a standard React application install the core engine and the React bindings:
+
+<Tabs items={["pnpm", "npm", "yarn"]}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @inscribe/core @inscribe/react
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @inscribe/core @inscribe/react
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @inscribe/core @inscribe/react
+    ```
+  </Tab>
+</Tabs>
+
+### Optional Packages
+
+| Package | When to install |
+| --- | --- |
+| `@inscribe/plugins` | Real-time collaboration (`Collaboration`, `CollaborationCursor`) |
+| `@inscribe/export` | Exporting documents to Markdown, PDF, etc. |
+
+---
+
+## TypeScript Configuration
+
+Inscribe targets `ES2020` and ships ESM-only packages. Ensure your `tsconfig.json` is
+compatible:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "jsx": "react-jsx"
+  }
+}
+```
+
+<Callout type="warn">
+  `moduleResolution: "Bundler"` (or `"Node16"` / `"NodeNext"`) is required. The older `"Node"` resolution mode does not support the package `exports` field used by all Inscribe packages.
+</Callout>
+
+---
+
+## Bundler Support
+
+Inscribe has been tested with **Vite** (recommended), **Webpack 5**, and **esbuild**. No special
+plugins or aliases are required — the packages ship pre-bundled ESM.
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Quick Start" href="/docs/getting-started/quick-start">
+    Build your first editor in under 30 lines of React.
+  </Card>
+</Cards>

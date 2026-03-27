@@ -1,5 +1,76 @@
 ---
-title: Welcome to Inscribe docs
+title: Introduction
+description: Inscribe is a canvas-based, paginated document editor built on ProseMirror and Yjs.
 ---
 
-Welcome to the official documentation for Inscribe.
+## What is Inscribe?
+
+**Inscribe** is an open-source, canvas-rendered document editor framework. Unlike traditional
+DOM-based rich-text editors, Inscribe renders its content directly onto `<canvas>` elements —
+giving you pixel-perfect, paginated layouts with high performance virtual scrolling, without
+fighting the browser's layout engine.
+
+It is built on the shoulders of giants:
+
+| Layer | Technology | Purpose |
+| --- | --- | --- |
+| **Document model** | [ProseMirror](https://prosemirror.net/) | Structured document state, commands, and history |
+| **Rendering** | HTML5 Canvas | Pixel-perfect, paginated page layout |
+| **Collaboration** | [Yjs](https://yjs.dev/) + [Hocuspocus](https://hocuspocus.dev/) | Real-time CRDT-based co-editing |
+| **React bindings** | `@inscribe/react` | Hooks and components for mounting the editor in a React app |
+
+---
+
+## Package Overview
+
+The monorepo ships four packages. As a consumer you will almost always use the first two.
+
+<Cards>
+  <Card title="@inscribe/core" href="/docs/packages/core">
+    The headless engine — `Editor` class, ProseMirror schema, canvas `ViewManager`, and all built-in extensions.
+  </Card>
+  <Card title="@inscribe/react" href="/docs/packages/react">
+    React bindings — `useCanvasEditor` hook, `<Canvas />` component, and contextual menus.
+  </Card>
+  <Card title="@inscribe/plugins" href="/docs/packages/plugins">
+    Optional extensions — real-time `Collaboration`, `CollaborationCursor`, and more.
+  </Card>
+  <Card title="@inscribe/export" href="/docs/packages/export">
+    Export utilities — convert the document to Markdown, PDF, or other formats.
+  </Card>
+</Cards>
+
+---
+
+## Key Concepts at a Glance
+
+**Canvas rendering, not DOM.** Every glyph, cursor, selection highlight, and overlay (ghost text,
+tracked changes) is drawn directly on an `HTMLCanvasElement`. The editor owns its own coordinate
+system — the browser's layout engine is only used for the outer scroll container.
+
+**Pages as first-class citizens.** The document is broken into fixed-size pages (A4 by default).
+The `ViewManager` implements virtual scrolling, only painting pages that are currently in the
+viewport. You control page dimensions and margins through a simple `PageConfig` object.
+
+**Extension-first architecture.** Almost every feature — headings, lists, links, collaboration —
+is an `Extension`. You compose the features you need via `StarterKit` or by listing extensions
+explicitly. This keeps bundle sizes lean.
+
+**One document model + multiple renderers.** The ProseMirror `EditorState` is the single source of
+truth. The canvas renderer reads from it; Yjs syncs it across peers; the export layer serializes it.
+Nothing holds a shadow copy.
+
+---
+
+## Getting Started
+
+New here? Start with the installation guide:
+
+<Cards>
+  <Card title="Installation" href="/docs/getting-started/installation">
+    Install the packages and configure TypeScript.
+  </Card>
+  <Card title="Quick Start" href="/docs/getting-started/quick-start">
+    Build a minimal working editor in under 30 lines of React.
+  </Card>
+</Cards>
