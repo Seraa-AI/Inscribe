@@ -1,5 +1,11 @@
 import { EditorState, Transaction, TextSelection } from "prosemirror-state";
-import type { FontModifier, MarkDecorator, ToolbarItemSpec, OverlayRenderHandler, IEditor } from "./extensions/types";
+import type {
+  FontModifier,
+  MarkDecorator,
+  ToolbarItemSpec,
+  OverlayRenderHandler,
+  IEditor,
+} from "./extensions/types";
 import type { Schema } from "prosemirror-model";
 import { MarkdownSerializer } from "prosemirror-markdown";
 import { ExtensionManager } from "./extensions/ExtensionManager";
@@ -206,11 +212,19 @@ export class Editor {
   /** Cleanup functions returned by onEditorReady() callbacks — called on destroy(). */
   private editorReadyCleanup: Array<() => void> = [];
 
-  constructor({ extensions = [StarterKit], pageConfig, onChange, onFocusChange, onCursorTick, startReady = true }: EditorOptions) {
+  constructor({
+    extensions = [StarterKit],
+    pageConfig,
+    onChange,
+    onFocusChange,
+    onCursorTick,
+    startReady = true,
+  }: EditorOptions) {
     this.manager = new ExtensionManager(extensions);
     this.onChange = onChange;
     this.onFocusChange = onFocusChange;
-    this.pageConfig = this.manager.buildPageConfig() ?? pageConfig ?? defaultPageConfig;
+    this.pageConfig =
+      this.manager.buildPageConfig() ?? pageConfig ?? defaultPageConfig;
     this.fontConfig = this.manager.buildBlockStyles();
     this.measurer = new TextMeasurer({ lineHeightMultiplier: 1.2 });
     this.fontModifiers = this.manager.buildFontModifiers();
@@ -255,14 +269,14 @@ export class Editor {
     );
 
     this.ib = new InputBridge({
-      getState:       () => this.state,
-      dispatch:       (tr) => this.dispatch(tr),
-      getSchema:      () => this.manager.schema,
+      getState: () => this.state,
+      dispatch: (tr) => this.dispatch(tr),
+      getSchema: () => this.manager.schema,
       getViewportRect: (from, to) => this.getViewportRect(from, to),
-      getCharMap:     () => this.lc.charMap,
-      keymap:         this.manager.buildKeymap(),
-      inputHandlers:  this.manager.buildInputHandlers(),
-      navigator:      this,
+      getCharMap: () => this.lc.charMap,
+      keymap: this.manager.buildKeymap(),
+      inputHandlers: this.manager.buildInputHandlers(),
+      navigator: this,
       pasteTransformer,
       onFocus: () => {
         this.cursorManager.start();
@@ -328,7 +342,9 @@ export class Editor {
    * Owned by the LayoutCoordinator; exposed here so ViewManager and adapters
    * can access it without knowing about the coordinator.
    */
-  get charMap(): CharacterMap { return this.lc.charMap; }
+  get charMap(): CharacterMap {
+    return this.lc.charMap;
+  }
 
   /**
    * The current document layout. Calls ensureLayout() so the result
@@ -363,14 +379,17 @@ export class Editor {
     const pageRect = pageEl.getBoundingClientRect();
     const toCoords = this.lc.charMap.coordsAtPos(to);
 
-    const left   = pageRect.left + fromCoords.x;
-    const top    = pageRect.top  + fromCoords.y;
+    const left = pageRect.left + fromCoords.x;
+    const top = pageRect.top + fromCoords.y;
     const height = fromCoords.height;
 
     // Width: span to toCoords if on same line, otherwise use a minimal 1px width
-    const sameLine = toCoords && toCoords.page === fromCoords.page &&
+    const sameLine =
+      toCoords &&
+      toCoords.page === fromCoords.page &&
       Math.abs(toCoords.y - fromCoords.y) < 2;
-    const width = sameLine && toCoords ? Math.abs(toCoords.x - fromCoords.x) : 1;
+    const width =
+      sameLine && toCoords ? Math.abs(toCoords.x - fromCoords.x) : 1;
 
     return new DOMRect(left, top, Math.max(1, width), height);
   }
@@ -544,7 +563,9 @@ export class Editor {
    * (e.g. Canvas) after mount so the editor can position the textarea
    * and scroll the cursor into view.
    */
-  setPageElementLookup(fn: ((page: number) => HTMLElement | null) | null): void {
+  setPageElementLookup(
+    fn: ((page: number) => HTMLElement | null) | null,
+  ): void {
     this.ib.setPageElementLookup(fn);
   }
 
@@ -583,9 +604,7 @@ export class Editor {
     const h = Math.max(0, Math.min(head, size));
     const $a = this.state.doc.resolve(a);
     const $h = this.state.doc.resolve(h);
-    this.dispatch(
-      this.state.tr.setSelection(TextSelection.between($a, $h))
-    );
+    this.dispatch(this.state.tr.setSelection(TextSelection.between($a, $h)));
     this.focus();
   }
 
@@ -789,9 +808,7 @@ export class Editor {
     // and position 0 without throwing, unlike TextSelection.create.
     const $a = this.state.doc.resolve(Math.max(0, Math.min(a, size)));
     const $h = this.state.doc.resolve(h);
-    this.dispatch(
-      this.state.tr.setSelection(TextSelection.between($a, $h))
-    );
+    this.dispatch(this.state.tr.setSelection(TextSelection.between($a, $h)));
   }
 
   private notifyListeners(): void {
@@ -850,5 +867,4 @@ export class Editor {
 
     return bound;
   }
-
 }
