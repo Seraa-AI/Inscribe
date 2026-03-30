@@ -1,4 +1,4 @@
 {
   "title": "Concepts",
-  "pages": ["document-model", "coordinate-system", "render-pipeline", "event-system", "memory-management"]
+  "pages": ["render-pipeline", "document-model", "coordinate-system", "event-system"]
 }
