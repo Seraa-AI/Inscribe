@@ -1,4 +1,11 @@
 {
   "title": "API Reference",
-  "pages": ["editor", "view-manager", "events", "types", "nodes"]
+  "icon": "Braces",
+  "pages": [
+    "editor",
+    "view-manager",
+    "events",
+    "types",
+    "nodes"
+  ]
 }

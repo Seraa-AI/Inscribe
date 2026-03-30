@@ -26,7 +26,7 @@ editor.mount(containerElement);
 new Editor(options: EditorOptions)
 ```
 
-Accepts an [`EditorOptions`](/docs/api/types#editoroptions) object. Builds the ProseMirror schema from
+Accepts an [`EditorOptions`](/ api/types#editoroptions) object. Builds the ProseMirror schema from
 extensions, runs the initial layout, and starts the cursor blink timer.
 
 ---
@@ -45,7 +45,7 @@ directly — it reflects exactly which node and mark types are loaded.
 readonly pageConfig: PageConfig
 ```
 The active page dimensions. Set once at construction from `EditorOptions.pageConfig` or the first
-extension that provides one. See [`PageConfig`](/docs/api/types#pageconfig).
+extension that provides one. See [`PageConfig`](/ api/types#pageconfig).
 
 ### `charMap`
 ```ts
@@ -144,7 +144,7 @@ editor.isActive('bulletList');                 // inside a list?
 getSelectionSnapshot(): SelectionSnapshot
 ```
 Returns a lightweight snapshot of the selection — all the data a toolbar or floating menu needs
-without requiring ProseMirror imports. See [`SelectionSnapshot`](/docs/api/types#selectionsnapshot).
+without requiring ProseMirror imports. See [`SelectionSnapshot`](/ api/types#selectionsnapshot).
 
 ### `getActiveMarks()`
 ```ts

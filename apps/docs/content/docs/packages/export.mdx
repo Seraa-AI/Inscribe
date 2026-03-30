@@ -1,0 +1,133 @@
+---
+title: "@inscribe/export"
+description: Export utilities — serialize Inscribe documents to paginated PDF (pdf-lib), DOCX (OpenXML), or Markdown.
+---
+
+`@inscribe/export` provides serializers that convert an Inscribe `EditorState` into portable document
+formats. All serializers run entirely in the browser — no server round-trip required.
+
+## Installation
+
+<Tabs items={["pnpm", "npm", "yarn"]}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @inscribe/export
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @inscribe/export
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @inscribe/export
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## PDF Export
+
+Generates a multi-page PDF that matches the paginated canvas layout pixel-for-pixel.
+Powered by [pdf-lib](https://pdf-lib.js.org/).
+
+```ts
+import { exportToPdf } from '@inscribe/export';
+
+const pdfBytes = await exportToPdf(editor);
+
+// Download in the browser
+const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'document.pdf';
+a.click();
+```
+
+### Options
+
+```ts
+const pdfBytes = await exportToPdf(editor, {
+  // Metadata embedded in the PDF
+  title: 'My Document',
+  author: 'Alice',
+  subject: 'Draft v1',
+
+  // Override page size (defaults to editor's PageConfig)
+  pageSize: { width: 595, height: 842 }, // A4 in PDF points
+});
+```
+
+---
+
+## DOCX Export
+
+Serializes the document to a `.docx` file (Office Open XML format) compatible with
+Microsoft Word, Google Docs, and LibreOffice.
+
+```ts
+import { exportToDocx } from '@inscribe/export';
+
+const docxBlob = await exportToDocx(editor);
+
+const url = URL.createObjectURL(docxBlob);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'document.docx';
+a.click();
+```
+
+### Supported Elements
+
+| Element | DOCX equivalent |
+|---------|----------------|
+| Paragraph | `<w:p>` with run formatting |
+| Heading 1–6 | Built-in Word heading styles |
+| Bold / Italic / Underline | `<w:b>`, `<w:i>`, `<w:u>` |
+| Bullet list | `<w:numPr>` with list style |
+| Ordered list | `<w:numPr>` with decimal style |
+| Link | `<w:hyperlink>` |
+| Hard break | `<w:br>` |
+| Code block | Monospace paragraph style |
+
+---
+
+## Markdown Export
+
+Converts the document to a CommonMark Markdown string. Useful for storing documents in
+version-controlled text files or feeding content into AI pipelines.
+
+```ts
+import { exportToMarkdown } from '@inscribe/export';
+
+const markdown = exportToMarkdown(editor);
+console.log(markdown);
+// # Heading
+//
+// A paragraph with **bold** and _italic_ text.
+```
+
+### Options
+
+```ts
+const markdown = exportToMarkdown(editor, {
+  // Use GitHub Flavored Markdown extensions (tables, strikethrough)
+  gfm: true,
+});
+```
+
+---
+
+## Export Guide
+
+<Cards>
+  <Card title="Export Guide" href="/guides/export">
+    Trigger exports from toolbar buttons and handle async PDF generation.
+  </Card>
+  <Card title="Serialization" href="/guides/serialization">
+    Reading and writing ProseMirror JSON and HTML document formats.
+  </Card>
+</Cards>

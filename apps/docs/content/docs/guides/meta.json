@@ -1,4 +1,12 @@
 {
   "title": "Guides",
-  "pages": ["nodes", "interactivity", "viewport", "serialization", "export", "plugins"]
+  "icon": "BookMarked",
+  "pages": [
+    "nodes",
+    "interactivity",
+    "viewport",
+    "serialization",
+    "export",
+    "plugins"
+  ]
 }

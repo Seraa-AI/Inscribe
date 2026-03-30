@@ -1,0 +1,184 @@
+---
+title: "@inscribe/react"
+description: React bindings for Inscribe — useCanvasEditor hook, Canvas component, and useEditorState selector hook.
+---
+
+`@inscribe/react` is a thin React adapter over `@inscribe/core`. It provides a hook to create and manage
+an `Editor` instance within the React lifecycle, a mount component, and a state-subscription hook for
+building toolbars and menus without excessive re-renders.
+
+## Installation
+
+<Tabs items={["pnpm", "npm", "yarn"]}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @inscribe/core @inscribe/react
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @inscribe/core @inscribe/react
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @inscribe/core @inscribe/react
+    ```
+  </Tab>
+</Tabs>
+
+**Peer dependencies:** React 18 or 19.
+
+---
+
+## useCanvasEditor
+
+`useCanvasEditor` creates an `Editor` instance on mount and destroys it on unmount. It returns `null`
+during the first render (before the effect runs) — `<Canvas />` handles this gracefully.
+
+```tsx
+import { useCanvasEditor, StarterKit } from '@inscribe/react';
+
+const editor = useCanvasEditor({
+  extensions: [StarterKit],
+});
+```
+
+### Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `extensions` | `Extension[]` | **Required.** Extensions to load. |
+| `pageConfig` | `PageConfig` | Page dimensions and margins. Defaults to A4 / 1-inch margins. |
+| `content` | `string \| object` | Initial document content (HTML string or ProseMirror JSON). |
+| `onCreate` | `({ editor }) => void` | Called once the editor is fully initialized. |
+| `onUpdate` | `({ editor }) => void` | Called on every document change. |
+| `onDestroy` | `() => void` | Called when the editor is destroyed. |
+
+The optional second argument is a **dependency array** — if any value in it changes, the editor is torn down
+and re-initialized:
+
+```tsx
+const editor = useCanvasEditor({ extensions: [StarterKit] }, [roomId]);
+```
+
+---
+
+## Canvas
+
+`<Canvas />` mounts the `ViewManager` into a container `<div>`. It manages the hidden `<textarea>`
+input bridge for keyboard and IME events, and cleans up all observers on unmount.
+
+```tsx
+import { Canvas } from '@inscribe/react';
+
+<Canvas
+  editor={editor}
+  style={{ height: '100vh', background: '#f5f5f5' }}
+/>
+```
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `editor` | `Editor \| null` | — | **Required.** Editor instance from `useCanvasEditor`. |
+| `gap` | `number` | `24` | Gap in px between pages. |
+| `overscan` | `number` | `500` | Virtual scroll overscan in px. |
+| `className` | `string` | — | CSS class on the outer container. |
+| `style` | `CSSProperties` | — | Inline styles on the outer container. |
+
+---
+
+## useEditorState
+
+`useEditorState` subscribes to a specific slice of editor state. The component only re-renders when
+the selected value changes — not on every keypress.
+
+```tsx
+import { useEditorState } from '@inscribe/react';
+
+const isBold = useEditorState({
+  editor,
+  selector: ({ editor }) => editor?.isActive('bold') ?? false,
+});
+```
+
+Use this to build toolbars that stay in sync with cursor position:
+
+```tsx
+export function Toolbar({ editor }: { editor: Editor | null }) {
+  const isBold = useEditorState({
+    editor,
+    selector: ({ editor }) => editor?.isActive('bold') ?? false,
+  });
+
+  const isItalic = useEditorState({
+    editor,
+    selector: ({ editor }) => editor?.isActive('italic') ?? false,
+  });
+
+  return (
+    <div>
+      <button
+        onClick={() => editor?.commands.toggleBold()}
+        data-active={isBold}
+      >
+        B
+      </button>
+      <button
+        onClick={() => editor?.commands.toggleItalic()}
+        data-active={isItalic}
+      >
+        I
+      </button>
+    </div>
+  );
+}
+```
+
+---
+
+## Full Example
+
+```tsx title="MyEditor.tsx"
+import { useCanvasEditor, Canvas, useEditorState, StarterKit } from '@inscribe/react';
+
+export function MyEditor() {
+  const editor = useCanvasEditor({
+    extensions: [StarterKit],
+    pageConfig: {
+      width: 794,
+      height: 1123,
+      margin: { top: 96, right: 96, bottom: 96, left: 96 },
+    },
+  });
+
+  const isBold = useEditorState({
+    editor,
+    selector: ({ editor }) => editor?.isActive('bold') ?? false,
+  });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <button onClick={() => editor?.commands.toggleBold()}>
+        {isBold ? 'Bold ✓' : 'Bold'}
+      </button>
+      <Canvas editor={editor} style={{ flex: 1 }} />
+    </div>
+  );
+}
+```
+
+---
+
+## React Integration Guide
+
+<Cards>
+  <Card title="React Integration" href="/integrations/react">
+    Patterns for context providers, SSR, and server components.
+  </Card>
+  <Card title="Quick Start" href="/getting-started/quick-start">
+    Minimal working editor in under 30 lines.
+  </Card>
+</Cards>

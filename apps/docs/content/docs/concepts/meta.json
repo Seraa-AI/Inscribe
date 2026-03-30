@@ -1,4 +1,10 @@
 {
   "title": "Concepts",
-  "pages": ["render-pipeline", "document-model", "coordinate-system", "event-system"]
+  "icon": "Lightbulb",
+  "pages": [
+    "render-pipeline",
+    "document-model",
+    "coordinate-system",
+    "event-system"
+  ]
 }
