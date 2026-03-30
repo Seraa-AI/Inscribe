@@ -1,4 +1,94 @@
 ---
-title: Local Environment
-description: Cloning the repository, running tests, and managing pnpm links.
+title: Local Setup
+description: Clone the repo, install dependencies, and run the monorepo locally.
 ---
+
+Inscribe is a pnpm monorepo managed by Turbo. Here's how to get your local environment running.
+
+---
+
+## Prerequisites
+
+- **Node.js** ≥ 20 (LTS recommended — `node --version`)
+- **pnpm** ≥ 10 — `npm install -g pnpm`
+- **Git**
+
+---
+
+## Clone and Install
+
+```bash
+git clone https://github.com/your-org/inscribe.git
+cd inscribe
+pnpm install
+```
+
+---
+
+## Running the Dev Servers
+
+```bash
+# Start all apps and watch packages simultaneously
+pnpm dev
+
+# Or target specific apps:
+pnpm --filter @inscribe/demo dev      # demo editor at http://localhost:5173
+pnpm --filter @inscribe/docs dev      # documentation at http://localhost:3000
+```
+
+The collaboration server must be running for multiplayer features:
+
+```bash
+pnpm --filter @inscribe/server dev    # Hocuspocus WebSocket server at ws://localhost:1234
+```
+
+---
+
+## Environment Variables
+
+Create a `.env` file in `apps/demo/` (copy from `apps/demo/.env.example` if present):
+
+```bash
+VITE_WS_URL=ws://localhost:1234   # Hocuspocus WebSocket server
+ANTHROPIC_API_KEY=sk-ant-...      # Required for AI features
+```
+
+---
+
+## Running Tests
+
+```bash
+# All packages
+turbo test
+
+# Watch mode (re-runs on file changes)
+turbo test:watch
+
+# With coverage
+turbo test -- --coverage
+```
+
+Tests live co-located with source files as `*.test.ts`. New code should include tests.
+
+---
+
+## Linting and Type Checking
+
+```bash
+pnpm lint   # ESLint + TypeScript — must pass with zero errors/warnings before opening a PR
+pnpm tsc    # Full monorepo type check
+```
+
+---
+
+## Building Packages
+
+```bash
+# Build all packages (required before running apps in production mode)
+turbo build
+
+# Build a specific package
+pnpm --filter @inscribe/core build
+```
+
+Packages are built with `tsup` into each package's `dist/` directory. App builds use Vite.
