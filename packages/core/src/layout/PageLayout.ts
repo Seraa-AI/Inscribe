@@ -693,16 +693,24 @@ function runFloatPass(
 
     const contentX = margins.left;
     const contentRight = pageWidth - margins.right;
+    const contentWidth = contentRight - contentX;
+
+    // Clamp nodeWidth so it never exceeds the available content width.
+    // This guards against attrs set before the resize constraint was in place.
+    const clampedNodeWidth = Math.min(nodeWidth, contentWidth);
 
     let floatX: number;
     if (mode === "square-right") {
       // offsetX shifts from the default right-side position. Adding it means
       // dragging right increases offsetX and moves the image right (natural).
-      floatX = contentRight - nodeWidth + offsetX;
+      floatX = contentRight - clampedNodeWidth + offsetX;
     } else {
       // square-left, top-bottom, behind, front — default to left side
       floatX = contentX + offsetX;
     }
+    // Clamp so the float never escapes the page content area regardless of how
+    // floatOffset was set (drag, paste, serialised state, etc.).
+    floatX = Math.max(contentX, Math.min(floatX, contentRight - clampedNodeWidth));
 
     // Fix 1: downward scan — push this float below any already-placed float on
     // the same page that it would physically overlap. This implements the CSS
@@ -722,7 +730,7 @@ function runFloatPass(
         for (const placed of floats) {
           if (placed.page !== onPage) continue;
           if (placed.mode === "behind" || placed.mode === "front") continue;
-          const hOverlap = floatX < placed.x + placed.width && floatX + nodeWidth > placed.x;
+          const hOverlap = floatX < placed.x + placed.width && floatX + clampedNodeWidth > placed.x;
           const vOverlap = cy < placed.y + placed.height && cy + nodeHeight > placed.y;
           if (hOverlap && vOverlap) {
             cy = placed.y + placed.height;
@@ -749,7 +757,7 @@ function runFloatPass(
       page: floatPage,
       x: floatX,
       y: candidateY,
-      width: nodeWidth,
+      width: clampedNodeWidth,
       height: nodeHeight,
       mode,
       node,
