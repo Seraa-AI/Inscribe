@@ -69,6 +69,7 @@ export function hitHandle(
  *   T → top edge    → height increases with -dy
  *
  * A minimum of 20px is enforced on both dimensions.
+ * An optional maxWidth caps the width so a float cannot be dragged wider than the page content area.
  */
 export function computeNewSize(
   handleId: string,
@@ -76,11 +77,12 @@ export function computeNewSize(
   startH: number,
   dx: number,
   dy: number,
+  maxWidth = Infinity,
 ): { width: number; height: number } {
   let w = startW;
   let h = startH;
-  if (handleId.includes("R")) w = Math.max(20, startW + dx);
-  if (handleId.includes("L")) w = Math.max(20, startW - dx);
+  if (handleId.includes("R")) w = Math.min(maxWidth, Math.max(20, startW + dx));
+  if (handleId.includes("L")) w = Math.min(maxWidth, Math.max(20, startW - dx));
   if (handleId.includes("B")) h = Math.max(20, startH + dy);
   if (handleId.includes("T")) h = Math.max(20, startH - dy);
   return { width: Math.round(w), height: Math.round(h) };

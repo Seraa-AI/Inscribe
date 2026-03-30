@@ -424,11 +424,14 @@ export class ViewManager {
     // ── Resize drag ───────────────────────────────────────────────────────────
     if (this.resizeDrag) {
       const { handle, startX, startY, startW, startH, docPos } = this.resizeDrag;
+      const { pageWidth, margins } = this.editor.layout.pageConfig;
+      const maxWidth = pageWidth - margins.left - margins.right;
       const { width, height } = computeNewSize(
         handle,
         startW, startH,
         e.clientX - startX,
         e.clientY - startY,
+        maxWidth,
       );
       this.editor.setNodeAttrs(docPos, { width, height });
       return;
