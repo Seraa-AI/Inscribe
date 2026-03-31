@@ -127,6 +127,12 @@ export interface LayoutResumption {
   prevSpaceAfter: number;
   /** Layout version carried through all chunks. */
   version: number;
+  /**
+   * Number of fully-completed pages as of the end of the previous chunk.
+   * Used by LayoutCoordinator to skip clearing charMap entries for pages
+   * that are already final and have not changed in this chunk.
+   */
+  prevPageCount: number;
 }
 
 /**
@@ -298,6 +304,7 @@ export function layoutDocument(
         currentY: y,
         prevSpaceAfter,
         version: chunkVersion,
+        prevPageCount: pages.length,
       };
       const partialPass1: DocumentLayout = { pages: [...pages, currentPage], pageConfig, version: chunkVersion, isPartial: true, resumption };
       // Run the float pass on already-processed pages so floats visible in the
@@ -448,6 +455,7 @@ export function layoutDocument(
       let remainingLines = entry.lines;
       let hasPlacedAnyPart = false;
       let currentPartStartY = targetY;
+      let fragmentIdx = 0;
       // Tracks whether gap-suppression has already been applied for this block.
       // If linesFit=0 fires a second time after gap-suppress, force 1 line
       // (sub-pixel shortfall: pageBottom - y is just barely less than lineHeight,
@@ -530,6 +538,8 @@ export function layoutDocument(
           availableWidth: blockWidth,
           ...(isCont ? { isContinuation: true as const } : {}),
           ...(!isLastPart ? { continuesOnNextPage: true as const } : {}),
+          fragmentIndex: fragmentIdx,
+          sourceNodePos: nodePos,
         };
 
         if (listMarker !== undefined) {
@@ -548,6 +558,7 @@ export function layoutDocument(
         }
         currentPage.blocks.push(partBlock);
         hasPlacedAnyPart = true;
+        fragmentIdx++;
 
         if (!isLastPart) {
           pages.push(currentPage);
@@ -631,6 +642,26 @@ export function layoutDocument(
   // already pushed inside the loop (along with all subsequent copied pages).
   if (!earlyTerminated) {
     pages.push(currentPage);
+  }
+
+  // Stamp fragmentCount on all split-block parts.
+  // fragmentIndex and sourceNodePos were set per-part in the split loop above;
+  // fragmentCount requires knowing the total, so we compute it in a post-pass.
+  const fragmentCounts = new Map<number, number>();
+  for (const page of pages) {
+    for (const block of page.blocks) {
+      if (block.sourceNodePos !== undefined) {
+        fragmentCounts.set(block.sourceNodePos, (fragmentCounts.get(block.sourceNodePos) ?? 0) + 1);
+      }
+    }
+  }
+  for (const page of pages) {
+    for (const block of page.blocks) {
+      if (block.sourceNodePos !== undefined) {
+        const count = fragmentCounts.get(block.sourceNodePos);
+        if (count !== undefined) block.fragmentCount = count;
+      }
+    }
   }
 
   const pass1Result: DocumentLayout = { pages, pageConfig, version: chunkVersion };
@@ -1059,6 +1090,8 @@ function clampBlockToPage(block: LayoutBlock, pageBottom: number): LayoutBlock {
 function splitBlockAtBoundary(
   block: LayoutBlock,
   pageBottom: number,
+  keptFragmentIndex?: number,
+  overflowFragmentIndex?: number,
 ): { kept: LayoutBlock | null; overflow: LayoutBlock } {
   const available = pageBottom - block.y;
   let linesFit = 0;
@@ -1082,6 +1115,10 @@ function splitBlockAtBoundary(
     lines: block.lines.slice(0, linesFit),
     spaceAfter: 0,
     continuesOnNextPage: true as const,
+    ...(keptFragmentIndex !== undefined ? {
+      fragmentIndex: keptFragmentIndex,
+      sourceNodePos: block.sourceNodePos ?? block.nodePos,
+    } : {}),
   };
 
   // Helper: spread block without list marker props (continuation parts don't show markers).
@@ -1095,6 +1132,10 @@ function splitBlockAtBoundary(
     lines: block.lines.slice(linesFit),
     spaceBefore: 0,
     isContinuation: true as const,
+    ...(overflowFragmentIndex !== undefined ? {
+      fragmentIndex: overflowFragmentIndex,
+      sourceNodePos: block.sourceNodePos ?? block.nodePos,
+    } : {}),
   };
 
   return { kept, overflow };

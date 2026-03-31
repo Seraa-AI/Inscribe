@@ -97,6 +97,21 @@ export interface LayoutBlock {
    * last line of the block (relevant for justify alignment's last-line exception).
    */
   continuesOnNextPage?: boolean;
+  /**
+   * 0-based index of this visual part within its source block.
+   * 0 = first (or only) part. Absent on unsplit blocks (treat as 0).
+   */
+  fragmentIndex?: number;
+  /**
+   * Total number of visual parts this source block was split into.
+   * Absent on unsplit blocks (treat as 1).
+   */
+  fragmentCount?: number;
+  /**
+   * nodePos of the original unsplit source block.
+   * Same as nodePos for the first part; allows grouping all parts of a split back to their origin.
+   */
+  sourceNodePos?: number;
 }
 
 export interface BlockLayoutOptions {
