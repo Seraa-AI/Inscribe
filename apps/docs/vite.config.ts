@@ -4,6 +4,7 @@ import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import mdx from 'fumadocs-mdx/vite';
 import { nitro } from 'nitro/vite';
+import { resolve } from 'path';
 
 export default defineConfig({
   server: {
@@ -27,6 +28,10 @@ export default defineConfig({
     tsconfigPaths: true,
     alias: {
       tslib: 'tslib/tslib.es6.js',
+      '@inscribe/core': resolve(__dirname, '../../packages/core/src/index.ts'),
+      '@inscribe/plugins': resolve(__dirname, '../../packages/plugins/src/index.ts'),
+      '@inscribe/export': resolve(__dirname, '../../packages/export/src/index.ts'),
+      '@inscribe/react': resolve(__dirname, '../../packages/react/src/index.ts'),
     },
   },
 });

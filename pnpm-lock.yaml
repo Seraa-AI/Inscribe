@@ -96,6 +96,30 @@ importers:
 
   apps/docs:
     dependencies:
+      '@ai-sdk/anthropic':
+        specifier: ^3.0.63
+        version: 3.0.63(zod@4.3.6)
+      '@ai-sdk/react':
+        specifier: ^3.0.136
+        version: 3.0.136(react@19.2.4)(zod@4.3.6)
+      '@anthropic-ai/sdk':
+        specifier: ^0.80.0
+        version: 0.80.0(zod@4.3.6)
+      '@floating-ui/dom':
+        specifier: ^1.7.6
+        version: 1.7.6
+      '@inscribe/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@inscribe/export':
+        specifier: workspace:*
+        version: link:../../packages/export
+      '@inscribe/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
+      '@inscribe/react':
+        specifier: workspace:*
+        version: link:../../packages/react
       '@tanstack/react-router':
         specifier: 1.168.3
         version: 1.168.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -105,6 +129,9 @@ importers:
       '@tanstack/react-start':
         specifier: 1.167.6
         version: 1.167.6(crossws@0.4.4(srvx@0.11.12))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vite@8.0.3(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0))
+      ai:
+        specifier: ^6.0.134
+        version: 6.0.134(zod@4.3.6)
       fumadocs-core:
         specifier: 16.7.6
         version: 16.7.6(@mdx-js/mdx@3.1.1)(@tanstack/react-router@1.168.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(lucide-react@1.7.0(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6)
@@ -129,6 +156,9 @@ importers:
       vite:
         specifier: ^8.0.2
         version: 8.0.3(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.2.2
@@ -4205,6 +4235,16 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
+  '@ai-sdk/react@3.0.136(react@19.2.4)(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider-utils': 4.0.21(zod@4.3.6)
+      ai: 6.0.134(zod@4.3.6)
+      react: 19.2.4
+      swr: 2.4.1(react@19.2.4)
+      throttleit: 2.1.0
+    transitivePeerDependencies:
+      - zod
+
   '@ampproject/remapping@2.3.0':
     dependencies:
       '@jridgewell/gen-mapping': 0.3.13
@@ -7835,6 +7875,12 @@ snapshots:
       dequal: 2.0.3
       react: 18.3.1
       use-sync-external-store: 1.6.0(react@18.3.1)
+
+  swr@2.4.1(react@19.2.4):
+    dependencies:
+      dequal: 2.0.3
+      react: 19.2.4
+      use-sync-external-store: 1.6.0(react@19.2.4)
 
   tailwind-merge@3.5.0: {}
 
