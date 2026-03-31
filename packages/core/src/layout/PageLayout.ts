@@ -538,8 +538,9 @@ export function layoutDocument(
           availableWidth: blockWidth,
           ...(isCont ? { isContinuation: true as const } : {}),
           ...(!isLastPart ? { continuesOnNextPage: true as const } : {}),
-          fragmentIndex: fragmentIdx,
-          sourceNodePos: nodePos,
+          // Only stamp fragment identity on actual split parts (not unsplit blocks).
+          // An unsplit block has isCont=false and isLastPart=true on its only iteration.
+          ...(isCont || !isLastPart ? { fragmentIndex: fragmentIdx, sourceNodePos: nodePos } : {}),
         };
 
         if (listMarker !== undefined) {
@@ -644,22 +645,28 @@ export function layoutDocument(
     pages.push(currentPage);
   }
 
-  // Stamp fragmentCount on all split-block parts.
-  // fragmentIndex and sourceNodePos were set per-part in the split loop above;
-  // fragmentCount requires knowing the total, so we compute it in a post-pass.
-  const fragmentCounts = new Map<number, number>();
-  for (const page of pages) {
-    for (const block of page.blocks) {
-      if (block.sourceNodePos !== undefined) {
-        fragmentCounts.set(block.sourceNodePos, (fragmentCounts.get(block.sourceNodePos) ?? 0) + 1);
+  // Stamp fragmentCount on split-block parts produced in THIS run only.
+  // When Phase 1b early-terminated, blocks were copied from previousLayout
+  // which already has correct fragmentCount values — skip the scan entirely.
+  // When no splits occurred (common case), the Map stays empty and the second
+  // pass is skipped.
+  if (!earlyTerminated) {
+    const fragmentCounts = new Map<number, number>();
+    for (const page of pages) {
+      for (const block of page.blocks) {
+        if (block.sourceNodePos !== undefined) {
+          fragmentCounts.set(block.sourceNodePos, (fragmentCounts.get(block.sourceNodePos) ?? 0) + 1);
+        }
       }
     }
-  }
-  for (const page of pages) {
-    for (const block of page.blocks) {
-      if (block.sourceNodePos !== undefined) {
-        const count = fragmentCounts.get(block.sourceNodePos);
-        if (count !== undefined) block.fragmentCount = count;
+    if (fragmentCounts.size > 0) {
+      for (const page of pages) {
+        for (const block of page.blocks) {
+          if (block.sourceNodePos !== undefined) {
+            const count = fragmentCounts.get(block.sourceNodePos);
+            if (count !== undefined) block.fragmentCount = count;
+          }
+        }
       }
     }
   }

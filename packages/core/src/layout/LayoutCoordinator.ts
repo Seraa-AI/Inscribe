@@ -322,8 +322,11 @@ export class LayoutCoordinator {
       }
     }
 
-    // Sort by start ascending for binary search.
-    this._fragmentIndex.sort((a, b) => a.start - b.start);
+    // No sort needed: entries are produced in document order.
+    // Pages are processed in sequence; blocks within each page are in docPos order;
+    // lines within each block are in docPos order; overflow always moves to a later page.
+    // The sentinel extension on the last line (end = nodePos + nodeSize) can exceed
+    // the next entry's start, but start values remain strictly non-decreasing.
   }
 
   /**

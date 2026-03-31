@@ -1367,3 +1367,152 @@ describe("layoutDocument — float image wrapping", () => {
   });
 });
 
+// ── Fragment identity fields ───────────────────────────────────────────────────
+//
+// Phase 2 of the layout fragment architecture stamps fragmentIndex, fragmentCount,
+// and sourceNodePos on every part of a split block so consumers can identify
+// "which part am I?" without reading boolean flag combinations.
+//
+// Same splitPage geometry as the line-splitting suites above.
+describe("layoutDocument — fragment identity", () => {
+  const LH = MOCK_LINE_HEIGHT; // 18px
+
+  const splitPage = {
+    pageWidth:  120,
+    pageHeight: Math.round(10 + 3 * LH + 10), // 74px: 3 lines + 10px margins each side
+    margins: { top: 10, right: 10, bottom: 10, left: 10 },
+  };
+
+  // Each 9-char word wraps to its own line (72px < contentWidth=100px;
+  // two words = 152px > 100px). spaceAfter for paragraph pushes targetY by
+  // one line height, leaving room for exactly 1 line on page 1 after "intro".
+  const fourLineText = "aaaaaaaaa bbbbbbbbb ccccccccc ddddddddd"; // 4 words → 4 lines
+  const sixLineText  = "aaaaaaaaa bbbbbbbbb ccccccccc ddddddddd eeeeeeeee fffffffff"; // 6 lines
+
+  it("unsplit block has no fragment identity fields", () => {
+    const layout = layoutDocument(doc(p("intro")), {
+      pageConfig: splitPage,
+      measurer: createMeasurer(),
+    });
+    const block = layout.pages[0]!.blocks[0]!;
+    expect(block.fragmentIndex).toBeUndefined();
+    expect(block.fragmentCount).toBeUndefined();
+    expect(block.sourceNodePos).toBeUndefined();
+  });
+
+  it("two-part split: fragmentIndex is 0 on first part, 1 on second", () => {
+    const layout = layoutDocument(doc(p("intro"), p(fourLineText)), {
+      pageConfig: splitPage,
+      measurer: createMeasurer(),
+    });
+    const part1 = layout.pages[0]!.blocks[1]!;
+    const part2 = layout.pages[1]!.blocks[0]!;
+
+    expect(part1.fragmentIndex).toBe(0);
+    expect(part2.fragmentIndex).toBe(1);
+  });
+
+  it("two-part split: fragmentCount is 2 on both parts", () => {
+    const layout = layoutDocument(doc(p("intro"), p(fourLineText)), {
+      pageConfig: splitPage,
+      measurer: createMeasurer(),
+    });
+    const part1 = layout.pages[0]!.blocks[1]!;
+    const part2 = layout.pages[1]!.blocks[0]!;
+
+    expect(part1.fragmentCount).toBe(2);
+    expect(part2.fragmentCount).toBe(2);
+  });
+
+  it("two-part split: sourceNodePos equals nodePos on both parts", () => {
+    const layout = layoutDocument(doc(p("intro"), p(fourLineText)), {
+      pageConfig: splitPage,
+      measurer: createMeasurer(),
+    });
+    const part1 = layout.pages[0]!.blocks[1]!;
+    const part2 = layout.pages[1]!.blocks[0]!;
+
+    expect(part1.sourceNodePos).toBe(part1.nodePos);
+    expect(part2.sourceNodePos).toBe(part1.nodePos);
+  });
+
+  it("three-part split: fragmentIndex is 0, 1, 2 on successive parts", () => {
+    // sixLineText: 1 line on page 1, 3 on page 2, 2 on page 3
+    const layout = layoutDocument(doc(p("intro"), p(sixLineText)), {
+      pageConfig: splitPage,
+      measurer: createMeasurer(),
+    });
+    const p1part = layout.pages[0]!.blocks[1]!;
+    const p2part = layout.pages[1]!.blocks[0]!;
+    const p3part = layout.pages[2]!.blocks[0]!;
+
+    expect(p1part.fragmentIndex).toBe(0);
+    expect(p2part.fragmentIndex).toBe(1);
+    expect(p3part.fragmentIndex).toBe(2);
+  });
+
+  it("three-part split: fragmentCount is 3 on all parts", () => {
+    const layout = layoutDocument(doc(p("intro"), p(sixLineText)), {
+      pageConfig: splitPage,
+      measurer: createMeasurer(),
+    });
+    const p1part = layout.pages[0]!.blocks[1]!;
+    const p2part = layout.pages[1]!.blocks[0]!;
+    const p3part = layout.pages[2]!.blocks[0]!;
+
+    expect(p1part.fragmentCount).toBe(3);
+    expect(p2part.fragmentCount).toBe(3);
+    expect(p3part.fragmentCount).toBe(3);
+  });
+
+  it("three-part split: all parts share the same sourceNodePos", () => {
+    const layout = layoutDocument(doc(p("intro"), p(sixLineText)), {
+      pageConfig: splitPage,
+      measurer: createMeasurer(),
+    });
+    const p1part = layout.pages[0]!.blocks[1]!;
+    const p2part = layout.pages[1]!.blocks[0]!;
+    const p3part = layout.pages[2]!.blocks[0]!;
+
+    expect(p2part.sourceNodePos).toBe(p1part.sourceNodePos);
+    expect(p3part.sourceNodePos).toBe(p1part.sourceNodePos);
+  });
+
+  it("isFirst / isLast derived from fragmentIndex + fragmentCount are correct", () => {
+    const layout = layoutDocument(doc(p("intro"), p(sixLineText)), {
+      pageConfig: splitPage,
+      measurer: createMeasurer(),
+    });
+    const p1part = layout.pages[0]!.blocks[1]!;
+    const p2part = layout.pages[1]!.blocks[0]!;
+    const p3part = layout.pages[2]!.blocks[0]!;
+
+    const isFirst  = (b: typeof p1part) => b.fragmentIndex === 0;
+    const isLast   = (b: typeof p1part) => b.fragmentIndex === (b.fragmentCount ?? 1) - 1;
+
+    expect(isFirst(p1part)).toBe(true);
+    expect(isLast(p1part)).toBe(false);
+
+    expect(isFirst(p2part)).toBe(false);
+    expect(isLast(p2part)).toBe(false);
+
+    expect(isFirst(p3part)).toBe(false);
+    expect(isLast(p3part)).toBe(true);
+  });
+
+  it("surrounding unsplit blocks are unaffected by a split block on the same page", () => {
+    const layout = layoutDocument(doc(p("before"), p(fourLineText), p("after")), {
+      pageConfig: splitPage,
+      measurer: createMeasurer(),
+    });
+    const beforeBlock = layout.pages[0]!.blocks[0]!;
+    // "after" ends up on page 3 (page 2 is full with 3 continuation lines)
+    const afterBlock  = layout.pages[layout.pages.length - 1]!.blocks.at(-1)!;
+
+    expect(beforeBlock.fragmentIndex).toBeUndefined();
+    expect(beforeBlock.fragmentCount).toBeUndefined();
+    expect(afterBlock.fragmentIndex).toBeUndefined();
+    expect(afterBlock.fragmentCount).toBeUndefined();
+  });
+});
+
