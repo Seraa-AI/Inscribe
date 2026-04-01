@@ -40,6 +40,7 @@
   "scripts": {
     "dev": "tsup --watch",
     "build": "tsup",
+    "test": "true",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
