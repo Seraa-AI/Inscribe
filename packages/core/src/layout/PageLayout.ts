@@ -173,6 +173,50 @@ export interface MeasureCacheEntry {
   placedPage?: number;
 }
 
+/**
+ * Geometry-only config for buildBlockFlow — no page height since this stage
+ * performs measurement only; pagination lives in layoutDocument's loop.
+ */
+export interface FlowConfig {
+  margins: PageConfig["margins"];
+  contentWidth: number;
+}
+
+/**
+ * Measurement result for a single block in document flow order.
+ * Position-independent — no page assignments. The pagination loop in
+ * layoutDocument consumes FlowBlock[] and decides page placement.
+ */
+export interface FlowBlock {
+  /** Original ProseMirror node. */
+  node: Node;
+  nodePos: number;
+  /** Measured lines — position-independent (lineHeight only, no absolute Y). */
+  lines: LayoutLine[];
+  height: number;
+  /** Block style spacing (styleKey-aware, e.g. list_item overrides paragraph). */
+  spaceBefore: number;
+  spaceAfter: number;
+  availableWidth: number;
+  blockType: string;
+  align: BlockStyle["align"];
+  listMarker?: string;
+  listMarkerX?: number;
+  indentLeft: number;
+  /** True if any line span is a zero-width float anchor. */
+  hasFloatAnchor: boolean;
+  /** djb2 hash of nodePos + textContent + availableWidth for incremental re-layout. */
+  inputHash: number;
+  /** True when this entry represents a hard page break node. */
+  isPageBreak?: true;
+  /** True when the block measurement was a cache hit. */
+  wasCacheHit: boolean;
+  // Phase 1b: cache snapshot taken before this run's measurement.
+  preCachedTargetY?: number;
+  preCachedPage?: number;
+  prevNodePos?: number;
+}
+
 export interface PageLayoutOptions {
   pageConfig: PageConfig;
   measurer: TextMeasurer;
