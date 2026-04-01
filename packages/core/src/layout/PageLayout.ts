@@ -347,7 +347,8 @@ export function layoutDocument(
       isPartial: true,
       resumption,
     };
-    return runFloatPass(partialPass1, margins, pageWidth, contentWidth, measurer, fontConfig, fontModifiers);
+    // ── Stage 3: float layout (partial chunk) ────────────────────────────────
+    return applyFloatLayout(partialPass1, margins, pageWidth, contentWidth, measurer, fontConfig, fontModifiers);
   }
 
   const allPages = pr.earlyTerminated ? pr.pages : [...pr.pages, pr.currentPage];
@@ -378,8 +379,9 @@ export function layoutDocument(
     }
   }
 
+  // ── Stage 3: float layout ─────────────────────────────────────────────────
   const pass1Result: DocumentLayout = { pages: allPages, pageConfig, version: chunkVersion };
-  return runFloatPass(pass1Result, margins, pageWidth, contentWidth, measurer, fontConfig, fontModifiers);
+  return applyFloatLayout(pass1Result, margins, pageWidth, contentWidth, measurer, fontConfig, fontModifiers);
 }
 
 /**
@@ -827,14 +829,22 @@ export function buildBlockFlow(
 }
 
 /**
- * Pass 2 + Pass 3 of layout: compute float positions, populate the
+ * Stage 3 of the layout pipeline: compute float positions, populate the
  * ExclusionManager, and re-flow any blocks that overlap an exclusion zone.
  *
- * Called both for complete layouts and for partial (streaming) layouts so that
- * floats visible in the initial chunk appear immediately rather than jumping
- * into view when the idle-layout follow-up completes.
+ * Pure geometry over paginated blocks — no measuring except targeted reflow of
+ * blocks that intersect an exclusion zone. Called for both complete layouts and
+ * partial (streaming) layouts so floats in the initial chunk appear immediately.
+ *
+ * @param pass1Result  Paginated layout from paginateFlow() (Stages 1+2).
+ * @param margins      Page margins.
+ * @param pageWidth    Full page width (used to compute content area for floats).
+ * @param contentWidth Content width (pageWidth - margins.left - margins.right).
+ * @param measurer     TextMeasurer — used only for targeted block reflow.
+ * @param fontConfig   Font config forwarded to layoutBlock() during reflow.
+ * @param fontModifiers Font modifiers forwarded to layoutBlock() during reflow.
  */
-function runFloatPass(
+export function applyFloatLayout(
   pass1Result: DocumentLayout,
   margins: PageConfig["margins"],
   pageWidth: number,
