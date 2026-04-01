@@ -3,7 +3,7 @@ title: Serialization
 description: Reading and writing document content — JSON, Markdown, and programmatic content loading.
 ---
 
-Inscribe stores the document as an immutable ProseMirror `EditorState`. This guide covers how to
+Scrivr stores the document as an immutable ProseMirror `EditorState`. This guide covers how to
 serialize it for storage and how to load content back into the editor.
 
 ---
@@ -62,8 +62,8 @@ your application layer decides how to fetch it (REST, GraphQL, localStorage, etc
 
 ```tsx
 import { useState } from 'react';
-import { useInscribeEditor, Inscribe, StarterKit } from '@inscribe/react';
-import { Extension } from '@inscribe/core';
+import { useScrivrEditor, Scrivr, StarterKit } from '@scrivr/react';
+import { Extension } from '@scrivr/core';
 
 interface EditorProps {
   /** ProseMirror JSON document to open. Pass null to start empty. */
@@ -83,14 +83,14 @@ export function MyEditor({ initialDoc, onUpdate }: EditorProps) {
     }),
   ]);
 
-  const editor = useInscribeEditor({
+  const editor = useScrivrEditor({
     extensions,
     onUpdate: ({ editor }) => {
       onUpdate?.(editor.getState().doc.toJSON());
     },
   });
 
-  return <Inscribe editor={editor} style={{ height: '100vh' }} />;
+  return <Scrivr editor={editor} style={{ height: '100vh' }} />;
 }
 ```
 
@@ -127,7 +127,7 @@ avoid excessive writes:
 
 ```ts
 // React
-const editor = useInscribeEditor({
+const editor = useScrivrEditor({
   extensions: [StarterKit],
   onUpdate: ({ editor }) => {
     const json = editor.getState().doc.toJSON();
@@ -151,7 +151,7 @@ const editor = new Editor({
 Replace the content with a minimal valid document — a single empty paragraph:
 
 ```ts
-import { Extension } from '@inscribe/core';
+import { Extension } from '@scrivr/core';
 
 const EmptyDoc = Extension.create({
   name: 'emptyDoc',
@@ -171,11 +171,11 @@ an empty paragraph automatically.
 
 ## Server-side Serialization
 
-Use `ServerEditor` from `@inscribe/core` to parse and transform documents in Node.js
+Use `ServerEditor` from `@scrivr/core` to parse and transform documents in Node.js
 without mounting a canvas:
 
 ```ts
-import { ServerEditor, StarterKit } from '@inscribe/core';
+import { ServerEditor, StarterKit } from '@scrivr/core';
 
 const server = new ServerEditor({ extensions: [StarterKit] });
 server.setContent(saved.content); // load from ProseMirror JSON
@@ -203,4 +203,4 @@ await db.saveDocument(id, server.getState().doc.toJSON());
 ## Export to other formats
 
 For PDF and Markdown file downloads, see the [Document Export](/guides/export) guide and the
-full [@inscribe/export package reference](/packages/export).
+full [@scrivr/export package reference](/packages/export).

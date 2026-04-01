@@ -3,12 +3,12 @@ title: Editor API
 description: Complete reference for the Editor class — methods, properties, and lifecycle.
 ---
 
-The `Editor` class is the central orchestrator of every Inscribe instance. It owns the document
+The `Editor` class is the central orchestrator of every Scrivr instance. It owns the document
 state, layout engine, and extension system. Consumers interact with it directly (headless) or
-via the `useInscribeEditor` React hook.
+via the `useScrivrEditor` React hook.
 
 ```ts
-import { Editor, StarterKit } from '@inscribe/core';
+import { Editor, StarterKit } from '@scrivr/core';
 
 const editor = new Editor({
   extensions: [StarterKit],
@@ -113,14 +113,14 @@ The 1-based page number of the current cursor position.
 mount(container: HTMLElement): void
 ```
 Attaches the keyboard, IME, and paste event listeners to the given container. Called
-automatically by `<Inscribe />`.
+automatically by `<Scrivr />`.
 
 ### `unmount()`
 ```ts
 unmount(): void
 ```
 Detaches event listeners. The editor state is preserved — the editor can be re-mounted.
-Called automatically by `<Inscribe />` on unmount.
+Called automatically by `<Scrivr />` on unmount.
 
 ### `destroy()`
 ```ts
@@ -215,7 +215,7 @@ Serializes the full document to Markdown using extension-contributed serializer 
 getMarkdownSerializer(): MarkdownSerializer
 ```
 Returns a configured `MarkdownSerializer` built from all extension rules. Used internally by
-`getMarkdown()` and `exportToMarkdown()` from `@inscribe/export`.
+`getMarkdown()` and `exportToMarkdown()` from `@scrivr/export`.
 
 ---
 
@@ -359,7 +359,7 @@ const unregister = editor.addOverlayRenderHandler(
 setPageElementLookup(fn: ((page: number) => HTMLElement | null) | null): void
 ```
 Registers the function used to resolve a 1-based page number to its DOM element. Called
-automatically by `<Inscribe />`. Only needed when building a custom rendering adapter.
+automatically by `<Scrivr />`. Only needed when building a custom rendering adapter.
 
 ### `_applyTransaction(tr)`
 ```ts

@@ -1,9 +1,9 @@
 ---
-title: "@inscribe/plugins"
+title: "@scrivr/plugins"
 description: Optional extensions — real-time collaboration, AI Toolkit, and Track Changes.
 ---
 
-`@inscribe/plugins` ships optional extensions that build on top of `@inscribe/core`. Install it only
+`@scrivr/plugins` ships optional extensions that build on top of `@scrivr/core`. Install it only
 when you need one of the advanced features it provides.
 
 ## Installation
@@ -11,17 +11,17 @@ when you need one of the advanced features it provides.
 <Tabs items={["pnpm", "npm", "yarn"]}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @inscribe/plugins
+    pnpm add @scrivr/plugins
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @inscribe/plugins
+    npm install @scrivr/plugins
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn add @inscribe/plugins
+    yarn add @scrivr/plugins
     ```
   </Tab>
 </Tabs>
@@ -30,7 +30,7 @@ when you need one of the advanced features it provides.
 
 ## Real-Time Collaboration
 
-Inscribe's collaboration layer uses **Yjs** for CRDT data structures and syncs over WebSockets.
+Scrivr's collaboration layer uses **Yjs** for CRDT data structures and syncs over WebSockets.
 Two extensions are needed:
 
 - `Collaboration` — connects the editor to a shared document via WebSocket
@@ -47,11 +47,11 @@ on the client.
 </Callout>
 
 ```tsx title="CollaborativeEditor.tsx"
-import { useInscribeEditor, Inscribe, StarterKit } from '@inscribe/react';
-import { Collaboration, CollaborationCursor } from '@inscribe/plugins';
+import { useScrivrEditor, Scrivr, StarterKit } from '@scrivr/react';
+import { Collaboration, CollaborationCursor } from '@scrivr/plugins';
 
 export function CollaborativeEditor() {
-  const editor = useInscribeEditor({
+  const editor = useScrivrEditor({
     extensions: [
       StarterKit.configure({ history: false }), // Y.UndoManager replaces PM history
       Collaboration.configure({
@@ -64,7 +64,7 @@ export function CollaborativeEditor() {
     ],
   });
 
-  return <Inscribe editor={editor} style={{ height: '100vh' }} />;
+  return <Scrivr editor={editor} style={{ height: '100vh' }} />;
 }
 ```
 
@@ -113,11 +113,11 @@ renderer), and `AiCaret` (cursor overlay during streaming).
 ### Setup
 
 ```tsx title="AiEditor.tsx"
-import { useInscribeEditor, Inscribe, StarterKit } from '@inscribe/react';
-import { AiToolkit, getAiToolkit } from '@inscribe/plugins';
+import { useScrivrEditor, Scrivr, StarterKit } from '@scrivr/react';
+import { AiToolkit, getAiToolkit } from '@scrivr/plugins';
 
 export function AiEditor() {
-  const editor = useInscribeEditor({
+  const editor = useScrivrEditor({
     extensions: [
       StarterKit,
       AiToolkit,
@@ -128,7 +128,7 @@ export function AiEditor() {
     },
   });
 
-  return <Inscribe editor={editor} style={{ height: '100vh' }} />;
+  return <Scrivr editor={editor} style={{ height: '100vh' }} />;
 }
 ```
 
@@ -137,7 +137,7 @@ export function AiEditor() {
 After the editor is created, call `getAiToolkit(editor)` to get the toolkit handle:
 
 ```ts
-import { getAiToolkit } from '@inscribe/plugins';
+import { getAiToolkit } from '@scrivr/plugins';
 
 const ai = getAiToolkit(editor);
 ```
@@ -174,9 +174,9 @@ document, enabling multi-author review workflows identical to Word or Google Doc
 ### Setup
 
 ```tsx
-import { TrackChanges } from '@inscribe/plugins';
+import { TrackChanges } from '@scrivr/plugins';
 
-const editor = useInscribeEditor({
+const editor = useScrivrEditor({
   extensions: [
     StarterKit,
     TrackChanges.configure({
@@ -211,7 +211,7 @@ toggle — that maps directly to the three `TrackChangesStatus` values:
 Wire up any dropdown or segmented control to `setTrackingStatus`:
 
 ```tsx
-import { TrackChangesStatus } from '@inscribe/plugins';
+import { TrackChangesStatus } from '@scrivr/plugins';
 
 type EditorMode = 'editing' | 'suggesting' | 'viewing';
 
@@ -261,12 +261,12 @@ editor.commands.refreshChanges();
 
 ### Accept/reject popover
 
-`@inscribe/plugins` exports a headless `createChangePopover` controller that fires whenever
+`@scrivr/plugins` exports a headless `createChangePopover` controller that fires whenever
 the cursor lands inside a pending change — use it to build an inline accept/reject popover,
 just like the comment cards in Word or Google Docs.
 
 ```ts
-import { createChangePopover } from '@inscribe/plugins';
+import { createChangePopover } from '@scrivr/plugins';
 
 const cleanup = createChangePopover(editor, {
   onShow: (rect, info) => {
@@ -288,12 +288,12 @@ rejectBtn.onclick = () => editor.commands.setChangeStatuses('rejected', [info.id
 When `info.isConflict` is `true`, `info.conflictChanges` contains all overlapping changes from
 different authors — render per-author accept/reject controls for each.
 
-For React, `@inscribe/react` exports a `TrackChangesPopover` component built on
+For React, `@scrivr/react` exports a `TrackChangesPopover` component built on
 `createChangePopover` that handles positioning, single-change and conflict layouts, and author
-attribution out of the box. Drop it alongside `<Inscribe />`:
+attribution out of the box. Drop it alongside `<Scrivr />`:
 
 ```tsx
-import { TrackChangesPopover } from '@inscribe/react';
+import { TrackChangesPopover } from '@scrivr/react';
 
 <TrackChangesPopover editor={editor} />
 ```

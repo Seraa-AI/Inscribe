@@ -7,7 +7,7 @@ An inline image node. Images live inside paragraph content as inline nodes and s
 six text-wrapping modes for float layout.
 
 ```ts
-import { Image } from '@inscribe/core';
+import { Image } from '@scrivr/core';
 ```
 
 No configurable options.
@@ -61,5 +61,5 @@ editor.setNodeAttrs(docPos, { width: 400, height: 300 });
 editor.setNodeAttrs(docPos, { wrappingMode: 'square-left' });
 ```
 
-The `ImageMenu` component in `@inscribe/react` uses this API to provide a context menu
+The `ImageMenu` component in `@scrivr/react` uses this API to provide a context menu
 for alignment, float mode, and resize handles.

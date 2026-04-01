@@ -1,9 +1,9 @@
 ---
-title: "@inscribe/core"
+title: "@scrivr/core"
 description: The headless engine — Editor orchestrator, ProseMirror schema, layout engine, canvas ViewManager, and all built-in extensions.
 ---
 
-`@inscribe/core` is the foundation of every Inscribe editor. It contains the headless `Editor` class,
+`@scrivr/core` is the foundation of every Scrivr editor. It contains the headless `Editor` class,
 the custom layout engine, the canvas `ViewManager`, and all built-in document extensions.
 It has no React dependency and can be used in any JavaScript environment.
 
@@ -12,17 +12,17 @@ It has no React dependency and can be used in any JavaScript environment.
 <Tabs items={["pnpm", "npm", "yarn"]}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @inscribe/core
+    pnpm add @scrivr/core
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @inscribe/core
+    npm install @scrivr/core
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn add @inscribe/core
+    yarn add @scrivr/core
     ```
   </Tab>
 </Tabs>
@@ -35,7 +35,7 @@ The `Editor` class is the central orchestrator. It owns the ProseMirror `EditorS
 and exposes a `commands` API for document mutations.
 
 ```ts
-import { Editor, StarterKit } from '@inscribe/core';
+import { Editor, StarterKit } from '@scrivr/core';
 
 const editor = new Editor({
   extensions: [StarterKit],
@@ -79,7 +79,7 @@ See the full [Editor API reference](/api/editor).
 | `TrailingNode` | Extension |
 
 ```ts
-import { Editor, StarterKit } from '@inscribe/core';
+import { Editor, StarterKit } from '@scrivr/core';
 
 const editor = new Editor({ extensions: [StarterKit] });
 ```
@@ -97,10 +97,10 @@ StarterKit.configure({
 
 ## Extensions
 
-Every feature in Inscribe is an `Extension`. You can compose only what you need:
+Every feature in Scrivr is an `Extension`. You can compose only what you need:
 
 ```ts
-import { Editor, Paragraph, Heading, Bold, History } from '@inscribe/core';
+import { Editor, Paragraph, Heading, Bold, History } from '@scrivr/core';
 
 const editor = new Editor({
   extensions: [
@@ -158,11 +158,11 @@ editor.commands.redo();
 
 ## ViewManager
 
-`ViewManager` is the canvas renderer. In React you will never construct it directly — `<Inscribe />` handles
+`ViewManager` is the canvas renderer. In React you will never construct it directly — `<Scrivr />` handles
 that. In headless contexts (tests, SSR pre-rendering) you can instantiate it directly:
 
 ```ts
-import { ViewManager } from '@inscribe/core';
+import { ViewManager } from '@scrivr/core';
 
 const vm = new ViewManager(editor, containerElement);
 vm.destroy();

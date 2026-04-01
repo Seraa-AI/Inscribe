@@ -3,8 +3,8 @@ title: React Integration
 description: Patterns for Next.js, server components, SSR, and context providers.
 ---
 
-`@inscribe/react` is a client-only library — it creates a canvas, listens to DOM events, and
-manages browser APIs. This page covers the patterns you need when using Inscribe inside
+`@scrivr/react` is a client-only library — it creates a canvas, listens to DOM events, and
+manages browser APIs. This page covers the patterns you need when using Scrivr inside
 a React framework like Next.js.
 
 ---
@@ -12,16 +12,16 @@ a React framework like Next.js.
 ## Client Components
 
 The editor must live in a **client component**. Add `'use client'` to any file that imports from
-`@inscribe/react`:
+`@scrivr/react`:
 
 ```tsx title="components/MyEditor.tsx"
 'use client';
 
-import { useInscribeEditor, Inscribe, StarterKit } from '@inscribe/react';
+import { useScrivrEditor, Scrivr, StarterKit } from '@scrivr/react';
 
 export function MyEditor() {
-  const editor = useInscribeEditor({ extensions: [StarterKit] });
-  return <Inscribe editor={editor} style={{ height: '100vh' }} />;
+  const editor = useScrivrEditor({ extensions: [StarterKit] });
+  return <Scrivr editor={editor} style={{ height: '100vh' }} />;
 }
 ```
 
@@ -59,7 +59,7 @@ it through every component.
 'use client';
 
 import { createContext, useContext } from 'react';
-import type { Editor } from '@inscribe/core';
+import type { Editor } from '@scrivr/core';
 
 const EditorContext = createContext<Editor | null>(null);
 
@@ -73,17 +73,17 @@ export function useEditor(): Editor | null {
 ```tsx title="components/EditorApp.tsx"
 'use client';
 
-import { useInscribeEditor, Inscribe, StarterKit } from '@inscribe/react';
+import { useScrivrEditor, Scrivr, StarterKit } from '@scrivr/react';
 import { EditorProvider } from '@/context/EditorContext';
 import { Toolbar } from './Toolbar';
 
 export function EditorApp() {
-  const editor = useInscribeEditor({ extensions: [StarterKit] });
+  const editor = useScrivrEditor({ extensions: [StarterKit] });
 
   return (
     <EditorProvider value={editor}>
       <Toolbar />
-      <Inscribe editor={editor} style={{ height: '100vh' }} />
+      <Scrivr editor={editor} style={{ height: '100vh' }} />
     </EditorProvider>
   );
 }
@@ -103,8 +103,8 @@ export function Toolbar() {
 ```
 
 <Callout type="info">
-  A built-in `InscribeContext` and `useInscribe` hook are coming to `@inscribe/react` — see the
-  [React package page](/packages/react#inscribecontext-and-useinscribe). Once available, the
+  A built-in `ScrivrContext` and `useScrivr` hook are coming to `@scrivr/react` — see the
+  [React package page](/packages/react#scrivrcontext-and-usescrivr). Once available, the
   manual context above can be replaced with those.
 </Callout>
 
@@ -113,11 +113,11 @@ export function Toolbar() {
 ## Server-Side Document Processing
 
 If you need to process documents on the server — applying AI suggestions, validating content,
-or exporting to Markdown — use `ServerEditor` from `@inscribe/core`.
+or exporting to Markdown — use `ServerEditor` from `@scrivr/core`.
 It shares the same schema and extension system as the browser `Editor` but has no DOM dependency.
 
 ```ts title="app/api/export/route.ts"
-import { ServerEditor, StarterKit } from '@inscribe/core';
+import { ServerEditor, StarterKit } from '@scrivr/core';
 
 export async function POST(req: Request) {
   const { doc } = await req.json();

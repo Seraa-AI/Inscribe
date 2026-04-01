@@ -3,7 +3,7 @@ title: Creating Plugins
 description: Extending the Editor by writing your first Extension.
 ---
 
-Every Inscribe feature — built-in or custom — is an `Extension`. Extensions declare schema
+Every Scrivr feature — built-in or custom — is an `Extension`. Extensions declare schema
 contributions, keymaps, commands, layout handlers, and lifecycle hooks through a single
 `Extension.create()` call.
 
@@ -12,7 +12,7 @@ contributions, keymaps, commands, layout handlers, and lifecycle hooks through a
 ## `Extension.create()`
 
 ```ts
-import { Extension } from '@inscribe/core';
+import { Extension } from '@scrivr/core';
 
 const MyExtension = Extension.create<MyOptions>({
   name: 'myExtension',
@@ -128,7 +128,7 @@ onEditorReady(editor) {
 This extension adds a `Mod-Shift-h` shortcut that inserts `"Hello!"` at the cursor:
 
 ```ts
-import { Extension } from '@inscribe/core';
+import { Extension } from '@scrivr/core';
 
 const HelloExtension = Extension.create({
   name: 'hello',

@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Install Inscribe into your project and configure TypeScript.
+description: Install Scrivr into your project and configure TypeScript.
 ---
 
 ## Prerequisites
@@ -9,7 +9,7 @@ description: Install Inscribe into your project and configure TypeScript.
 - A package manager — `pnpm`, `npm`, or `yarn`
 
 <Callout type="info">
-  Inscribe is written in strict TypeScript. You don't need to install separate `@types/*` packages — type declarations are bundled with each package.
+  Scrivr is written in strict TypeScript. You don't need to install separate `@types/*` packages — type declarations are bundled with each package.
 </Callout>
 
 ---
@@ -21,39 +21,39 @@ description: Install Inscribe into your project and configure TypeScript.
 <Tabs items={["pnpm", "npm", "yarn"]}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @inscribe/core @inscribe/react
+    pnpm add @scrivr/core @scrivr/react
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @inscribe/core @inscribe/react
+    npm install @scrivr/core @scrivr/react
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn add @inscribe/core @inscribe/react
+    yarn add @scrivr/core @scrivr/react
     ```
   </Tab>
 </Tabs>
 
 ### Headless (no framework)
 
-`@inscribe/core` has no framework dependency and can be used in any JavaScript environment — Node.js, vanilla JS, or as a base for a custom framework adapter.
+`@scrivr/core` has no framework dependency and can be used in any JavaScript environment — Node.js, vanilla JS, or as a base for a custom framework adapter.
 
 <Tabs items={["pnpm", "npm", "yarn"]}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @inscribe/core
+    pnpm add @scrivr/core
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @inscribe/core
+    npm install @scrivr/core
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn add @inscribe/core
+    yarn add @scrivr/core
     ```
   </Tab>
 </Tabs>
@@ -62,8 +62,8 @@ description: Install Inscribe into your project and configure TypeScript.
 
 | Package | Purpose |
 | --- | --- |
-| `@inscribe/plugins` | **Real-time collaboration**, **AI Toolkit**, and **Track Changes**. |
-| `@inscribe/export` | Export to paginated **PDF** and **Markdown**. DOCX coming soon. |
+| `@scrivr/plugins` | **Real-time collaboration**, **AI Toolkit**, and **Track Changes**. |
+| `@scrivr/export` | Export to paginated **PDF** and **Markdown**. DOCX coming soon. |
 
 ---
 
@@ -71,22 +71,22 @@ description: Install Inscribe into your project and configure TypeScript.
 
 ### Real-Time Collaboration
 
-The collaboration layer syncs over WebSockets using **Yjs** CRDTs. You will need to run your own WebSocket backend — any [Hocuspocus](https://hocuspocus.dev/)-compatible server works. Install `@inscribe/plugins` on the frontend:
+The collaboration layer syncs over WebSockets using **Yjs** CRDTs. You will need to run your own WebSocket backend — any [Hocuspocus](https://hocuspocus.dev/)-compatible server works. Install `@scrivr/plugins` on the frontend:
 
 <Tabs items={["pnpm", "npm", "yarn"]}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @inscribe/plugins
+    pnpm add @scrivr/plugins
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @inscribe/plugins
+    npm install @scrivr/plugins
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn add @inscribe/plugins
+    yarn add @scrivr/plugins
     ```
   </Tab>
 </Tabs>
@@ -105,13 +105,13 @@ See the [Collaboration example](/examples/collaboration) for the full setup.
 
 ### AI Toolkit
 
-`AiToolkit` is bring-your-own-LLM — it provides the editor-side context and ghost text overlay, but the actual LLM call is made from your own backend endpoint. Install `@inscribe/plugins` on the frontend and whatever AI SDK you prefer on the backend:
+`AiToolkit` is bring-your-own-LLM — it provides the editor-side context and ghost text overlay, but the actual LLM call is made from your own backend endpoint. Install `@scrivr/plugins` on the frontend and whatever AI SDK you prefer on the backend:
 
 <Tabs items={["pnpm", "npm", "yarn"]}>
   <Tab value="pnpm">
     ```bash
     # Frontend
-    pnpm add @inscribe/plugins
+    pnpm add @scrivr/plugins
 
     # Backend (example using Vercel AI SDK + Anthropic)
     pnpm add ai @ai-sdk/anthropic
@@ -120,7 +120,7 @@ See the [Collaboration example](/examples/collaboration) for the full setup.
   <Tab value="npm">
     ```bash
     # Frontend
-    npm install @inscribe/plugins
+    npm install @scrivr/plugins
 
     # Backend (example using Vercel AI SDK + Anthropic)
     npm install ai @ai-sdk/anthropic
@@ -129,7 +129,7 @@ See the [Collaboration example](/examples/collaboration) for the full setup.
   <Tab value="yarn">
     ```bash
     # Frontend
-    yarn add @inscribe/plugins
+    yarn add @scrivr/plugins
 
     # Backend (example using Vercel AI SDK + Anthropic)
     yarn add ai @ai-sdk/anthropic
@@ -149,7 +149,7 @@ See the [AI Assistant example](/examples/ai-assistant) for the full integration 
 
 ## Bundler Support
 
-Inscribe has been tested with **Vite** (recommended), **Webpack 5**, and **esbuild**. No special plugins or aliases are required — the packages ship pre-bundled ESM.
+Scrivr has been tested with **Vite** (recommended), **Webpack 5**, and **esbuild**. No special plugins or aliases are required — the packages ship pre-bundled ESM.
 
 ---
 

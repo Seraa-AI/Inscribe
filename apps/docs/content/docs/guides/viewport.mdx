@@ -3,8 +3,8 @@ title: Viewport & Pagination
 description: Configuring page dimensions, the virtual scroll window, and programmatic scrolling.
 ---
 
-Inscribe renders the document as a sequence of fixed-size pages inside a scrollable container.
-The `<Inscribe />` component manages this layout automatically through `ViewManager`. Only the
+Scrivr renders the document as a sequence of fixed-size pages inside a scrollable container.
+The `<Scrivr />` component manages this layout automatically through `ViewManager`. Only the
 pages near the visible area are painted at any time — off-screen pages are represented by
 empty spacer elements.
 
@@ -14,7 +14,7 @@ empty spacer elements.
 
 Each page in the `DocumentLayout` corresponds to a DOM `<div>` sized to
 `pageConfig.width × pageConfig.height`. These wrappers are stacked vertically inside the
-`<Inscribe />` container, separated by the `gap` value. Inscribe uses an `IntersectionObserver`
+`<Scrivr />` container, separated by the `gap` value. Scrivr uses an `IntersectionObserver`
 to track which pages are visible and only paints those (plus overscan).
 
 ```
@@ -38,7 +38,7 @@ to track which pages are visible and only paints those (plus overscan).
 Page dimensions and margins are set once via `pageConfig` in `EditorOptions`:
 
 ```ts
-const editor = useInscribeEditor({
+const editor = useScrivrEditor({
   extensions: [StarterKit],
   pageConfig: {
     width: 816,   // px — US Letter at 96 dpi
@@ -55,10 +55,10 @@ fields and defaults.
 
 ## Gap between pages
 
-Control the visual gap between pages with the `gap` prop on `<Inscribe />`:
+Control the visual gap between pages with the `gap` prop on `<Scrivr />`:
 
 ```tsx
-<Inscribe editor={editor} gap={40} />  {/* 40px between pages */}
+<Scrivr editor={editor} gap={40} />  {/* 40px between pages */}
 ```
 
 Default is `24px`. The gap is purely visual — it does not affect layout or pagination.
@@ -71,7 +71,7 @@ Default is `24px`. The gap is purely visual — it does not affect layout or pag
 Increase `overscan` if users report blank pages during fast scrolling:
 
 ```tsx
-<Inscribe editor={editor} overscan={1000} />
+<Scrivr editor={editor} overscan={1000} />
 ```
 
 Default is `500px`. Higher values keep more pages painted (smoother fast-scroll, more GPU usage).
@@ -90,7 +90,7 @@ Subscribe to updates to drive a reactive page indicator:
 
 ```tsx
 function PageIndicator({ editor }: { editor: Editor }) {
-  const page = useInscribeState({
+  const page = useScrivrState({
     editor,
     selector: ({ editor }) => editor?.cursorPage ?? 1,
   });

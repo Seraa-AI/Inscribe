@@ -1,6 +1,6 @@
 ---
 title: ViewManager API
-description: The DOM and canvas coordination layer for Inscribe's rendering engine.
+description: The DOM and canvas coordination layer for Scrivr's rendering engine.
 ---
 
 `ViewManager` is the component that bridges `Editor` (state + layout) with the browser DOM.
@@ -8,7 +8,7 @@ It manages the lifecycle of per-page `<div>` containers and `<canvas>` elements,
 virtual scrolling, and orchestrates canvas painting.
 
 <Callout type="info">
-  **You do not need to use `ViewManager` directly.** The `<Inscribe />` React component handles
+  **You do not need to use `ViewManager` directly.** The `<Scrivr />` React component handles
   `ViewManager` construction and teardown automatically. This page is for library contributors
   and developers building custom rendering adapters.
 </Callout>
@@ -18,7 +18,7 @@ virtual scrolling, and orchestrates canvas painting.
 ## Construction
 
 ```ts
-import { ViewManager } from '@inscribe/core';
+import { ViewManager } from '@scrivr/core';
 
 const vm = new ViewManager(editor, container, {
   gap: 24,       // px between pages. Default: 24
@@ -76,14 +76,14 @@ Full cleanup:
 - Disconnects the `IntersectionObserver`
 - Removes all page DOM elements from the container
 
-Always call `destroy()` before discarding a `ViewManager` instance. The `<Inscribe />` component
+Always call `destroy()` before discarding a `ViewManager` instance. The `<Scrivr />` component
 calls this in its `useEffect` cleanup.
 
 ---
 
-## `<Inscribe />` as a Thin Wrapper
+## `<Scrivr />` as a Thin Wrapper
 
-The full implementation of `<Inscribe />` is:
+The full implementation of `<Scrivr />` is:
 
 ```tsx
 useEffect(() => {

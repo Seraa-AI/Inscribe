@@ -3,7 +3,7 @@ title: Pagination & Layout Configuration
 description: Controlling page size, dimensions, margins, and layout behavior.
 ---
 
-Unlike scrolling webpage editors, Inscribe breaks documents down into distinct, visually paginated canvases. This is achieved by explicitly defining the dimensions and margins for the layout engine via the `PageConfig` object.
+Unlike scrolling webpage editors, Scrivr breaks documents down into distinct, visually paginated canvases. This is achieved by explicitly defining the dimensions and margins for the layout engine via the `PageConfig` object.
 
 ---
 
@@ -27,7 +27,7 @@ export interface PageConfig {
 }
 ```
 
-By default, Inscribe uses `defaultPageConfig` which roughly matches an A4 page.
+By default, Scrivr uses `defaultPageConfig` which roughly matches an A4 page.
 
 All values are in **world-space pixels** (`1px = 1 CSS pixel = 1/96th of an inch`).
 
@@ -76,17 +76,17 @@ const LETTER_CONFIG = {
 Pass the configuration object to the React adapter hook:
 
 ```tsx
-import { useInscribeEditor } from "@inscribe/react";
+import { useScrivrEditor } from "@scrivr/react";
 
 function App() {
-	const editor = useInscribeEditor({
+	const editor = useScrivrEditor({
 		extensions: [
 			/* ... */
 		],
 		pageConfig: LETTER_CONFIG, // Hardcode US Letter
 	});
 
-	return <Inscribe editor={editor} />;
+	return <Scrivr editor={editor} />;
 }
 ```
 

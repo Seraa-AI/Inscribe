@@ -3,7 +3,7 @@ title: Selection Ranges
 description: Reading selection state, moving the cursor programmatically, and handling mark queries.
 ---
 
-Inscribe exposes the current selection through `SelectionSnapshot` — a plain object you can
+Scrivr exposes the current selection through `SelectionSnapshot` — a plain object you can
 read without importing ProseMirror. For programmatic cursor movement and selection changes,
 use the methods on the `Editor` instance directly.
 
@@ -130,12 +130,12 @@ editor.moveRight(true);
 
 ## Subscribing to selection changes
 
-Use `editor.subscribe()` to react to every state change, or `useInscribeState` in React
+Use `editor.subscribe()` to react to every state change, or `useScrivrState` in React
 to subscribe to a specific slice without unnecessary re-renders:
 
 ```tsx
 // React — only re-renders when bold state changes
-const isBold = useInscribeState({
+const isBold = useScrivrState({
   editor,
   selector: ({ editor }) => editor?.isActive('bold') ?? false,
 });

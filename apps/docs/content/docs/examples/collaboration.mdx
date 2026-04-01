@@ -1,16 +1,16 @@
 ---
 title: Real-time Collaboration
-description: Full backend and frontend setup for multiplayer editing with Inscribe.
+description: Full backend and frontend setup for multiplayer editing with Scrivr.
 ---
 
-This example shows how to set up a real-time collaborative editor using `@inscribe/plugins`
+This example shows how to set up a real-time collaborative editor using `@scrivr/plugins`
 and a Hocuspocus-compatible WebSocket backend.
 
 ---
 
 ## How It Works
 
-Inscribe's collaboration layer uses **Yjs** CRDTs to merge concurrent edits. The library owns
+Scrivr's collaboration layer uses **Yjs** CRDTs to merge concurrent edits. The library owns
 the WebSocket connection — you don't need to manage a provider on the client.
 
 - `Collaboration.configure({ url, name })` — connects to your server and binds the document
@@ -20,7 +20,7 @@ the WebSocket connection — you don't need to manage a provider on the client.
 
 ## Backend Setup
 
-Inscribe's collaboration protocol is compatible with any [Hocuspocus](https://hocuspocus.dev/) server.
+Scrivr's collaboration protocol is compatible with any [Hocuspocus](https://hocuspocus.dev/) server.
 You can self-host Hocuspocus directly:
 
 ```bash
@@ -50,8 +50,8 @@ console.log('Collaboration server running on ws://localhost:1234');
 ## Frontend Setup
 
 ```tsx title="CollaborativeEditor.tsx"
-import { useInscribeEditor, Inscribe, useInscribeState, StarterKit } from '@inscribe/react';
-import { Collaboration, CollaborationCursor } from '@inscribe/plugins';
+import { useScrivrEditor, Scrivr, useScrivrState, StarterKit } from '@scrivr/react';
+import { Collaboration, CollaborationCursor } from '@scrivr/plugins';
 
 interface Props {
   documentId: string;
@@ -59,7 +59,7 @@ interface Props {
 }
 
 export function CollaborativeEditor({ documentId, user }: Props) {
-  const editor = useInscribeEditor(
+  const editor = useScrivrEditor(
     {
       extensions: [
         StarterKit.configure({ history: false }), // Y.UndoManager replaces PM history
@@ -73,7 +73,7 @@ export function CollaborativeEditor({ documentId, user }: Props) {
     [documentId], // re-initialize when document changes
   );
 
-  const loadingState = useInscribeState({
+  const loadingState = useScrivrState({
     editor,
     selector: ({ editor }) => editor?.loadingState,
   });
@@ -82,7 +82,7 @@ export function CollaborativeEditor({ documentId, user }: Props) {
     return <div>Connecting…</div>;
   }
 
-  return <Inscribe editor={editor} style={{ height: '100vh' }} />;
+  return <Scrivr editor={editor} style={{ height: '100vh' }} />;
 }
 ```
 

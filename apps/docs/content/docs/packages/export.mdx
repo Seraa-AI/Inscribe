@@ -1,9 +1,9 @@
 ---
-title: "@inscribe/export"
-description: Export utilities — serialize Inscribe documents to paginated PDF (pdf-lib) or Markdown.
+title: "@scrivr/export"
+description: Export utilities — serialize Scrivr documents to paginated PDF (pdf-lib) or Markdown.
 ---
 
-`@inscribe/export` provides serializers that convert an Inscribe `EditorState` into portable document
+`@scrivr/export` provides serializers that convert an Scrivr `EditorState` into portable document
 formats. All serializers run entirely in the browser — no server round-trip required.
 
 ## Installation
@@ -11,17 +11,17 @@ formats. All serializers run entirely in the browser — no server round-trip re
 <Tabs items={["pnpm", "npm", "yarn"]}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @inscribe/export
+    pnpm add @scrivr/export
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @inscribe/export
+    npm install @scrivr/export
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn add @inscribe/export
+    yarn add @scrivr/export
     ```
   </Tab>
 </Tabs>
@@ -39,7 +39,7 @@ Powered by [pdf-lib](https://pdf-lib.js.org/).
 </Callout>
 
 ```ts
-import { exportToPdf } from '@inscribe/export';
+import { exportToPdf } from '@scrivr/export';
 
 const pdfBytes = await exportToPdf(editor);
 
@@ -71,7 +71,7 @@ Converts the document to a CommonMark Markdown string. Useful for storing docume
 version-controlled text files or feeding content into AI pipelines.
 
 ```ts
-import { exportToMarkdown } from '@inscribe/export';
+import { exportToMarkdown } from '@scrivr/export';
 
 const markdown = exportToMarkdown(editor);
 console.log(markdown);
@@ -83,7 +83,7 @@ console.log(markdown);
 `exportToMarkdown` is synchronous and returns a `string`.
 
 <Callout type="warn">
-  **Markdown has no equivalent for some Inscribe formatting.** The following are silently dropped
+  **Markdown has no equivalent for some Scrivr formatting.** The following are silently dropped
   during serialization — the text content is preserved but the formatting is lost:
 
   | Lost | Reason |

@@ -3,7 +3,7 @@ title: Custom Extensions
 description: Building an extension for a Canvas-based editor without DOM rendering.
 ---
 
-Building a custom extension for Inscribe is fundamentally different from building one for a DOM-based toolkit like TipTap or Slate. Because Inscribe bypasses the DOM entirely, you cannot simply return a React component or an HTML string string. 
+Building a custom extension for Scrivr is fundamentally different from building one for a DOM-based toolkit like TipTap or Slate. Because Scrivr bypasses the DOM entirely, you cannot simply return a React component or an HTML string string. 
 
 You must define the strict mathematical layout and explicitly tell the engine how to paint your elements on the Canvas context.
 
@@ -84,7 +84,7 @@ When the `PageRenderer` traverses the `DocumentLayout`, it triggers rendering ho
 
 ```ts title="Renderer.ts"
 // In your application or extension registry:
-import type { PageRenderer } from "@inscribe/core";
+import type { PageRenderer } from "@scrivr/core";
 
 export function registerHighlightPainter(editor) {
   editor.registerPainter("mark:highlight", (ctx: CanvasRenderingContext2D, args) => {
@@ -101,7 +101,7 @@ export function registerHighlightPainter(editor) {
     ctx.fillRect(x, y - height, width, height);
     
     // Wait... what about the text?
-    // Inscribe will draw the text run automatically AFTER marks are painted.
+    // Scrivr will draw the text run automatically AFTER marks are painted.
     
     ctx.restore();
   });
@@ -116,4 +116,4 @@ export function registerHighlightPainter(editor) {
 
 ## The Complexity Of Canvas
 
-Writing extensions in Inscribe is more mathematically demanding than other editors. If you want to render a complex React component (e.g., an interactive Kanban board table) inside the document flow, Inscribe allows you to use `OverlayRenderer` to project absolute-positioned widgets over the Canvas. See the Coordinate System documentation for `getViewportRect`!
+Writing extensions in Scrivr is more mathematically demanding than other editors. If you want to render a complex React component (e.g., an interactive Kanban board table) inside the document flow, Scrivr allows you to use `OverlayRenderer` to project absolute-positioned widgets over the Canvas. See the Coordinate System documentation for `getViewportRect`!

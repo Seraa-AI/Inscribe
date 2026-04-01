@@ -3,7 +3,7 @@ title: Layout Strategies
 description: How the canvas renderer knows how to draw each block node — the BlockStrategy and InlineStrategy interfaces.
 ---
 
-Inscribe's canvas renderer does not know how to draw any specific block type by default.
+Scrivr's canvas renderer does not know how to draw any specific block type by default.
 Instead, each extension that adds a block node must also register a **strategy** — an object
 that tells the renderer exactly how to paint that block and where each character sits on screen.
 
@@ -83,8 +83,8 @@ The most common pattern for a custom block is to draw additional decoration, the
 This is exactly how `CodeBlockStrategy` is implemented:
 
 ```ts
-import { TextBlockStrategy } from '@inscribe/core';
-import type { BlockStrategy } from '@inscribe/core';
+import { TextBlockStrategy } from '@scrivr/core';
+import type { BlockStrategy } from '@scrivr/core';
 
 const CalloutStrategy: BlockStrategy = {
   render(block, renderCtx, map) {

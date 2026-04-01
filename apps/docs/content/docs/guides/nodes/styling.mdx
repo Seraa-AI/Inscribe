@@ -3,7 +3,7 @@ title: Styling Content
 description: Mark-based inline styling, block-level alignment, and overriding default block styles.
 ---
 
-Inscribe has two layers of styling: **inline marks** applied to text ranges, and **block styles**
+Scrivr has two layers of styling: **inline marks** applied to text ranges, and **block styles**
 that define the base font, size, and spacing for each block type.
 
 ---
@@ -110,7 +110,7 @@ The defaults (from `StarterKit`):
 Contribute replacement block styles from an extension's `addBlockStyles()`:
 
 ```ts
-import { Extension } from '@inscribe/core';
+import { Extension } from '@scrivr/core';
 
 const CustomTypography = Extension.create({
   name: 'customTypography',

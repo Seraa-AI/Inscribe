@@ -12,7 +12,7 @@ reference implementation in `apps/demo`.
 ## Setup
 
 ```bash
-pnpm add @inscribe/core @inscribe/react
+pnpm add @scrivr/core @scrivr/react
 ```
 
 ---
@@ -24,14 +24,14 @@ pnpm add @inscribe/core @inscribe/react
 
 import { useState } from 'react';
 import {
-  useInscribeEditor,
-  useInscribeState,
-  Inscribe,
+  useScrivrEditor,
+  useScrivrState,
+  Scrivr,
   BubbleMenu,
   SlashMenu,
   StarterKit,
-} from '@inscribe/react';
-import { Extension } from '@inscribe/core';
+} from '@scrivr/react';
+import { Extension } from '@scrivr/core';
 
 interface DocumentEditorProps {
   /** ProseMirror JSON to open. Pass null for an empty document. */
@@ -51,7 +51,7 @@ export function DocumentEditor({ initialDoc, onUpdate }: DocumentEditorProps) {
     }),
   ]);
 
-  const editor = useInscribeEditor({
+  const editor = useScrivrEditor({
     extensions,
     onUpdate: ({ editor }) => {
       onUpdate?.(editor.getState().doc.toJSON());
@@ -62,7 +62,7 @@ export function DocumentEditor({ initialDoc, onUpdate }: DocumentEditorProps) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <Toolbar editor={editor} />
       <div style={{ flex: 1, overflow: 'auto', background: '#f0f0f0' }}>
-        <Inscribe editor={editor} style={{ minHeight: '100%' }} />
+        <Scrivr editor={editor} style={{ minHeight: '100%' }} />
         <BubbleMenu editor={editor}>
           <FormatButtons editor={editor} />
         </BubbleMenu>
@@ -74,12 +74,12 @@ export function DocumentEditor({ initialDoc, onUpdate }: DocumentEditorProps) {
 
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 
-function Toolbar({ editor }: { editor: ReturnType<typeof useInscribeEditor> }) {
-  const isBold = useInscribeState({
+function Toolbar({ editor }: { editor: ReturnType<typeof useScrivrEditor> }) {
+  const isBold = useScrivrState({
     editor,
     selector: ({ editor }) => editor?.isActive('bold') ?? false,
   });
-  const isItalic = useInscribeState({
+  const isItalic = useScrivrState({
     editor,
     selector: ({ editor }) => editor?.isActive('italic') ?? false,
   });
@@ -103,7 +103,7 @@ function Toolbar({ editor }: { editor: ReturnType<typeof useInscribeEditor> }) {
 
 // ── Bubble menu buttons ───────────────────────────────────────────────────────
 
-function FormatButtons({ editor }: { editor: ReturnType<typeof useInscribeEditor> }) {
+function FormatButtons({ editor }: { editor: ReturnType<typeof useScrivrEditor> }) {
   return (
     <>
       <button onClick={() => editor?.commands.toggleBold()}>B</button>
@@ -122,8 +122,8 @@ function FormatButtons({ editor }: { editor: ReturnType<typeof useInscribeEditor
 - **`useState` initializer** captures `initialDoc` once at mount time so it is available to `addInitialDoc()` on construction — even if the parent re-renders before the effect fires.
 - **`addInitialDoc()`** is the extension hook that seeds the editor with an initial ProseMirror document. Returning `null` starts with an empty document instead.
 - **`onUpdate`** surfaces changes back to the parent. Debounce or batch this in production before writing to your backend.
-- **`useInscribeState`** makes the toolbar reactive — it re-renders only the toolbar, not the canvas, on each state change.
-- **`BubbleMenu`** and **`SlashMenu`** are standalone React components from `@inscribe/react` — no manual wiring needed.
+- **`useScrivrState`** makes the toolbar reactive — it re-renders only the toolbar, not the canvas, on each state change.
+- **`BubbleMenu`** and **`SlashMenu`** are standalone React components from `@scrivr/react` — no manual wiring needed.
 
 ---
 

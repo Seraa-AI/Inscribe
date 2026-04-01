@@ -3,7 +3,7 @@ title: Local Setup
 description: Clone the repo, install dependencies, and run the monorepo locally.
 ---
 
-Inscribe is a pnpm monorepo managed by Turbo. Here's how to get your local environment running.
+Scrivr is a pnpm monorepo managed by Turbo. Here's how to get your local environment running.
 
 ---
 
@@ -18,8 +18,8 @@ Inscribe is a pnpm monorepo managed by Turbo. Here's how to get your local envir
 ## Clone and Install
 
 ```bash
-git clone https://github.com/your-org/inscribe.git
-cd inscribe
+git clone https://github.com/your-org/scrivr.git
+cd scrivr
 pnpm install
 ```
 
@@ -32,8 +32,8 @@ pnpm install
 pnpm dev
 
 # Or target specific apps:
-pnpm --filter @inscribe/demo dev      # demo editor at http://localhost:5173
-pnpm --filter @inscribe/docs dev      # documentation at http://localhost:3000
+pnpm --filter @scrivr/demo dev      # demo editor at http://localhost:5173
+pnpm --filter @scrivr/docs dev      # documentation at http://localhost:3000
 ```
 
 For multiplayer features you will need a Hocuspocus server running locally. See the [Collaboration example](/examples/collaboration) for setup instructions.
@@ -84,7 +84,7 @@ pnpm tsc    # Full monorepo type check
 turbo build
 
 # Build a specific package
-pnpm --filter @inscribe/core build
+pnpm --filter @scrivr/core build
 ```
 
 Packages are built with `tsup` into each package's `dist/` directory. App builds use Vite.

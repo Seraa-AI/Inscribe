@@ -1,33 +1,33 @@
 ---
 title: Quick Start (React)
-description: Build a minimal working Inscribe document editor in a React application.
+description: Build a minimal working Scrivr document editor in a React application.
 ---
 
-This guide walks you through mounting a fully functional Inscribe document editor in a React component.
+This guide walks you through mounting a fully functional Scrivr document editor in a React component.
 
 <Callout type="info">
-  This guide is for **React 18 or 19**. Vue and Svelte bindings are coming soon. For framework-agnostic usage see `@inscribe/core` directly.
+  This guide is for **React 18 or 19**. Vue and Svelte bindings are coming soon. For framework-agnostic usage see `@scrivr/core` directly.
 </Callout>
 
-You will use the two primitives from `@inscribe/react`:
+You will use the two primitives from `@scrivr/react`:
 
-- **`useInscribeEditor`** — creates and manages an `Editor` instance within the React lifecycle.
-- **`<Inscribe />`** — mounts the rendering engine onto a DOM container and handles virtual scrolling.
+- **`useScrivrEditor`** — creates and manages an `Editor` instance within the React lifecycle.
+- **`<Scrivr />`** — mounts the rendering engine onto a DOM container and handles virtual scrolling.
 
 ---
 
 ## Minimal Example
 
 ```tsx title="MyEditor.tsx"
-import { useInscribeEditor, Inscribe, StarterKit } from '@inscribe/react';
+import { useScrivrEditor, Scrivr, StarterKit } from '@scrivr/react';
 
 export function MyEditor() {
-  const editor = useInscribeEditor({
+  const editor = useScrivrEditor({
     extensions: [StarterKit],
   });
 
   return (
-    <Inscribe
+    <Scrivr
       editor={editor}
       style={{ height: '100vh', background: '#f5f5f5' }}
     />
@@ -41,12 +41,12 @@ Drop `<MyEditor />` anywhere in your React tree and you have a paginated, canvas
 
 ## How It Works
 
-### 1. `useInscribeEditor`
+### 1. `useScrivrEditor`
 
-`useInscribeEditor` creates an `Editor` instance on mount and destroys it on unmount. The returned value is `null` on the very first render (before the effect runs) — `<Inscribe />` handles this gracefully by rendering nothing until the editor is ready.
+`useScrivrEditor` creates an `Editor` instance on mount and destroys it on unmount. The returned value is `null` on the very first render (before the effect runs) — `<Scrivr />` handles this gracefully by rendering nothing until the editor is ready.
 
 ```ts
-const editor = useInscribeEditor({
+const editor = useScrivrEditor({
   // Extensions to load. StarterKit includes paragraphs, headings,
   // lists, bold, italic, links, history, and more.
   extensions: [StarterKit],
@@ -64,12 +64,12 @@ const editor = useInscribeEditor({
 }, [/* Optional dependency array — re-initializes the editor when values change */]);
 ```
 
-### 2. `<Inscribe />`
+### 2. `<Scrivr />`
 
-`<Inscribe />` mounts the document renderer into a container `<div>`. It manages keyboard and IME input, virtual scrolling, and all cleanup on unmount. You never interact with it beyond passing the `editor` instance and layout props.
+`<Scrivr />` mounts the document renderer into a container `<div>`. It manages keyboard and IME input, virtual scrolling, and all cleanup on unmount. You never interact with it beyond passing the `editor` instance and layout props.
 
 ```tsx
-<Inscribe
+<Scrivr
   editor={editor}
   gap={24}          // gap in px between pages. Default: 24
   overscan={500}    // px beyond the viewport to keep painted. Default: 500
@@ -82,15 +82,15 @@ const editor = useInscribeEditor({
 
 ## Reading Editor State
 
-Use `useInscribeState` to subscribe to a specific slice of editor state. The component only re-renders when the selected value changes — not on every keypress.
+Use `useScrivrState` to subscribe to a specific slice of editor state. The component only re-renders when the selected value changes — not on every keypress.
 
 ```tsx
-import { useInscribeEditor, Inscribe, useInscribeState, StarterKit } from '@inscribe/react';
+import { useScrivrEditor, Scrivr, useScrivrState, StarterKit } from '@scrivr/react';
 
 export function EditorWithToolbar() {
-  const editor = useInscribeEditor({ extensions: [StarterKit] });
+  const editor = useScrivrEditor({ extensions: [StarterKit] });
 
-  const isBold = useInscribeState({
+  const isBold = useScrivrState({
     editor,
     selector: ({ editor }) => editor?.isActive('bold') ?? false,
   });
@@ -103,7 +103,7 @@ export function EditorWithToolbar() {
       >
         Bold
       </button>
-      <Inscribe editor={editor} style={{ height: '80vh' }} />
+      <Scrivr editor={editor} style={{ height: '80vh' }} />
     </>
   );
 }
@@ -113,11 +113,11 @@ export function EditorWithToolbar() {
 
 ## Adding Real-Time Collaboration
 
-Turning your editor into a multiplayer one requires just a few extra lines using `@inscribe/plugins`. Pass the current user's name and colour so remote cursors can be identified.
+Turning your editor into a multiplayer one requires just a few extra lines using `@scrivr/plugins`. Pass the current user's name and colour so remote cursors can be identified.
 
 ```tsx title="MultiplayerEditor.tsx"
-import { useInscribeEditor, Inscribe, StarterKit } from '@inscribe/react';
-import { Collaboration, CollaborationCursor } from '@inscribe/plugins';
+import { useScrivrEditor, Scrivr, StarterKit } from '@scrivr/react';
+import { Collaboration, CollaborationCursor } from '@scrivr/plugins';
 
 interface Props {
   documentId: string;
@@ -125,7 +125,7 @@ interface Props {
 }
 
 export function MultiplayerEditor({ documentId, user }: Props) {
-  const editor = useInscribeEditor({
+  const editor = useScrivrEditor({
     extensions: [
       StarterKit.configure({ history: false }), // Y.UndoManager replaces PM history
       Collaboration.configure({
@@ -136,7 +136,7 @@ export function MultiplayerEditor({ documentId, user }: Props) {
     ],
   }, [documentId]);
 
-  return <Inscribe editor={editor} style={{ height: '100vh' }} />;
+  return <Scrivr editor={editor} style={{ height: '100vh' }} />;
 }
 ```
 
@@ -153,10 +153,10 @@ See the [Collaboration example](/examples/collaboration) for the full backend se
   <Card title="Menus" href="/getting-started/menus">
     Headless menu controllers — bubble, floating, slash, and image menus.
   </Card>
-  <Card title="@inscribe/core" href="/packages/core">
+  <Card title="@scrivr/core" href="/packages/core">
     All available extensions, commands, and the Editor API.
   </Card>
-  <Card title="@inscribe/react" href="/packages/react">
+  <Card title="@scrivr/react" href="/packages/react">
     `BubbleMenu`, `FloatingMenu`, `SlashMenu`, and more as React components.
   </Card>
 </Cards>

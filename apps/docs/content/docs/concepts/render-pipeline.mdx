@@ -1,9 +1,9 @@
 ---
 title: Render Pipeline
-description: How Inscribe moves from a user keypress to pixels on the canvas.
+description: How Scrivr moves from a user keypress to pixels on the canvas.
 ---
 
-Inscribe's rendering model is fundamentally different from a DOM-based editor. There is no
+Scrivr's rendering model is fundamentally different from a DOM-based editor. There is no
 `contenteditable` region, no DOM diffing, and no CSS layout. Instead, every glyph, cursor, 
 and selection highlight is drawn directly onto an HTML5 `<canvas>` element by a custom layout 
 and rendering engine.
@@ -36,7 +36,7 @@ This page walks you through the four-stage pipeline that runs on every user inte
 
 ## Stage 1 — Input Bridge
 
-Inscribe does not use `contenteditable`. Instead, `Editor.mount()` creates a **hidden `<textarea>`**
+Scrivr does not use `contenteditable`. Instead, `Editor.mount()` creates a **hidden `<textarea>`**
 and positions it at the cursor's pixel location. All keyboard events are captured from this element.
 
 The textarea serves three purposes:

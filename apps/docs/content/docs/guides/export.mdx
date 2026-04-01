@@ -3,11 +3,11 @@ title: Document Export
 description: Exporting the canvas to standalone PDFs or downloading Markdown.
 ---
 
-`@inscribe/export` provides browser-side serializers for converting Inscribe documents to
+`@scrivr/export` provides browser-side serializers for converting Scrivr documents to
 portable formats. Install it separately:
 
 ```bash
-pnpm add @inscribe/export
+pnpm add @scrivr/export
 ```
 
 ---
@@ -21,7 +21,7 @@ no custom font embedding.
 ### Triggering a download from a toolbar button
 
 ```tsx
-import { exportToPdf } from '@inscribe/export';
+import { exportToPdf } from '@scrivr/export';
 
 async function handleDownloadPdf(editor: Editor) {
   // 1. Generate PDF bytes
@@ -86,7 +86,7 @@ export function ExportToolbar({ editor }: { editor: Editor | null }) {
 `exportToMarkdown` is synchronous and serializes the full document to a CommonMark string.
 
 ```tsx
-import { exportToMarkdown } from '@inscribe/export';
+import { exportToMarkdown } from '@scrivr/export';
 
 function handleDownloadMarkdown(editor: Editor) {
   const markdown = exportToMarkdown(editor);
@@ -121,4 +121,4 @@ await navigator.clipboard.writeText(markdown);
 
 ## Package Reference
 
-See the full [@inscribe/export package reference](/packages/export) for the complete API.
+See the full [@scrivr/export package reference](/packages/export) for the complete API.

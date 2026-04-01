@@ -1,17 +1,17 @@
 ---
 title: Introduction
-description: Inscribe is a canvas-based, paginated document editor built on ProseMirror and Yjs.
+description: Scrivr is a canvas-based, paginated document editor built on ProseMirror and Yjs.
 ---
 
 <Callout type="warn">
-  Inscribe is currently in **beta**. APIs may change between releases. We recommend pinning to an
+  Scrivr is currently in **beta**. APIs may change between releases. We recommend pinning to an
   exact version and reviewing the changelog before upgrading.
 </Callout>
 
-## What is Inscribe?
+## What is Scrivr?
 
-**Inscribe** is an open-source, canvas-rendered document editor framework. Unlike traditional
-DOM-based rich-text editors, Inscribe renders its content directly onto `<canvas>` elements —
+**Scrivr** is an open-source, canvas-rendered document editor framework. Unlike traditional
+DOM-based rich-text editors, Scrivr renders its content directly onto `<canvas>` elements —
 giving you pixel-perfect, paginated layouts with high performance virtual scrolling, without
 fighting the browser's layout engine.
 
@@ -29,23 +29,23 @@ It is built upon four distinct architectural layers:
 ## Package Overview
 
 <Cards>
-  <Card title="@inscribe/core" href="/packages/core">
+  <Card title="@scrivr/core" href="/packages/core">
     The headless engine — `Editor` orchestrator, ProseMirror schema, custom layout engine, canvas `ViewManager`, and all built-in extensions.
   </Card>
-  <Card title="@inscribe/react" href="/packages/react">
-    React bindings — `useInscribeEditor` hook, `<Inscribe />` component, and contextual menus.
+  <Card title="@scrivr/react" href="/packages/react">
+    React bindings — `useScrivrEditor` hook, `<Scrivr />` component, and contextual menus.
   </Card>
-  <Card title="@inscribe/plugins" href="/packages/plugins">
+  <Card title="@scrivr/plugins" href="/packages/plugins">
     Optional extensions — AI Toolkit, Track Changes, and real-time collaboration via Yjs.
   </Card>
-  <Card title="@inscribe/export" href="/packages/export">
+  <Card title="@scrivr/export" href="/packages/export">
     Export utilities — paginated PDF (via `pdf-lib`) and Markdown. DOCX coming soon.
   </Card>
-  <Card title="@inscribe/vue">
-    <span class="inline-block mb-2 rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/40 dark:text-orange-400">Coming Soon</span> Vue 3 bindings — `useInscribeEditor` composable and `<Inscribe />` component.
+  <Card title="@scrivr/vue">
+    <span class="inline-block mb-2 rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/40 dark:text-orange-400">Coming Soon</span> Vue 3 bindings — `useScrivrEditor` composable and `<Scrivr />` component.
   </Card>
-  <Card title="@inscribe/svelte">
-    <span class="inline-block mb-2 rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/40 dark:text-orange-400">Coming Soon</span> Svelte bindings — `createInscribeEditor` store and `<Inscribe />` component.
+  <Card title="@scrivr/svelte">
+    <span class="inline-block mb-2 rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/40 dark:text-orange-400">Coming Soon</span> Svelte bindings — `createScrivrEditor` store and `<Scrivr />` component.
   </Card>
 </Cards>
 
@@ -55,7 +55,7 @@ It is built upon four distinct architectural layers:
 
 **Canvas rendering, not DOM.** Every glyph, cursor, selection highlight, and overlay (ghost text, tracked changes) is drawn directly on an `HTMLCanvasElement`. The editor owns its own coordinate system — the browser's layout engine is only used for the outer scroll container.
 
-**Deterministic layout engine.** Inscribe implements its own page and block layout algorithms. It handles word wrapping, font measurement, and pagination natively. Documents are visually identical across all browsers and devices.
+**Deterministic layout engine.** Scrivr implements its own page and block layout algorithms. It handles word wrapping, font measurement, and pagination natively. Documents are visually identical across all browsers and devices.
 
 **Pages as first-class citizens.** The document is broken into fixed-size pages (A4 by default). The `ViewManager` implements virtual scrolling, only painting pages in the viewport. You control page dimensions and margins through a simple `PageConfig` object.
 

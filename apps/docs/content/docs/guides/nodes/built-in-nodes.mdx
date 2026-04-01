@@ -1,9 +1,9 @@
 ---
 title: Built-in Nodes
-description: Complete reference for all extensions bundled with @inscribe/core.
+description: Complete reference for all extensions bundled with @scrivr/core.
 ---
 
-All extensions are exported from `@inscribe/core` and aggregated by `StarterKit`. You can use
+All extensions are exported from `@scrivr/core` and aggregated by `StarterKit`. You can use
 `StarterKit` for convenience, or compose individual extensions to include only what you need.
 
 ---
@@ -15,7 +15,7 @@ All extensions are exported from `@inscribe/core` and aggregated by `StarterKit`
 The default block type. Every document must include `Paragraph`.
 
 ```ts
-import { Paragraph } from '@inscribe/core';
+import { Paragraph } from '@scrivr/core';
 ```
 
 No configurable options.
@@ -27,7 +27,7 @@ No configurable options.
 Block node for headings at levels 1–6.
 
 ```ts
-import { Heading } from '@inscribe/core';
+import { Heading } from '@scrivr/core';
 
 Heading.configure({
   levels: [1, 2, 3], // restrict to H1–H3 only
@@ -47,7 +47,7 @@ Heading.configure({
 Provides both bullet and ordered lists, including `listItem`.
 
 ```ts
-import { List } from '@inscribe/core';
+import { List } from '@scrivr/core';
 ```
 
 No configurable options.
@@ -61,7 +61,7 @@ No configurable options.
 Fenced code block with monospace rendering.
 
 ```ts
-import { CodeBlock } from '@inscribe/core';
+import { CodeBlock } from '@scrivr/core';
 ```
 
 No configurable options.
@@ -75,7 +75,7 @@ No configurable options.
 A thematic break — renders as a horizontal line.
 
 ```ts
-import { HorizontalRule } from '@inscribe/core';
+import { HorizontalRule } from '@scrivr/core';
 ```
 
 No configurable options.
@@ -91,7 +91,7 @@ No configurable options.
 Inline image node with support for float layout modes.
 
 ```ts
-import { Image } from '@inscribe/core';
+import { Image } from '@scrivr/core';
 ```
 
 **Attributes:** `src`, `alt`, `title`, `width`, `height`, `floatMode` (`'inline'` | `'square-left'` | `'square-right'` | `'top-bottom'` | `'behind'` | `'front'`)
@@ -105,7 +105,7 @@ import { Image } from '@inscribe/core';
 ### `Bold`
 
 ```ts
-import { Bold } from '@inscribe/core';
+import { Bold } from '@scrivr/core';
 ```
 
 **Commands:** `toggleBold()`
@@ -116,7 +116,7 @@ import { Bold } from '@inscribe/core';
 ### `Italic`
 
 ```ts
-import { Italic } from '@inscribe/core';
+import { Italic } from '@scrivr/core';
 ```
 
 **Commands:** `toggleItalic()`
@@ -127,7 +127,7 @@ import { Italic } from '@inscribe/core';
 ### `Underline`
 
 ```ts
-import { Underline } from '@inscribe/core';
+import { Underline } from '@scrivr/core';
 ```
 
 **Commands:** `toggleUnderline()`
@@ -138,7 +138,7 @@ import { Underline } from '@inscribe/core';
 ### `Strikethrough`
 
 ```ts
-import { Strikethrough } from '@inscribe/core';
+import { Strikethrough } from '@scrivr/core';
 ```
 
 **Commands:** `toggleStrikethrough()`
@@ -150,7 +150,7 @@ import { Strikethrough } from '@inscribe/core';
 Background highlight. Supports multiple colours.
 
 ```ts
-import { Highlight } from '@inscribe/core';
+import { Highlight } from '@scrivr/core';
 
 Highlight.configure({
   colors: ['#fef08a', '#bbf7d0', '#bfdbfe'], // allowed colours
@@ -170,7 +170,7 @@ Highlight.configure({
 Text foreground colour.
 
 ```ts
-import { Color } from '@inscribe/core';
+import { Color } from '@scrivr/core';
 
 Color.configure({
   colors: ['#dc2626', '#2563eb', '#16a34a'],
@@ -190,7 +190,7 @@ Color.configure({
 Text size in pixels.
 
 ```ts
-import { FontSize } from '@inscribe/core';
+import { FontSize } from '@scrivr/core';
 
 FontSize.configure({
   sizes: [10, 12, 14, 16, 18, 24, 32],
@@ -210,7 +210,7 @@ FontSize.configure({
 Text font family.
 
 ```ts
-import { FontFamily } from '@inscribe/core';
+import { FontFamily } from '@scrivr/core';
 
 FontFamily.configure({
   families: ['Arial', 'Georgia', 'Courier New'],
@@ -230,7 +230,7 @@ FontFamily.configure({
 Hyperlink mark.
 
 ```ts
-import { Link } from '@inscribe/core';
+import { Link } from '@scrivr/core';
 ```
 
 **Attributes:** `href`, `title`
@@ -246,7 +246,7 @@ import { Link } from '@inscribe/core';
 Paragraph text alignment (left, center, right, justify).
 
 ```ts
-import { Alignment } from '@inscribe/core';
+import { Alignment } from '@scrivr/core';
 ```
 
 **Commands:** `setAlignment('left' | 'center' | 'right' | 'justify')`
@@ -258,7 +258,7 @@ import { Alignment } from '@inscribe/core';
 Undo/redo stack powered by ProseMirror's history module.
 
 ```ts
-import { History } from '@inscribe/core';
+import { History } from '@scrivr/core';
 
 History.configure({
   depth: 100,   // max undo steps
@@ -282,7 +282,7 @@ Enables multi-page layout. Required for the canvas layout engine to split conten
 Included in `StarterKit` automatically.
 
 ```ts
-import { Pagination } from '@inscribe/core';
+import { Pagination } from '@scrivr/core';
 ```
 
 ---
@@ -292,7 +292,7 @@ import { Pagination } from '@inscribe/core';
 Smart typography rules — converts `"straight quotes"` to `"curly quotes"`, `--` to em-dashes, etc.
 
 ```ts
-import { Typography } from '@inscribe/core';
+import { Typography } from '@scrivr/core';
 ```
 
 ---
@@ -303,5 +303,5 @@ Ensures the document always ends with an empty paragraph, preventing cursor trap
 block node.
 
 ```ts
-import { TrailingNode } from '@inscribe/core';
+import { TrailingNode } from '@scrivr/core';
 ```

@@ -1,6 +1,6 @@
 ---
 title: Type References
-description: Core TypeScript types exported by @inscribe/core and @inscribe/react.
+description: Core TypeScript types exported by @scrivr/core and @scrivr/react.
 ---
 
 All types are bundled with the packages — no separate `@types/*` packages are needed.
@@ -33,12 +33,12 @@ interface EditorOptions {
 
 ---
 
-## `UseInscribeEditorOptions`
+## `UseScrivrEditorOptions`
 
 React hook options — a superset of `EditorOptions` with React lifecycle callbacks.
 
 ```ts
-interface UseInscribeEditorOptions {
+interface UseScrivrEditorOptions {
   extensions?: Extension[];
   pageConfig?: PageConfig;
   onUpdate?: (props: { editor: Editor }) => void;
@@ -87,7 +87,7 @@ const defaultPageConfig: PageConfig = {
 ```
 
 <Callout type="info">
-  Inscribe uses 96 DPI as its reference density. 1 inch = 96 px, matching CSS `px` units at standard
+  Scrivr uses 96 DPI as its reference density. 1 inch = 96 px, matching CSS `px` units at standard
   screen resolution. Letter size would be `{ pageWidth: 816, pageHeight: 1056 }`.
 </Callout>
 
@@ -137,11 +137,11 @@ snap.activeMarkAttrs.color?.color;    // '#dc2626'
 
 ## `CanvasProps`
 
-Props accepted by the `<Inscribe />` React component.
+Props accepted by the `<Scrivr />` React component.
 
 ```ts
 interface CanvasProps {
-  /** Editor from useInscribeEditor(). Renders nothing when null. */
+  /** Editor from useScrivrEditor(). Renders nothing when null. */
   editor: Editor | null;
   /** Gap in pixels between pages. Default: 24. */
   gap?: number;
@@ -166,7 +166,7 @@ The type of the `onChange` callback in `EditorOptions`.
 
 ## `Extension`
 
-The base type for all Inscribe extensions. Created via `Extension.create<Options>({ ... })`.
+The base type for all Scrivr extensions. Created via `Extension.create<Options>({ ... })`.
 See [Custom Extensions](/guides/nodes/custom-extensions) for full documentation.
 
 ---

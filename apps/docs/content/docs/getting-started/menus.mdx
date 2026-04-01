@@ -1,9 +1,9 @@
 ---
 title: Menus
-description: Headless menu controllers from @inscribe/core — position and show your own UI.
+description: Headless menu controllers from @scrivr/core — position and show your own UI.
 ---
 
-`@inscribe/core` ships four framework-agnostic menu controllers. Each one subscribes to editor
+`@scrivr/core` ships four framework-agnostic menu controllers. Each one subscribes to editor
 state, computes visibility, and fires `onShow` / `onHide` / `onMove` callbacks with a viewport
 `DOMRect`. You are responsible for rendering — bring any UI library you like.
 
@@ -18,7 +18,7 @@ Shows when the editor has a non-empty text selection. Use it for inline formatti
 (bold, italic, link).
 
 ```ts
-import { createBubbleMenu } from '@inscribe/core';
+import { createBubbleMenu } from '@scrivr/core';
 
 const el = document.getElementById('bubble-menu')!;
 
@@ -57,7 +57,7 @@ Shows when the cursor is in an empty text block with nothing selected. Use it fo
 UI — a `+` button or a `/` command trigger beside empty paragraphs.
 
 ```ts
-import { createFloatingMenu } from '@inscribe/core';
+import { createFloatingMenu } from '@scrivr/core';
 
 const el = document.getElementById('floating-menu')!;
 
@@ -92,7 +92,7 @@ Shows when the user types `/` anywhere in a text block. Passes a live `query` st
 after the `/`) so you can filter your command list as they type.
 
 ```ts
-import { createSlashMenu } from '@inscribe/core';
+import { createSlashMenu } from '@scrivr/core';
 
 const { cleanup, dismissMenu } = createSlashMenu(editor, {
   onShow: (rect, query, slashFrom) => {
@@ -147,7 +147,7 @@ Shows when the user selects an image node. The `DOMRect` covers the full visual 
 image, so `rect.bottom` is a reliable anchor for a popover below it.
 
 ```ts
-import { createImageMenu } from '@inscribe/core';
+import { createImageMenu } from '@scrivr/core';
 
 const cleanup = createImageMenu(editor, {
   onShow: (rect, info) => {

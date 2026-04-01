@@ -1,6 +1,6 @@
 ---
 title: Event Callbacks
-description: Full signature reference for all Editor and useInscribeEditor event callbacks.
+description: Full signature reference for all Editor and useScrivrEditor event callbacks.
 ---
 
 These callbacks are passed directly to `new Editor(options)`. Framework adapters
@@ -29,7 +29,7 @@ const editor = new Editor({
 ```
 
 <Callout type="info">
-  When using `<Inscribe />` and `useInscribeEditor`, you do not need `onChange` — use `onUpdate` instead.
+  When using `<Scrivr />` and `useScrivrEditor`, you do not need `onChange` — use `onUpdate` instead.
   The React adapter subscribes to the editor internally via `editor.subscribe()`.
 </Callout>
 
@@ -72,7 +72,7 @@ const editor = new Editor({
 ```
 
 <Callout type="info">
-  When using `<Inscribe />`, the `ViewManager` handles cursor repainting automatically.
+  When using `<Scrivr />`, the `ViewManager` handles cursor repainting automatically.
   You only need `onCursorTick` when building a completely custom rendering adapter.
 </Callout>
 
@@ -93,5 +93,5 @@ const unsubscribe = editor.subscribe(() => {
 unsubscribe();
 ```
 
-`editor.subscribe()` is the underlying primitive that both `useInscribeEditor` and `<Inscribe />`
+`editor.subscribe()` is the underlying primitive that both `useScrivrEditor` and `<Scrivr />`
 use internally.

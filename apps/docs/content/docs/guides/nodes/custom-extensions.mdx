@@ -31,7 +31,7 @@ A block extension contributes a ProseMirror node spec, a layout strategy, and op
 block styles (font and spacing).
 
 ```ts
-import { Extension, TextBlockStrategy } from '@inscribe/core';
+import { Extension, TextBlockStrategy } from '@scrivr/core';
 
 const Callout = Extension.create({
   name: 'callout',
@@ -94,8 +94,8 @@ Custom marks contribute a ProseMirror mark spec and optionally a `MarkDecorator`
 rendering (e.g. drawing a background colour or underline).
 
 ```ts
-import { Extension } from '@inscribe/core';
-import type { MarkDecorator } from '@inscribe/core';
+import { Extension } from '@scrivr/core';
+import type { MarkDecorator } from '@scrivr/core';
 
 const Spoiler = Extension.create({
   name: 'spoiler',

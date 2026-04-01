@@ -3,7 +3,7 @@ title: Event System
 description: How browser events are bridged to ProseMirror commands through the hidden textarea.
 ---
 
-Inscribe does not use `contenteditable`. All user input is routed through a **hidden `<textarea>`**
+Scrivr does not use `contenteditable`. All user input is routed through a **hidden `<textarea>`**
 that acts as a thin, invisible bridge between the browser's native input handling and the ProseMirror
 command system.
 
@@ -51,7 +51,7 @@ Printable characters are consumed via the `input` event (not `keydown`). This co
 
 - **Regular typing** — `insertText` is called with `event.data`
 - **Autocorrect / spellcheck substitution** — the browser fires a single `input` event with the
-  corrected word; Inscribe replaces the affected range accordingly
+  corrected word; Scrivr replaces the affected range accordingly
 
 Extensions can register **input handlers** to intercept specific text patterns before the default
 insert runs. The slash menu (`/`) is implemented this way — typing `/` triggers an input handler that
@@ -67,7 +67,7 @@ For CJK input methods (Chinese, Japanese, Korean), the browser fires a sequence 
 compositionstart  →  compositionupdate (...)  →  compositionend  →  input
 ```
 
-Inscribe guards the `keydown` and `input` handlers with a `composing` flag so that intermediate
+Scrivr guards the `keydown` and `input` handlers with a `composing` flag so that intermediate
 composition states do not corrupt the document. Only the final `compositionend + input` sequence
 commits the composed text as a single ProseMirror transaction.
 

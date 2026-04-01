@@ -3,7 +3,7 @@ title: AI Assistant Toolkit
 description: Stream ghost text suggestions over the canvas with AiToolkit.
 ---
 
-`AiToolkit` adds a streaming ghost-text writing assistant to Inscribe. Suggestions are rendered
+`AiToolkit` adds a streaming ghost-text writing assistant to Scrivr. Suggestions are rendered
 as a canvas overlay — the document is not modified during streaming. When the stream ends the
 content is inserted as a tracked change so the user can review it before accepting.
 
@@ -29,18 +29,18 @@ The core flow:
 ## Setup
 
 ```tsx title="AiEditor.tsx"
-import { useInscribeEditor, Inscribe, StarterKit } from '@inscribe/react';
-import { AiToolkit } from '@inscribe/plugins';
+import { useScrivrEditor, Scrivr, StarterKit } from '@scrivr/react';
+import { AiToolkit } from '@scrivr/plugins';
 
 export function AiEditor() {
-  const editor = useInscribeEditor({
+  const editor = useScrivrEditor({
     extensions: [
       StarterKit,
       AiToolkit,
     ],
   });
 
-  return <Inscribe editor={editor} style={{ height: '100vh' }} />;
+  return <Scrivr editor={editor} style={{ height: '100vh' }} />;
 }
 ```
 
@@ -49,7 +49,7 @@ export function AiEditor() {
 ## Reading Document Context
 
 ```ts
-import { getAiToolkit } from '@inscribe/plugins';
+import { getAiToolkit } from '@scrivr/plugins';
 
 const ai = getAiToolkit(editor);
 
@@ -77,7 +77,7 @@ const chunks = ai.getTextChunks(4000);
 as ghost text, then inserts the result after the anchor block as a tracked change.
 
 ```ts
-import { getAiToolkit } from '@inscribe/plugins';
+import { getAiToolkit } from '@scrivr/plugins';
 
 async function runSuggestion(editor: Editor) {
   const ai = getAiToolkit(editor);

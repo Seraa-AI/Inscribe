@@ -3,7 +3,7 @@ title: Typography & Fonts
 description: How to safely load web fonts for accurate Canvas text measurement.
 ---
 
-Because Inscribe renders text manually using the HTML5 `<canvas>` API rather than the DOM, the layout engine heavily relies on accurate font metrics from the browser's `TextMeasurer`.
+Because Scrivr renders text manually using the HTML5 `<canvas>` API rather than the DOM, the layout engine heavily relies on accurate font metrics from the browser's `TextMeasurer`.
 
 This creates a race condition known as the **"Canvas Font Trap."**
 
@@ -18,10 +18,10 @@ When you use the `<canvas>` API's `measureText()` method, the browser measures t
 3. The browser will temporarily fallback to a system font (e.g., Arial or Times New Roman).
 4. `measureText()` will return the widths for the **fallback font**.
 
-Because Inscribe's custom layout engine (`PageLayout.ts`) permanently absolute-positions every character and line break based on these initial measurements, your text layout will be completely corrupted once the custom font finally loads.
+Because Scrivr's custom layout engine (`PageLayout.ts`) permanently absolute-positions every character and line break based on these initial measurements, your text layout will be completely corrupted once the custom font finally loads.
 
 <Callout type="warn">
-	Never initialize the editor or call `useInscribeEditor` until you can
+	Never initialize the editor or call `useScrivrEditor` until you can
 	guarantee your application's fonts are fully loaded and ready in the
 	browser.
 </Callout>
@@ -36,7 +36,7 @@ The most robust way to sidestep this issue in a web environment is to wrap your 
 
 ```tsx title="EditorWrapper.tsx"
 import { useState, useEffect } from "react";
-import { useInscribeEditor } from "@inscribe/react";
+import { useScrivrEditor } from "@scrivr/react";
 import { Editor } from "./Editor";
 
 export function EditorWrapper() {
@@ -86,7 +86,7 @@ async function changeDocumentFont(editor, fontFamily, fontUrl) {
 ```
 
 <Callout type="info">
-	When using `editor.ensureLayout()`, Inscribe re-runs `layoutDocument()` and
+	When using `editor.ensureLayout()`, Scrivr re-runs `layoutDocument()` and
 	`populateCharMap()`. This guarantees that the spatial index is updated with
 	the new `measureText()` dimensions corresponding to your newly loaded font.
 </Callout>
