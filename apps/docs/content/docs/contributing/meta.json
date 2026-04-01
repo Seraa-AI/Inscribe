@@ -1,0 +1,9 @@
+{
+  "title": "Contributing",
+  "icon": "GitPullRequest",
+  "pages": [
+    "overview",
+    "local-setup",
+    "changelog"
+  ]
+}

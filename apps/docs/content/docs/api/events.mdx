@@ -1,0 +1,97 @@
+---
+title: Event Callbacks
+description: Full signature reference for all Editor and useInscribeEditor event callbacks.
+---
+
+These callbacks are passed directly to `new Editor(options)`. Framework adapters
+(React, Vue, Svelte) wrap these in their own lifecycle hooks — see the relevant
+[package page](/packages/react) for framework-specific options.
+
+---
+
+### `onChange`
+```ts
+onChange?: (state: EditorState) => void
+```
+Fired synchronously on every state change — any document edit or selection move that produces a new
+`EditorState`. The `state` argument is the new (immutable) state.
+
+This is the ideal hook for serializing the document for persistence:
+
+```ts
+const editor = new Editor({
+  extensions: [StarterKit],
+  onChange: (state) => {
+    const json = state.doc.toJSON();
+    localStorage.setItem('doc', JSON.stringify(json));
+  },
+});
+```
+
+<Callout type="info">
+  When using `<Inscribe />` and `useInscribeEditor`, you do not need `onChange` — use `onUpdate` instead.
+  The React adapter subscribes to the editor internally via `editor.subscribe()`.
+</Callout>
+
+---
+
+### `onFocusChange`
+```ts
+onFocusChange?: (focused: boolean) => void
+```
+Fired when the editor's hidden textarea gains or loses focus. `focused` is `true` on focus-in,
+`false` on focus-out.
+
+```ts
+const editor = new Editor({
+  extensions: [StarterKit],
+  onFocusChange: (focused) => {
+    toolbar.classList.toggle('visible', focused);
+  },
+});
+```
+
+---
+
+### `onCursorTick`
+```ts
+onCursorTick?: (isVisible: boolean) => void
+```
+Fired on every cursor blink tick (every ~530ms) and immediately after any user interaction that
+moves the cursor. `isVisible` alternates between `true` and `false` to drive the blink animation.
+
+This is the hook for custom overlay renderers that need to redraw the cursor:
+
+```ts
+const editor = new Editor({
+  extensions: [StarterKit],
+  onCursorTick: (isVisible) => {
+    overlayCanvas.drawCursor(isVisible);
+  },
+});
+```
+
+<Callout type="info">
+  When using `<Inscribe />`, the `ViewManager` handles cursor repainting automatically.
+  You only need `onCursorTick` when building a completely custom rendering adapter.
+</Callout>
+
+---
+
+## Subscription vs Callbacks
+
+For custom rendering adapters or framework-agnostic integrations, use `editor.subscribe()` instead
+of callbacks:
+
+```ts
+const unsubscribe = editor.subscribe(() => {
+  // fires on every state change, focus change, and cursor tick
+  repaintOverlay();
+});
+
+// later
+unsubscribe();
+```
+
+`editor.subscribe()` is the underlying primitive that both `useInscribeEditor` and `<Inscribe />`
+use internally.

@@ -1,0 +1,148 @@
+---
+title: Real-time Collaboration
+description: Full backend and frontend setup for multiplayer editing with Inscribe.
+---
+
+This example shows how to set up a real-time collaborative editor using `@inscribe/plugins`
+and a Hocuspocus-compatible WebSocket backend.
+
+---
+
+## How It Works
+
+Inscribe's collaboration layer uses **Yjs** CRDTs to merge concurrent edits. The library owns
+the WebSocket connection — you don't need to manage a provider on the client.
+
+- `Collaboration.configure({ url, name })` — connects to your server and binds the document
+- `CollaborationCursor.configure({ user })` — renders remote user cursors on the overlay canvas
+
+---
+
+## Backend Setup
+
+Inscribe's collaboration protocol is compatible with any [Hocuspocus](https://hocuspocus.dev/) server.
+You can self-host Hocuspocus directly:
+
+```bash
+pnpm add @hocuspocus/server
+```
+
+```ts title="server.ts"
+import { Server } from '@hocuspocus/server';
+
+const server = Server.configure({
+  port: 1234,
+  // Optional: persist documents to a database
+  async onLoadDocument({ documentName }) {
+    return await db.load(documentName);
+  },
+  async onStoreDocument({ documentName, document }) {
+    await db.save(documentName, document);
+  },
+});
+
+server.listen();
+console.log('Collaboration server running on ws://localhost:1234');
+```
+
+---
+
+## Frontend Setup
+
+```tsx title="CollaborativeEditor.tsx"
+import { useInscribeEditor, Inscribe, useInscribeState, StarterKit } from '@inscribe/react';
+import { Collaboration, CollaborationCursor } from '@inscribe/plugins';
+
+interface Props {
+  documentId: string;
+  user: { name: string; color: string };
+}
+
+export function CollaborativeEditor({ documentId, user }: Props) {
+  const editor = useInscribeEditor(
+    {
+      extensions: [
+        StarterKit.configure({ history: false }), // Y.UndoManager replaces PM history
+        Collaboration.configure({
+          url: import.meta.env.VITE_WS_URL, // e.g. 'ws://localhost:1234'
+          name: documentId,
+        }),
+        CollaborationCursor.configure({ user }),
+      ],
+    },
+    [documentId], // re-initialize when document changes
+  );
+
+  const loadingState = useInscribeState({
+    editor,
+    selector: ({ editor }) => editor?.loadingState,
+  });
+
+  if (loadingState === 'syncing') {
+    return <div>Connecting…</div>;
+  }
+
+  return <Inscribe editor={editor} style={{ height: '100vh' }} />;
+}
+```
+
+**Environment variable required:** `VITE_WS_URL` — the WebSocket URL of your Hocuspocus server.
+
+<Callout type="info">
+  **Authentication — coming soon.** An `onAuthenticate` callback will be added to
+  `Collaboration.configure()` so you can attach tokens or headers to the WebSocket handshake
+  before the connection is established:
+
+  ```ts
+  // Future API — not yet available
+  Collaboration.configure({
+    url: import.meta.env.VITE_WS_URL,
+    name: documentId,
+    onAuthenticate: () => ({
+      token: getAuthToken(),
+    }),
+  })
+  ```
+</Callout>
+
+---
+
+## `loadingState`
+
+The editor exposes a `loadingState` property to track the connection lifecycle:
+
+| Value | Meaning |
+|-------|---------|
+| `'syncing'` | WebSocket connected, waiting for initial document sync from server. |
+| `'rendering'` | Document synced, layout engine running for the first time. |
+| `'ready'` | Layout complete — document is fully visible. |
+
+Use `loadingState` to show a loading spinner or skeleton UI while the document loads.
+
+---
+
+## Cursor Colours
+
+Each connected user should have a distinct colour. A common pattern is to assign colours from a
+palette based on user ID:
+
+```ts
+const CURSOR_COLORS = [
+  '#f7b731', '#26de81', '#45aaf2', '#fd9644', '#a55eea',
+];
+
+function getCursorColor(userId: string): string {
+  let hash = 0;
+  for (const char of userId) hash = (hash * 31 + char.charCodeAt(0)) & 0xffffffff;
+  return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
+}
+```
+
+```ts
+CollaborationCursor.configure({
+  user: {
+    name: currentUser.name,
+    color: getCursorColor(currentUser.id),
+  },
+})
+```

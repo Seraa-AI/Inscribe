@@ -1,0 +1,183 @@
+---
+title: Viewport & Pagination
+description: Configuring page dimensions, the virtual scroll window, and programmatic scrolling.
+---
+
+Inscribe renders the document as a sequence of fixed-size pages inside a scrollable container.
+The `<Inscribe />` component manages this layout automatically through `ViewManager`. Only the
+pages near the visible area are painted at any time — off-screen pages are represented by
+empty spacer elements.
+
+---
+
+## How pages are displayed
+
+Each page in the `DocumentLayout` corresponds to a DOM `<div>` sized to
+`pageConfig.width × pageConfig.height`. These wrappers are stacked vertically inside the
+`<Inscribe />` container, separated by the `gap` value. Inscribe uses an `IntersectionObserver`
+to track which pages are visible and only paints those (plus overscan).
+
+```
+┌───── scroll container ──────┐
+│  ┌── page-wrapper (div) ──┐ │
+│  │  <canvas> content      │ │  ← PageRenderer
+│  │  <canvas> overlay      │ │  ← OverlayRenderer
+│  └────────────────────────┘ │
+│     ← gap (24px default) →  │
+│  ┌── page-wrapper (div) ──┐ │
+│  │  <canvas> content      │ │
+│  │  <canvas> overlay      │ │
+│  └────────────────────────┘ │
+└─────────────────────────────┘
+```
+
+---
+
+## Controlling page size
+
+Page dimensions and margins are set once via `pageConfig` in `EditorOptions`:
+
+```ts
+const editor = useInscribeEditor({
+  extensions: [StarterKit],
+  pageConfig: {
+    width: 816,   // px — US Letter at 96 dpi
+    height: 1056,
+    margin: { top: 96, right: 96, bottom: 96, left: 96 }, // 1 inch
+  },
+});
+```
+
+`pageConfig` is read-only after construction. See [`PageConfig`](/api/types#pageconfig) for all
+fields and defaults.
+
+---
+
+## Gap between pages
+
+Control the visual gap between pages with the `gap` prop on `<Inscribe />`:
+
+```tsx
+<Inscribe editor={editor} gap={40} />  {/* 40px between pages */}
+```
+
+Default is `24px`. The gap is purely visual — it does not affect layout or pagination.
+
+---
+
+## Virtual scrolling and overscan
+
+`ViewManager` only paints pages that intersect with the scroll viewport ± `overscan` pixels.
+Increase `overscan` if users report blank pages during fast scrolling:
+
+```tsx
+<Inscribe editor={editor} overscan={1000} />
+```
+
+Default is `500px`. Higher values keep more pages painted (smoother fast-scroll, more GPU usage).
+
+---
+
+## Observing the current page
+
+`editor.cursorPage` returns the 1-based page number of the current cursor position:
+
+```ts
+const page = editor.cursorPage; // e.g. 3
+```
+
+Subscribe to updates to drive a reactive page indicator:
+
+```tsx
+function PageIndicator({ editor }: { editor: Editor }) {
+  const page = useInscribeState({
+    editor,
+    selector: ({ editor }) => editor?.cursorPage ?? 1,
+  });
+
+  return <span>Page {page}</span>;
+}
+```
+
+---
+
+## Programmatic scrolling
+
+`scrollCursorIntoView()` scrolls the viewport so the current cursor is visible. It is called
+automatically after every cursor move — you only need it when moving the cursor programmatically:
+
+```ts
+editor.moveCursorTo(targetPos);
+editor.scrollCursorIntoView();
+```
+
+To scroll to a specific page by pixel offset:
+
+```ts
+const container = document.querySelector('.my-editor') as HTMLElement;
+const scrollParent = container.closest('[style*="overflow"]') ?? container;
+scrollParent.scrollTo({
+  top: (pageNumber - 1) * (pageHeight + gap),
+  behavior: 'smooth',
+});
+```
+
+---
+
+## Converting positions to screen coordinates
+
+`getViewportRect(from, to)` maps a doc-position range to a viewport-relative `DOMRect`.
+Use it to position floating UI elements — menus, tooltips, link popovers — relative to text:
+
+```ts
+const snap = editor.getSelectionSnapshot();
+const rect = editor.getViewportRect(snap.from, snap.to);
+
+if (rect) {
+  tooltipEl.style.top  = `${rect.bottom + 8}px`;
+  tooltipEl.style.left = `${rect.left}px`;
+}
+```
+
+Returns `null` when the positions are not in the character map or no rendering adapter is mounted.
+
+For a selected image, use `getNodeViewportRect(docPos)` instead — it returns a rect covering the
+full visual bounds of the node:
+
+```ts
+const rect = editor.getNodeViewportRect(imageDocPos);
+if (rect) {
+  toolbar.style.top  = `${rect.bottom + 8}px`;
+  toolbar.style.left = `${rect.left}px`;
+}
+```
+
+---
+
+## Manual layout control
+
+These methods are rarely needed — the layout engine runs automatically after every transaction.
+
+```ts
+// Force a synchronous layout pass if stale
+editor.ensureLayout();
+
+// Lay out and index a specific page (useful for off-screen coordinate lookups)
+editor.ensurePagePopulated(5);
+
+// Trigger a repaint without a doc/selection change (e.g. after awareness data updates)
+editor.redraw();
+```
+
+---
+
+## Further reading
+
+<Cards>
+  <Card title="PageConfig reference" href="/api/types#pageconfig">
+    All fields and their defaults.
+  </Card>
+  <Card title="Editor API — Viewport & Position" href="/api/editor#viewport--position">
+    Full reference for getViewportRect, scrollCursorIntoView, and related methods.
+  </Card>
+</Cards>

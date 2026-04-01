@@ -1,0 +1,78 @@
+---
+title: Editor Options
+description: Configuration reference for the headless Editor class and PageConfig.
+---
+
+This page covers the headless `new Editor(options)` API. If you are using a framework binding,
+the hook options live in the package page for your framework.
+
+<Cards>
+  <Card title="@inscribe/react" href="/packages/react">
+    `useInscribeEditor`, `useInscribeState`, and React-specific callbacks.
+  </Card>
+</Cards>
+
+---
+
+## `new Editor(options)`
+
+```ts
+import { Editor, StarterKit } from '@inscribe/core';
+
+const editor = new Editor({
+  extensions: [StarterKit],
+  onChange: (state) => console.log('changed', state),
+});
+
+editor.mount(document.getElementById('editor')!);
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `extensions` | `Extension[]` | `[StarterKit]` | Extensions to load. |
+| `pageConfig` | `PageConfig` | A4, ¾-inch margins | Page dimensions and margins. |
+| `onChange` | `(state: EditorState) => void` | — | Fired on every document or selection change. |
+| `onFocusChange` | `(focused: boolean) => void` | — | Fired when the editor textarea gains or loses focus. |
+| `onCursorTick` | `(isVisible: boolean) => void` | — | Fired on every cursor blink tick. Only needed when building a custom rendering adapter. |
+| `startReady` | `boolean` | `true` | Advanced. Suppresses layout flushes until the editor is marked ready internally. Managed automatically by the `Collaboration` extension — you do not need to set this manually. |
+
+---
+
+## `PageConfig`
+
+Controls the physical dimensions and margins of every page. All values are in **pixels at 96 dpi**.
+
+```ts
+interface PageConfig {
+  pageWidth: number;
+  pageHeight: number;
+  margins: { top: number; right: number; bottom: number; left: number };
+  fontFamily?: string;
+}
+```
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `pageWidth` | `794` | Page width in px. 794 ≈ A4 width (210 mm). |
+| `pageHeight` | `1123` | Page height in px. 1123 ≈ A4 height (297 mm). |
+| `margins.top` | `72` | Top margin in px. 72 px = ¾ inch. |
+| `margins.right` | `72` | Right margin in px. |
+| `margins.bottom` | `72` | Bottom margin in px. |
+| `margins.left` | `72` | Left margin in px. |
+| `fontFamily` | — | Document-level default font family. |
+
+**Common page sizes:**
+
+| Format | `pageWidth` | `pageHeight` |
+|--------|-------------|--------------|
+| A4 portrait | `794` | `1123` |
+| US Letter portrait | `816` | `1056` |
+| A4 landscape | `1123` | `794` |
+
+**Common margin presets:**
+
+| Preset | px |
+|--------|----|
+| ¾ inch (default) | `72` |
+| 1 inch | `96` |
+| ½ inch (narrow) | `48` |

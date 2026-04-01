@@ -1,0 +1,12 @@
+{
+  "title": "Guides",
+  "icon": "BookMarked",
+  "pages": [
+    "nodes",
+    "interactivity",
+    "viewport",
+    "serialization",
+    "export",
+    "plugins"
+  ]
+}
