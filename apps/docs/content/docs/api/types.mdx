@@ -1,0 +1,186 @@
+---
+title: Type References
+description: Core TypeScript types exported by @inscribe/core and @inscribe/react.
+---
+
+All types are bundled with the packages — no separate `@types/*` packages are needed.
+
+---
+
+## `EditorOptions`
+
+Configuration object passed to `new Editor(options)`.
+
+```ts
+interface EditorOptions {
+  extensions?: Extension[];
+  pageConfig?: PageConfig;
+  onChange?: (state: EditorState) => void;
+  onFocusChange?: (focused: boolean) => void;
+  onCursorTick?: (isVisible: boolean) => void;
+  startReady?: boolean;
+}
+```
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `extensions` | `Extension[]` | No | Active extensions. Defaults to `[StarterKit]`. |
+| `pageConfig` | `PageConfig` | No | Page dimensions. Defaults to A4, ¾-inch margins. |
+| `onChange` | `(state: EditorState) => void` | No | State change callback. |
+| `onFocusChange` | `(focused: boolean) => void` | No | Focus in/out callback. |
+| `onCursorTick` | `(isVisible: boolean) => void` | No | Cursor blink tick callback. |
+| `startReady` | `boolean` | No | Set to `false` when using collaboration — suppresses layout flushes until `setReady(true)` is called. Defaults to `true`. |
+
+---
+
+## `UseInscribeEditorOptions`
+
+React hook options — a superset of `EditorOptions` with React lifecycle callbacks.
+
+```ts
+interface UseInscribeEditorOptions {
+  extensions?: Extension[];
+  pageConfig?: PageConfig;
+  onUpdate?: (props: { editor: Editor }) => void;
+  onSelectionUpdate?: (props: { editor: Editor }) => void;
+  onFocus?: (props: { editor: Editor }) => void;
+  onBlur?: (props: { editor: Editor }) => void;
+  onCreate?: (props: { editor: Editor }) => void;
+  onDestroy?: () => void;
+}
+```
+
+See [Event Callbacks](/api/events) for full documentation of each callback.
+
+---
+
+## `PageConfig`
+
+Defines the physical dimensions and margins of a single page.
+
+```ts
+interface PageConfig {
+  /** Page width in pixels. At 96 DPI, 794px = A4 width. */
+  pageWidth: number;
+  /** Page height in pixels. At 96 DPI, 1123px = A4 height. */
+  pageHeight: number;
+  /** Content margins in pixels. */
+  margins: {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  };
+  /** Document-level default font family. Overrides block styles. */
+  fontFamily?: string;
+}
+```
+
+**Default (A4, ¾-inch margins):**
+
+```ts
+const defaultPageConfig: PageConfig = {
+  pageWidth: 794,
+  pageHeight: 1123,
+  margins: { top: 72, right: 72, bottom: 72, left: 72 },
+};
+```
+
+<Callout type="info">
+  Inscribe uses 96 DPI as its reference density. 1 inch = 96 px, matching CSS `px` units at standard
+  screen resolution. Letter size would be `{ pageWidth: 816, pageHeight: 1056 }`.
+</Callout>
+
+---
+
+## `SelectionSnapshot`
+
+A lightweight snapshot of the current selection. Contains everything a toolbar or floating menu needs
+without exposing ProseMirror internals.
+
+```ts
+interface SelectionSnapshot {
+  /** Fixed end of the selection (doesn't move on Shift+arrow) */
+  anchor: number;
+  /** Moving end — where the cursor caret is drawn */
+  head: number;
+  /** Math.min(anchor, head) */
+  from: number;
+  /** Math.max(anchor, head) */
+  to: number;
+  /** True when anchor === head (no text selected) */
+  empty: boolean;
+  /** Names of marks active at cursor / across entire selection */
+  activeMarks: string[];
+  /** Attrs of each active mark, keyed by mark name */
+  activeMarkAttrs: Record<string, Record<string, unknown>>;
+  /** Node type name of the block containing the cursor */
+  blockType: string;
+  /** Attrs of the block node */
+  blockAttrs: Record<string, unknown>;
+}
+```
+
+**Example usage:**
+
+```ts
+const snap = editor.getSelectionSnapshot();
+
+snap.empty;                           // true = cursor only
+snap.activeMarks.includes('bold');    // is bold active?
+snap.blockType;                       // 'paragraph' | 'heading' | 'bulletList' | ...
+snap.blockAttrs;                      // { level: 1 } for a heading
+snap.activeMarkAttrs.color?.color;    // '#dc2626'
+```
+
+---
+
+## `CanvasProps`
+
+Props accepted by the `<Inscribe />` React component.
+
+```ts
+interface CanvasProps {
+  /** Editor from useInscribeEditor(). Renders nothing when null. */
+  editor: Editor | null;
+  /** Gap in pixels between pages. Default: 24. */
+  gap?: number;
+  /** Virtual scroll overscan in pixels. Default: 500. */
+  overscan?: number;
+  className?: string;
+  style?: React.CSSProperties;
+}
+```
+
+---
+
+## `EditorChangeHandler`
+
+```ts
+type EditorChangeHandler = (state: EditorState) => void;
+```
+
+The type of the `onChange` callback in `EditorOptions`.
+
+---
+
+## `Extension`
+
+The base type for all Inscribe extensions. Created via `Extension.create<Options>({ ... })`.
+See [Custom Extensions](/guides/nodes/custom-extensions) for full documentation.
+
+---
+
+## `DocumentLayout`
+
+The output of the layout engine. Contains an array of positioned pages.
+
+```ts
+interface DocumentLayout {
+  pages: LayoutPage[];
+  version: number;
+}
+```
+
+You typically don't interact with this directly — access it via `editor.layout` when building
+a custom renderer or computing positions.

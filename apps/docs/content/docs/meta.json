@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "index",
+    "getting-started",
+    "concepts",
+    "guides",
+    "examples",
+    "packages",
+    "api",
+    "integrations",
+    "internals",
+    "contributing"
+  ]
+}

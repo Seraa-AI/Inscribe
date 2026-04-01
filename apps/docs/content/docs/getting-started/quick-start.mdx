@@ -1,0 +1,162 @@
+---
+title: Quick Start (React)
+description: Build a minimal working Inscribe document editor in a React application.
+---
+
+This guide walks you through mounting a fully functional Inscribe document editor in a React component.
+
+<Callout type="info">
+  This guide is for **React 18 or 19**. Vue and Svelte bindings are coming soon. For framework-agnostic usage see `@inscribe/core` directly.
+</Callout>
+
+You will use the two primitives from `@inscribe/react`:
+
+- **`useInscribeEditor`** — creates and manages an `Editor` instance within the React lifecycle.
+- **`<Inscribe />`** — mounts the rendering engine onto a DOM container and handles virtual scrolling.
+
+---
+
+## Minimal Example
+
+```tsx title="MyEditor.tsx"
+import { useInscribeEditor, Inscribe, StarterKit } from '@inscribe/react';
+
+export function MyEditor() {
+  const editor = useInscribeEditor({
+    extensions: [StarterKit],
+  });
+
+  return (
+    <Inscribe
+      editor={editor}
+      style={{ height: '100vh', background: '#f5f5f5' }}
+    />
+  );
+}
+```
+
+Drop `<MyEditor />` anywhere in your React tree and you have a paginated, canvas-rendered document editor.
+
+---
+
+## How It Works
+
+### 1. `useInscribeEditor`
+
+`useInscribeEditor` creates an `Editor` instance on mount and destroys it on unmount. The returned value is `null` on the very first render (before the effect runs) — `<Inscribe />` handles this gracefully by rendering nothing until the editor is ready.
+
+```ts
+const editor = useInscribeEditor({
+  // Extensions to load. StarterKit includes paragraphs, headings,
+  // lists, bold, italic, links, history, and more.
+  extensions: [StarterKit],
+
+  // Optional: page dimensions and margins. Defaults to A4, ¾-inch margins.
+  pageConfig: {
+    pageWidth: 794,   // px at 96 dpi — A4 width
+    pageHeight: 1123, // px at 96 dpi — A4 height
+    margins: { top: 72, right: 72, bottom: 72, left: 72 }, // ¾-inch margins
+  },
+
+  // Lifecycle callbacks
+  onUpdate: ({ editor }) => console.log('Document changed'),
+  onDestroy: () => console.log('Editor destroyed'),
+}, [/* Optional dependency array — re-initializes the editor when values change */]);
+```
+
+### 2. `<Inscribe />`
+
+`<Inscribe />` mounts the document renderer into a container `<div>`. It manages keyboard and IME input, virtual scrolling, and all cleanup on unmount. You never interact with it beyond passing the `editor` instance and layout props.
+
+```tsx
+<Inscribe
+  editor={editor}
+  gap={24}          // gap in px between pages. Default: 24
+  overscan={500}    // px beyond the viewport to keep painted. Default: 500
+  className="my-editor"
+  style={{ height: '100%' }}
+/>
+```
+
+---
+
+## Reading Editor State
+
+Use `useInscribeState` to subscribe to a specific slice of editor state. The component only re-renders when the selected value changes — not on every keypress.
+
+```tsx
+import { useInscribeEditor, Inscribe, useInscribeState, StarterKit } from '@inscribe/react';
+
+export function EditorWithToolbar() {
+  const editor = useInscribeEditor({ extensions: [StarterKit] });
+
+  const isBold = useInscribeState({
+    editor,
+    selector: ({ editor }) => editor?.isActive('bold') ?? false,
+  });
+
+  return (
+    <>
+      <button
+        onClick={() => editor?.commands.toggleBold()}
+        style={{ fontWeight: isBold ? 'bold' : 'normal' }}
+      >
+        Bold
+      </button>
+      <Inscribe editor={editor} style={{ height: '80vh' }} />
+    </>
+  );
+}
+```
+
+---
+
+## Adding Real-Time Collaboration
+
+Turning your editor into a multiplayer one requires just a few extra lines using `@inscribe/plugins`. Pass the current user's name and colour so remote cursors can be identified.
+
+```tsx title="MultiplayerEditor.tsx"
+import { useInscribeEditor, Inscribe, StarterKit } from '@inscribe/react';
+import { Collaboration, CollaborationCursor } from '@inscribe/plugins';
+
+interface Props {
+  documentId: string;
+  user: { name: string; color: string };
+}
+
+export function MultiplayerEditor({ documentId, user }: Props) {
+  const editor = useInscribeEditor({
+    extensions: [
+      StarterKit.configure({ history: false }), // Y.UndoManager replaces PM history
+      Collaboration.configure({
+        url: import.meta.env.VITE_WS_URL,
+        name: documentId,
+      }),
+      CollaborationCursor.configure({ user }),
+    ],
+  }, [documentId]);
+
+  return <Inscribe editor={editor} style={{ height: '100vh' }} />;
+}
+```
+
+See the [Collaboration example](/examples/collaboration) for the full backend setup.
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Editor Options" href="/getting-started/editor-options">
+    Full reference for all configuration options and page config.
+  </Card>
+  <Card title="Menus" href="/getting-started/menus">
+    Headless menu controllers — bubble, floating, slash, and image menus.
+  </Card>
+  <Card title="@inscribe/core" href="/packages/core">
+    All available extensions, commands, and the Editor API.
+  </Card>
+  <Card title="@inscribe/react" href="/packages/react">
+    `BubbleMenu`, `FloatingMenu`, `SlashMenu`, and more as React components.
+  </Card>
+</Cards>

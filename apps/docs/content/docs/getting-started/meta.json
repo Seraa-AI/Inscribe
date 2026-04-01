@@ -1,0 +1,11 @@
+{
+  "title": "Getting Started",
+  "icon": "Rocket",
+  "pages": [
+    "installation",
+    "quick-start",
+    "editor-options",
+    "menus",
+    "typescript-setup"
+  ]
+}

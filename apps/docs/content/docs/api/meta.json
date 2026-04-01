@@ -1,0 +1,12 @@
+{
+  "title": "API Reference",
+  "icon": "Braces",
+  "pages": [
+    "editor",
+    "server-editor",
+    "view-manager",
+    "events",
+    "types",
+    "nodes"
+  ]
+}
