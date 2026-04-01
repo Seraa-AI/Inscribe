@@ -7,20 +7,20 @@ import {
   LinkPopover,
   SlashMenu,
   ImageMenu,
-} from "@inscribe/react";
-import type { EditorStateContext } from "@inscribe/react";
-import { PdfExport } from "@inscribe/export";
+} from "@harfi/react";
+import type { EditorStateContext } from "@harfi/react";
+import { PdfExport } from "@harfi/export";
 import {
   Collaboration,
   CollaborationCursor,
   TrackChanges,
   AiToolkit,
-} from "@inscribe/plugins";
+} from "@harfi/plugins";
 import { Toolbar } from "./Toolbar";
 import { BubbleMenuBar } from "./BubbleMenuBar";
 import { FloatingMenuBar } from "./FloatingMenuBar";
 import { ModeSwitcher } from "./ModeSwitcher";
-import { TrackChangesPopover } from "@inscribe/react";
+import { TrackChangesPopover } from "@harfi/react";
 import { ChatPanel } from "./ChatPanel";
 import { DemoContent } from "./demoContent";
 
@@ -78,7 +78,7 @@ const EXTENSIONS =
       ]
     : [
         StarterKit,
-        PdfExport.configure({ filename: "inscribe-demo" }),
+        PdfExport.configure({ filename: "harfi-demo" }),
         TrackChanges.configure({ userID: "demo-user", canAcceptReject: true }),
         AiToolkit,
         DemoContent,

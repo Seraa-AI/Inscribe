@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Inscribe** — a canvas-based document editor framework. Packages: `@inscribe/core`, `@inscribe/react`, `@inscribe/plugins`, `@inscribe/export`. Apps: `demo`, `docs`, `server`.
+**Harfi** — a canvas-based document editor framework. Packages: `@harfi/core`, `@harfi/react`, `@harfi/plugins`, `@harfi/export`. Apps: `demo`, `docs`, `server`.
 
 ## Commands
 

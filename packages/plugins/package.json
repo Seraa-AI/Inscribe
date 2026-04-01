@@ -1,17 +1,17 @@
 {
-  "name": "@inscribe/plugins",
+  "name": "@harfi/plugins",
   "version": "0.1.0",
-  "description": "ProseMirror plugins and collaboration extensions for Inscribe",
+  "description": "ProseMirror plugins and collaboration extensions for Harfi",
   "license": "Apache-2.0",
   "author": "Seraa AI <hello@seraa.ai>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Seraa-AI/Inscribe.git",
+    "url": "https://github.com/Seraa-AI/Harfi.git",
     "directory": "packages/plugins"
   },
-  "homepage": "https://github.com/Seraa-AI/Inscribe#readme",
+  "homepage": "https://github.com/Seraa-AI/Harfi#readme",
   "bugs": {
-    "url": "https://github.com/Seraa-AI/Inscribe/issues"
+    "url": "https://github.com/Seraa-AI/Harfi/issues"
   },
   "keywords": [
     "canvas",
@@ -20,7 +20,7 @@
     "plugins",
     "collaboration",
     "yjs",
-    "inscribe"
+    "harfi"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -47,7 +47,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@inscribe/core": "workspace:*"
+    "@harfi/core": "workspace:*"
   },
   "peerDependencies": {
     "@hocuspocus/provider": ">=3.0.0",

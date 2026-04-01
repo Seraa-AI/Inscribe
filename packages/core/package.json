@@ -1,17 +1,17 @@
 {
-  "name": "@inscribe/core",
+  "name": "@harfi/core",
   "version": "0.1.0",
   "description": "High-performance canvas-based document editor engine",
   "license": "Apache-2.0",
   "author": "Seraa AI <hello@seraa.ai>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Seraa-AI/Inscribe.git",
+    "url": "https://github.com/Seraa-AI/Harfi.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/Seraa-AI/Inscribe#readme",
+  "homepage": "https://github.com/Seraa-AI/Harfi#readme",
   "bugs": {
-    "url": "https://github.com/Seraa-AI/Inscribe/issues"
+    "url": "https://github.com/Seraa-AI/Harfi/issues"
   },
   "keywords": [
     "canvas",
@@ -19,7 +19,7 @@
     "prosemirror",
     "document",
     "rich-text",
-    "inscribe"
+    "harfi"
   ],
   "type": "module",
   "main": "./dist/index.js",

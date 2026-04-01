@@ -1,11 +1,11 @@
 /**
  * PdfExport — extension that adds an "Export PDF" toolbar button and
- * `exportPdf` command to any Inscribe editor instance.
+ * `exportPdf` command to any Harfi editor instance.
  *
- * Lives in @inscribe/export (not core) because it depends on pdf-lib.
+ * Lives in @harfi/export (not core) because it depends on pdf-lib.
  *
  * Usage:
- *   import { PdfExport } from "@inscribe/export";
+ *   import { PdfExport } from "@harfi/export";
  *
  *   new Editor({
  *     extensions: [
@@ -14,8 +14,8 @@
  *     ],
  *   });
  */
-import { Extension } from "@inscribe/core";
-import type { IEditor } from "@inscribe/core";
+import { Extension } from "@harfi/core";
+import type { IEditor } from "@harfi/core";
 import { exportToPdf } from "./index";
 
 interface PdfExportOptions {

@@ -91,16 +91,16 @@ export class LayoutCoordinator {
   constructor(opts: LayoutCoordinatorOptions) {
     this.opts = opts;
 
-    performance.mark("inscribe:layout-initial-start");
+    performance.mark("harfi:layout-initial-start");
     this._layout = this._runLayout({
       previousVersion: 0,
       maxBlocks: LayoutCoordinator.INITIAL_BLOCKS,
     });
-    performance.mark("inscribe:layout-initial-end");
+    performance.mark("harfi:layout-initial-end");
     performance.measure(
-      `inscribe:layout-initial (${opts.getDoc().childCount} blocks, first ${LayoutCoordinator.INITIAL_BLOCKS} sync)`,
-      "inscribe:layout-initial-start",
-      "inscribe:layout-initial-end",
+      `harfi:layout-initial (${opts.getDoc().childCount} blocks, first ${LayoutCoordinator.INITIAL_BLOCKS} sync)`,
+      "harfi:layout-initial-start",
+      "harfi:layout-initial-end",
     );
 
     this._layoutIsPartial = this._layout.isPartial ?? false;
@@ -456,18 +456,18 @@ export class LayoutCoordinator {
 
     this.charMap.clear();
     this._populatedPages.clear();
-    performance.mark("inscribe:layout-chunk-start");
+    performance.mark("harfi:layout-chunk-start");
     // Pass resumption so layout continues from the next unprocessed block
     // rather than restarting from block 0 — O(N) total vs O(N²).
     this._layout = this._runLayout({
       resumption: this._layoutResumption,
       maxBlocks: chunkSize,
     });
-    performance.mark("inscribe:layout-chunk-end");
+    performance.mark("harfi:layout-chunk-end");
     performance.measure(
-      `inscribe:layout-chunk (next ${chunkSize} blocks, total ${this._partialLayoutBlocks} of ${this.opts.getDoc().childCount})`,
-      "inscribe:layout-chunk-start",
-      "inscribe:layout-chunk-end",
+      `harfi:layout-chunk (next ${chunkSize} blocks, total ${this._partialLayoutBlocks} of ${this.opts.getDoc().childCount})`,
+      "harfi:layout-chunk-start",
+      "harfi:layout-chunk-end",
     );
     this._layoutIsPartial = this._layout.isPartial ?? false;
     this._layoutResumption = this._layout.resumption ?? null;

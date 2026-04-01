@@ -1,23 +1,23 @@
 {
-  "name": "inscribe",
+  "name": "harfi",
   "private": true,
   "version": "0.0.1",
   "packageManager": "pnpm@10.32.1",
-  "description": "Inscribe — high-performance canvas-based document editor",
+  "description": "Harfi — high-performance canvas-based document editor",
   "license": "Apache-2.0",
   "author": "Seraa AI <hello@seraa.ai>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Seraa-AI/Inscribe.git"
+    "url": "https://github.com/Seraa-AI/Harfi.git"
   },
-  "homepage": "https://github.com/Seraa-AI/Inscribe#readme",
+  "homepage": "https://github.com/Seraa-AI/Harfi#readme",
   "bugs": {
-    "url": "https://github.com/Seraa-AI/Inscribe/issues"
+    "url": "https://github.com/Seraa-AI/Harfi/issues"
   },
   "scripts": {
-    "dev": "turbo dev --filter=@inscribe/demo",
-    "dev:docs": "turbo dev --filter=@inscribe/docs",
-    "server": "turbo dev --filter=@inscribe/server",
+    "dev": "turbo dev --filter=@harfi/demo",
+    "dev:docs": "turbo dev --filter=@harfi/docs",
+    "server": "turbo dev --filter=@harfi/server",
     "build": "turbo build --filter='./packages/**'",
     "typecheck": "turbo typecheck",
     "test": "turbo test",

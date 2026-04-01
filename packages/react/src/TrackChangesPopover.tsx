@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { computePosition, offset, flip, shift } from "@floating-ui/dom";
-import type { Editor } from "@inscribe/core";
-import { createChangePopover, CHANGE_OPERATION, CHANGE_STATUS } from "@inscribe/plugins";
-import type { ChangePopoverInfo } from "@inscribe/plugins";
+import type { Editor } from "@harfi/core";
+import { createChangePopover, CHANGE_OPERATION, CHANGE_STATUS } from "@harfi/plugins";
+import type { ChangePopoverInfo } from "@harfi/plugins";
 
 interface TrackChangesPopoverProps {
   editor: Editor | null;

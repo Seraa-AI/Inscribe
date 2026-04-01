@@ -1,7 +1,7 @@
 import { Plugin, PluginKey } from "prosemirror-state";
 import type { EditorState, Transaction } from "prosemirror-state";
-import { Extension, renderGhostText } from "@inscribe/core";
-import type { IEditor, OverlayRenderHandler } from "@inscribe/core";
+import { Extension, renderGhostText } from "@harfi/core";
+import type { IEditor, OverlayRenderHandler } from "@harfi/core";
 import { findNodeById } from "./UniqueId";
 
 // ── Plugin state ──────────────────────────────────────────────────────────────

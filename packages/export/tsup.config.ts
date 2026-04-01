@@ -6,5 +6,5 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  external: ["@inscribe/core", "pdf-lib", "prosemirror-markdown"],
+  external: ["@harfi/core", "pdf-lib", "prosemirror-markdown"],
 });

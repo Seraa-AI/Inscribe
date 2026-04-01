@@ -13,9 +13,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { computePosition, offset, flip, shift } from "@floating-ui/dom";
-import { createBubbleMenu } from "@inscribe/core";
-import type { BubbleMenuOptions } from "@inscribe/core";
-import type { Editor } from "@inscribe/core";
+import { createBubbleMenu } from "@harfi/core";
+import type { BubbleMenuOptions } from "@harfi/core";
+import type { Editor } from "@harfi/core";
 
 interface BubbleMenuProps {
   editor: Editor | null;

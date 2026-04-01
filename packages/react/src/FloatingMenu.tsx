@@ -12,9 +12,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { computePosition, offset, flip, shift } from "@floating-ui/dom";
-import { createFloatingMenu } from "@inscribe/core";
-import type { FloatingMenuOptions } from "@inscribe/core";
-import type { Editor } from "@inscribe/core";
+import { createFloatingMenu } from "@harfi/core";
+import type { FloatingMenuOptions } from "@harfi/core";
+import type { Editor } from "@harfi/core";
 
 interface FloatingMenuProps {
   editor: Editor | null;

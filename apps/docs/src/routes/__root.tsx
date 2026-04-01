@@ -14,7 +14,7 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'Inscribe',
+        title: 'Harfi',
       },
     ],
     links: [{ rel: 'stylesheet', href: appCss }],

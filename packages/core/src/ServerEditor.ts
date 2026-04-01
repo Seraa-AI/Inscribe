@@ -36,8 +36,8 @@ export interface ServerEditorOptions {
  *   4. Export the modified document back to JSON and persist it.
  *
  * @example
- *   import { ServerEditor } from "@inscribe/core";
- *   import { TrackChanges } from "@inscribe/plugins";
+ *   import { ServerEditor } from "@harfi/core";
+ *   import { TrackChanges } from "@harfi/plugins";
  *
  *   const editor = new ServerEditor({
  *     extensions: [StarterKit, TrackChanges.configure({ userID: "server", canAcceptReject: true })],

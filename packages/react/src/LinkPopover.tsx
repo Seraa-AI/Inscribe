@@ -11,9 +11,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { computePosition, offset, flip, shift } from "@floating-ui/dom";
-import { createLinkPopover } from "@inscribe/core";
-import type { LinkPopoverInfo } from "@inscribe/core";
-import type { Editor } from "@inscribe/core";
+import { createLinkPopover } from "@harfi/core";
+import type { LinkPopoverInfo } from "@harfi/core";
+import type { Editor } from "@harfi/core";
 
 interface LinkPopoverProps {
   editor: Editor | null;

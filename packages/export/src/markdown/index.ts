@@ -1,4 +1,4 @@
-import type { Editor } from "@inscribe/core";
+import type { Editor } from "@harfi/core";
 
 /**
  * exportToMarkdown — serializes the editor's current document to a Markdown string.

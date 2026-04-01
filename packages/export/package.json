@@ -1,17 +1,17 @@
 {
-  "name": "@inscribe/export",
+  "name": "@harfi/export",
   "version": "0.1.0",
-  "description": "PDF and Markdown export for Inscribe documents",
+  "description": "PDF and Markdown export for Harfi documents",
   "license": "Apache-2.0",
   "author": "Seraa AI <hello@seraa.ai>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Seraa-AI/Inscribe.git",
+    "url": "https://github.com/Seraa-AI/Harfi.git",
     "directory": "packages/export"
   },
-  "homepage": "https://github.com/Seraa-AI/Inscribe#readme",
+  "homepage": "https://github.com/Seraa-AI/Harfi#readme",
   "bugs": {
-    "url": "https://github.com/Seraa-AI/Inscribe/issues"
+    "url": "https://github.com/Seraa-AI/Harfi/issues"
   },
   "keywords": [
     "canvas",
@@ -19,7 +19,7 @@
     "pdf",
     "export",
     "markdown",
-    "inscribe"
+    "harfi"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -45,7 +45,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@inscribe/core": "workspace:*",
+    "@harfi/core": "workspace:*",
     "pdf-lib": "^1.17.1",
     "prosemirror-markdown": "^1.13.4"
   },

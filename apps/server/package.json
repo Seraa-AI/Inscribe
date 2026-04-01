@@ -1,5 +1,5 @@
 {
-  "name": "@inscribe/server",
+  "name": "@harfi/server",
   "version": "0.0.1",
   "private": true,
   "type": "module",

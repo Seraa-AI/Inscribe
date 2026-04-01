@@ -1,5 +1,5 @@
 /**
- * Shared test utilities for @inscribe/core tests.
+ * Shared test utilities for @harfi/core tests.
  *
  * Centralises:
  *   - Canvas mock setup (consistent char width / ascent / descent across all layout tests)

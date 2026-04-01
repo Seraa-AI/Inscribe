@@ -1,8 +1,8 @@
-# Inscribe
+# Harfi
 
 > **Beta** — APIs may change between releases. Pin to an exact version and review the changelog before upgrading.
 
-Inscribe is an open-source, canvas-rendered document editor framework. Unlike traditional DOM-based rich-text editors, Inscribe renders its content directly onto `<canvas>` elements — giving you pixel-perfect, paginated layouts without fighting the browser's layout engine.
+Harfi is an open-source, canvas-rendered document editor framework. Unlike traditional DOM-based rich-text editors, Harfi renders its content directly onto `<canvas>` elements — giving you pixel-perfect, paginated layouts without fighting the browser's layout engine.
 
 ## Architecture
 
@@ -17,26 +17,26 @@ Inscribe is an open-source, canvas-rendered document editor framework. Unlike tr
 
 | Package | Description |
 |---------|-------------|
-| [`@inscribe/core`](./packages/core) | Headless engine — `Editor`, layout engine, canvas `ViewManager`, and all built-in extensions |
-| [`@inscribe/react`](./packages/react) | React bindings — `useCanvasEditor`, `<Inscribe />`, and menu components |
-| [`@inscribe/plugins`](./packages/plugins) | Optional extensions — real-time collaboration (Yjs), AI Toolkit, and Track Changes |
-| [`@inscribe/export`](./packages/export) | Export utilities — paginated PDF (`exportToPdf`) and Markdown (`exportToMarkdown`) |
+| [`@harfi/core`](./packages/core) | Headless engine — `Editor`, layout engine, canvas `ViewManager`, and all built-in extensions |
+| [`@harfi/react`](./packages/react) | React bindings — `useCanvasEditor`, `<Harfi />`, and menu components |
+| [`@harfi/plugins`](./packages/plugins) | Optional extensions — real-time collaboration (Yjs), AI Toolkit, and Track Changes |
+| [`@harfi/export`](./packages/export) | Export utilities — paginated PDF (`exportToPdf`) and Markdown (`exportToMarkdown`) |
 
 ## Quick Start
 
 ```bash
-pnpm add @inscribe/core @inscribe/react
+pnpm add @harfi/core @harfi/react
 ```
 
 ```tsx
-import { useCanvasEditor, Inscribe, StarterKit } from '@inscribe/react';
+import { useCanvasEditor, Harfi, StarterKit } from '@harfi/react';
 
 export function MyEditor() {
   const editor = useCanvasEditor({
     extensions: [StarterKit],
   });
 
-  return <Inscribe editor={editor} style={{ height: '100vh' }} />;
+  return <Harfi editor={editor} style={{ height: '100vh' }} />;
 }
 ```
 
@@ -48,10 +48,10 @@ apps/
   docs/     # Fumadocs documentation site
   server/   # Hocuspocus collaboration server
 packages/
-  core/     # @inscribe/core
-  react/    # @inscribe/react
-  plugins/  # @inscribe/plugins
-  export/   # @inscribe/export
+  core/     # @harfi/core
+  react/    # @harfi/react
+  plugins/  # @harfi/plugins
+  export/   # @harfi/export
 ```
 
 ## Development

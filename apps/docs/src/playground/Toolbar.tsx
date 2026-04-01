@@ -1,4 +1,4 @@
-import type { ToolbarItemSpec } from "@inscribe/core";
+import type { ToolbarItemSpec } from "@harfi/core";
 import {
   Bold,
   Italic,

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Editor, StarterKit } from "@inscribe/core";
-import type { Extension, PageConfig } from "@inscribe/core";
+import { Editor, StarterKit } from "@harfi/core";
+import type { Extension, PageConfig } from "@harfi/core";
 
 export interface UseCanvasEditorOptions {
   /** Extensions to load. Defaults to [StarterKit]. */

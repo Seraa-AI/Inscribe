@@ -9,8 +9,8 @@
  *     user: { name: "Alice", color: "#ef4444" },
  *   })
  */
-import { Extension } from "@inscribe/core";
-import type { IEditor, OverlayRenderHandler } from "@inscribe/core";
+import { Extension } from "@harfi/core";
+import type { IEditor, OverlayRenderHandler } from "@harfi/core";
 import { collaborationRegistry } from "./collaborationState";
 
 interface CollaborationCursorOptions {

@@ -11,7 +11,7 @@
  * Nodes without text content are skipped.
  */
 
-import type { IEditor } from "@inscribe/core";
+import type { IEditor } from "@harfi/core";
 
 import { buildAcceptedTextMap } from "./acceptedTextMap";
 

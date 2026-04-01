@@ -65,5 +65,5 @@ const server = Server.configure({
 });
 
 server.listen();
-console.log("Inscribe collaboration server listening on ws://localhost:1234");
+console.log("Harfi collaboration server listening on ws://localhost:1234");
 console.log(`Documents persisted to: ${DATA_DIR}`);

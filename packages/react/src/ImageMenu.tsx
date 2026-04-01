@@ -11,9 +11,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { computePosition, offset, flip, shift } from "@floating-ui/dom";
-import { createImageMenu } from "@inscribe/core";
-import type { ImageMenuInfo } from "@inscribe/core";
-import type { Editor } from "@inscribe/core";
+import { createImageMenu } from "@harfi/core";
+import type { ImageMenuInfo } from "@harfi/core";
+import type { Editor } from "@harfi/core";
 
 interface ImageMenuProps {
   editor: Editor | null;

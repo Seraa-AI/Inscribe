@@ -3,7 +3,7 @@ import * as Y from "yjs";
 import { Schema } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
 import type { Transaction } from "prosemirror-state";
-import type { IEditor } from "@inscribe/core";
+import type { IEditor } from "@harfi/core";
 import { YBinding } from "./YBinding";
 
 // Minimal schema — no y-prosemirror DOM conversion needed

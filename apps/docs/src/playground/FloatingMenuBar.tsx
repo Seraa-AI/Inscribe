@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { FloatingMenu } from "@inscribe/react";
-import type { Editor } from "@inscribe/react";
+import { FloatingMenu } from "@harfi/react";
+import type { Editor } from "@harfi/react";
 
 interface FloatingMenuBarProps {
   editor: Editor | null;

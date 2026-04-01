@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { LayoutPage } from "@inscribe/core";
+import { LayoutPage } from "@harfi/core";
 
 export interface VirtualPageState {
   /** Page numbers currently considered visible (within overscan distance) */

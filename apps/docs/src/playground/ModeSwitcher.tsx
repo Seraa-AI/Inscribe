@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { Editor } from "@inscribe/core";
-import { TrackChangesStatus } from "@inscribe/plugins";
+import type { Editor } from "@harfi/core";
+import { TrackChangesStatus } from "@harfi/plugins";
 
 export type EditorMode = "editing" | "suggesting" | "viewing";
 
