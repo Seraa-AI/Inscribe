@@ -1,13 +1,25 @@
 import type { Node } from "prosemirror-model";
 import { TextSelection } from "prosemirror-state";
 import { CharacterMap } from "./CharacterMap";
-import { layoutDocument } from "./PageLayout";
-import type { PageConfig, DocumentLayout, LayoutPage, MeasureCacheEntry, LayoutResumption } from "./PageLayout";
+import { runPipeline } from "./PageLayout";
+import type {
+  PageConfig,
+  DocumentLayout,
+  LayoutPage,
+  MeasureCacheEntry,
+  LayoutResumption,
+} from "./PageLayout";
 import type { FontConfig } from "./FontConfig";
 import type { TextMeasurer } from "./TextMeasurer";
 import type { FontModifier } from "../extensions/types";
 import { populateCharMap } from "./BlockLayout";
 import { spanEndDocPos } from "./LineBreaker";
+
+interface FragmentIndexEntry {
+  start: number; // first docPos on this line (charStart)
+  end: number; // last docPos on this line, exclusive (charEnd)
+  page: number;
+}
 
 export interface LayoutCoordinatorOptions {
   pageConfig: PageConfig;
@@ -67,11 +79,11 @@ export class LayoutCoordinator {
 
   /**
    * Flat sorted index used by _cursorPageFromLayout().
-   * Each entry is [blockStart, blockEnd, pageNumber].
-   * Kept sorted by blockStart so binary search is O(log N).
+   * Each entry covers one rendered line — one entry per line per page.
+   * Kept sorted by start so binary search is O(log N).
    * Rebuilt by _indexLayout() after every layout assignment.
    */
-  private _blockIndex: Array<[start: number, end: number, page: number]> = [];
+  private _fragmentIndex: FragmentIndexEntry[] = [];
 
   /** The glyph-position map — populated lazily per page, cleared on each layout pass. */
   readonly charMap = new CharacterMap();
@@ -80,13 +92,8 @@ export class LayoutCoordinator {
     this.opts = opts;
 
     performance.mark("inscribe:layout-initial-start");
-    this._layout = layoutDocument(opts.getDoc(), {
-      pageConfig: opts.pageConfig,
-      fontConfig: opts.fontConfig,
-      measurer: opts.measurer,
-      fontModifiers: opts.fontModifiers,
+    this._layout = this._runLayout({
       previousVersion: 0,
-      measureCache: this._measureCache,
       maxBlocks: LayoutCoordinator.INITIAL_BLOCKS,
     });
     performance.mark("inscribe:layout-initial-end");
@@ -110,9 +117,15 @@ export class LayoutCoordinator {
 
   // ── Public getters ──────────────────────────────────────────────────────────
 
-  get current(): DocumentLayout { return this._layout; }
-  get cursorPage(): number { return this._cursorPage; }
-  get isReady(): boolean { return this._ready; }
+  get current(): DocumentLayout {
+    return this._layout;
+  }
+  get cursorPage(): number {
+    return this._cursorPage;
+  }
+  get isReady(): boolean {
+    return this._ready;
+  }
 
   get loadingState(): "syncing" | "rendering" | "ready" {
     if (!this._ready) return "syncing";
@@ -147,13 +160,8 @@ export class LayoutCoordinator {
     this.charMap.clear();
     this._populatedPages.clear();
     const prev = this._layout;
-    this._layout = layoutDocument(this.opts.getDoc(), {
-      pageConfig: this.opts.pageConfig,
-      fontConfig: this.opts.fontConfig,
-      measurer: this.opts.measurer,
-      fontModifiers: this.opts.fontModifiers,
+    this._layout = this._runLayout({
       previousVersion: prev.version,
-      measureCache: this._measureCache,
       previousLayout: prev,
     });
     this._indexLayout();
@@ -189,14 +197,25 @@ export class LayoutCoordinator {
         const beforeSel = TextSelection.findFrom($before, -1);
         const beforePos = beforeSel?.head ?? block.nodePos;
 
-        const $after = doc.resolve(Math.min(block.nodePos + block.node.nodeSize, doc.content.size));
+        const $after = doc.resolve(
+          Math.min(block.nodePos + block.node.nodeSize, doc.content.size),
+        );
         const afterSel = TextSelection.findFrom($after, 1);
-        const afterPos = afterSel?.head ?? (block.nodePos + block.node.nodeSize);
+        const afterPos = afterSel?.head ?? block.nodePos + block.node.nodeSize;
 
         const halfWidth = block.availableWidth / 2;
         const li = lineOffset;
         if (!this.charMap.hasLine(page.pageNumber, li)) {
-          this.charMap.registerLine({ page: page.pageNumber, lineIndex: li, y: block.y, height: block.height, x: block.x, contentWidth: block.availableWidth, startDocPos: beforePos, endDocPos: afterPos });
+          this.charMap.registerLine({
+            page: page.pageNumber,
+            lineIndex: li,
+            y: block.y,
+            height: block.height,
+            x: block.x,
+            contentWidth: block.availableWidth,
+            startDocPos: beforePos,
+            endDocPos: afterPos,
+          });
         }
         // Left-half glyph only (no hasGlyph guard so it coexists with para's sentinel).
         // coordsAtPos finds the paragraph's glyph first (registered earlier) → cursor
@@ -205,12 +224,27 @@ export class LayoutCoordinator {
         // No right-half glyph: posAtCoords falls through to line.endDocPos = afterPos.
         // The following paragraph registers its own glyph at afterPos unblocked, so
         // coordsAtPos draws the cursor at the correct position in that paragraph.
-        this.charMap.registerGlyph({ docPos: beforePos, x: block.x, y: block.y, lineY: block.y, width: halfWidth, height: block.height, page: page.pageNumber, lineIndex: li });
+        this.charMap.registerGlyph({
+          docPos: beforePos,
+          x: block.x,
+          y: block.y,
+          lineY: block.y,
+          width: halfWidth,
+          height: block.height,
+          page: page.pageNumber,
+          lineIndex: li,
+        });
         lineOffset += 1;
         continue;
       }
 
-      populateCharMap(block, this.charMap, page.pageNumber, lineOffset, this.opts.measurer);
+      populateCharMap(
+        block,
+        this.charMap,
+        page.pageNumber,
+        lineOffset,
+        this.opts.measurer,
+      );
       lineOffset += block.lines.length;
     }
   }
@@ -232,13 +266,8 @@ export class LayoutCoordinator {
       this._dirty = false;
       this.charMap.clear();
       this._populatedPages.clear();
-      this._layout = layoutDocument(this.opts.getDoc(), {
-        pageConfig: this.opts.pageConfig,
-        fontConfig: this.opts.fontConfig,
-        measurer: this.opts.measurer,
-        fontModifiers: this.opts.fontModifiers,
+      this._layout = this._runLayout({
         previousVersion: this._layout.version,
-        measureCache: this._measureCache,
         maxBlocks: LayoutCoordinator.INITIAL_BLOCKS,
       });
       this._layoutIsPartial = this._layout.isPartial ?? false;
@@ -272,43 +301,59 @@ export class LayoutCoordinator {
    */
   private _indexLayout(): void {
     this._pageMap.clear();
-    this._blockIndex = [];
+    this._fragmentIndex = [];
+
     for (const page of this._layout.pages) {
       this._pageMap.set(page.pageNumber, page);
+
       for (const block of page.blocks) {
         if (block.lines.length === 0) {
-          // Leaf block (image, HR): use the full node range.
-          this._blockIndex.push([block.nodePos, block.nodePos + block.node.nodeSize, page.pageNumber]);
-        } else {
-          // Text block: use the actual char range of the rendered lines so that
-          // split-paragraph continuation blocks (same nodePos, different lines)
-          // get non-overlapping ranges. Without this, the binary search in
-          // _cursorPageFromLayout always returns page 1 for any position in the
-          // paragraph, regardless of which visual part the cursor is in.
-          const firstLine = block.lines[0]!;
-          const lastLine  = block.lines[block.lines.length - 1]!;
-          const firstSpan = firstLine.spans[0];
-          const lastSpan  = lastLine.spans[lastLine.spans.length - 1];
-          const charStart = firstSpan ? firstSpan.docPos : block.nodePos + 1;
-          // charStart-only blocks (no last span) fall back to the node range.
-          let charEnd = lastSpan
-            ? spanEndDocPos(lastSpan)
-            : block.nodePos + block.node.nodeSize;
-          // For the LAST visual part of a block (continuesOnNextPage is falsy),
-          // extend charEnd to include the paragraph-end cursor position so that
-          // clicking after the last character lands on the correct page.
-          // For blocks that continue on the next page, charEnd stays at
-          // spanEndDocPos — keeping the range non-overlapping with the next part.
-          if (!block.continuesOnNextPage) {
-            charEnd = Math.max(charEnd, block.nodePos + block.node.nodeSize);
+          // Leaf block (image, HR): single entry covering the full node range.
+          this._fragmentIndex.push({
+            start: block.nodePos,
+            end: block.nodePos + block.node.nodeSize,
+            page: page.pageNumber,
+          });
+          continue;
+        }
+
+        // Text block: one entry per rendered line.
+        // Each line's char range is naturally non-overlapping, so split-paragraph
+        // continuation blocks (same nodePos, different lines on different pages)
+        // map to the correct page without special casing.
+        const isLastVisualPart = !block.continuesOnNextPage;
+
+        for (let li = 0; li < block.lines.length; li++) {
+          const line = block.lines[li]!;
+          const firstSpan = line.spans[0];
+          const lastSpan = line.spans[line.spans.length - 1];
+
+          if (!firstSpan || !lastSpan) continue; // safety: skip phantom lines
+
+          const lineStart = firstSpan.docPos;
+          let lineEnd = spanEndDocPos(lastSpan);
+
+          // Sentinel: the very last line of the last visual part extends to
+          // nodePos + nodeSize so the paragraph-end cursor position is covered.
+          const isLastLine = li === block.lines.length - 1;
+          if (isLastLine && isLastVisualPart) {
+            lineEnd = Math.max(lineEnd, block.nodePos + block.node.nodeSize);
           }
-          this._blockIndex.push([charStart, charEnd, page.pageNumber]);
+
+          this._fragmentIndex.push({
+            start: lineStart,
+            end: lineEnd,
+            page: page.pageNumber,
+          });
         }
       }
     }
-    // Sort by charStart. For non-split paragraphs the ranges are already ordered;
-    // for split paragraphs each part now has a distinct, non-overlapping range.
-    this._blockIndex.sort((a, b) => a[0] - b[0]);
+
+    // No sort needed: entries are produced in document order.
+    // Pages are processed in sequence; blocks within each page are in docPos order;
+    // lines within each block are in docPos order; overflow always moves to a later page.
+    // The sentinel extension on the last line (end = nodePos + nodeSize) can exceed
+    // the next entry's start, but start values remain strictly non-decreasing.
   }
 
   /**
@@ -318,10 +363,10 @@ export class LayoutCoordinator {
   private _cursorPageFromLayout(): number {
     const head = this.opts.getHead();
     let lo = 0;
-    let hi = this._blockIndex.length - 1;
+    let hi = this._fragmentIndex.length - 1;
     while (lo <= hi) {
       const mid = (lo + hi) >>> 1;
-      const [start, end, page] = this._blockIndex[mid]!;
+      const { start, end, page } = this._fragmentIndex[mid]!;
       if (head < start) {
         hi = mid - 1;
       } else if (head >= end) {
@@ -330,7 +375,48 @@ export class LayoutCoordinator {
         return page;
       }
     }
-    return this._layout.pages[this._layout.pages.length - 1]?.pageNumber ?? 1;
+    // Binary search miss: fall back to linear scan by node range.
+    return this._findPageLinear(head);
+  }
+
+  private _findPageLinear(docPos: number): number {
+    for (const page of this._layout.pages) {
+      for (const block of page.blocks) {
+        if (
+          docPos >= block.nodePos &&
+          docPos < block.nodePos + block.node.nodeSize
+        ) {
+          return page.pageNumber;
+        }
+      }
+    }
+    return this._layout.pages.at(-1)?.pageNumber ?? 1;
+  }
+
+  /**
+   * Thin delegation to runPipeline() — maps coordinator state to pipeline options.
+   * All orchestration logic lives in runPipeline (PageLayout.ts); the coordinator
+   * owns only the call-site wiring and state management.
+   */
+  private _runLayout(opts: {
+    previousVersion?: number;
+    maxBlocks?: number;
+    previousLayout?: DocumentLayout;
+    resumption?: LayoutResumption | null;
+  }): DocumentLayout {
+    return runPipeline(this.opts.getDoc(), {
+      pageConfig: this.opts.pageConfig,
+      fontConfig: this.opts.fontConfig,
+      measurer: this.opts.measurer,
+      fontModifiers: this.opts.fontModifiers,
+      measureCache: this._measureCache,
+      ...(opts.previousVersion !== undefined
+        ? { previousVersion: opts.previousVersion }
+        : {}),
+      ...(opts.maxBlocks !== undefined ? { maxBlocks: opts.maxBlocks } : {}),
+      ...(opts.previousLayout ? { previousLayout: opts.previousLayout } : {}),
+      ...(opts.resumption ? { resumption: opts.resumption } : {}),
+    });
   }
 
   private _scheduleIdleLayout(): void {
@@ -364,22 +450,17 @@ export class LayoutCoordinator {
     let chunkSize = LayoutCoordinator.LAYOUT_CHUNK_SIZE;
     if (deadline && deadline.timeRemaining() > 8) {
       // ~3 blocks/ms heuristic — process more when the browser has budget.
-      chunkSize = Math.min(300, Math.floor(deadline.timeRemaining() * 3));
+      chunkSize = Math.min(120, Math.floor(deadline.timeRemaining() * 2));
     }
     this._partialLayoutBlocks += chunkSize;
 
     this.charMap.clear();
     this._populatedPages.clear();
     performance.mark("inscribe:layout-chunk-start");
-    this._layout = layoutDocument(this.opts.getDoc(), {
-      pageConfig: this.opts.pageConfig,
-      fontConfig: this.opts.fontConfig,
-      measurer: this.opts.measurer,
-      fontModifiers: this.opts.fontModifiers,
-      measureCache: this._measureCache,
-      // Pass resumption so layout continues from the next unprocessed block
-      // rather than restarting from block 0 — O(N) total vs O(N²).
-      ...(this._layoutResumption ? { resumption: this._layoutResumption } : {}),
+    // Pass resumption so layout continues from the next unprocessed block
+    // rather than restarting from block 0 — O(N) total vs O(N²).
+    this._layout = this._runLayout({
+      resumption: this._layoutResumption,
       maxBlocks: chunkSize,
     });
     performance.mark("inscribe:layout-chunk-end");

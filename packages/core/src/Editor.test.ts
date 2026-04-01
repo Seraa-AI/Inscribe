@@ -990,6 +990,59 @@ describe("Editor — cursorPage", () => {
     editor.destroy();
     container.remove();
   });
+
+  it("cursorPage resolves correctly for all three parts of a 3-page paragraph split", () => {
+    // Geometry: pageWidth=200 pageHeight=200 margins=20 → contentWidth=160 contentHeight=160
+    // MOCK_LINE_HEIGHT=18 → 8 lines per page (8×18=144 ≤ 160; 9×18=162 > 160)
+    // MOCK_CHAR_WIDTH=8, "hello"=40px, 3 words/line (3×48=144 ≤ 160; 4×48=192 > 160)
+    // 60 words → 20 lines: 8 on page 1, 8 on page 2, 4 on page 3.
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const editor = new Editor({
+      extensions: [StarterKit.configure({ pagination: { pageWidth: 200, pageHeight: 200, margins: { top: 20, bottom: 20, left: 20, right: 20 } } })],
+    });
+    editor.mount(container);
+
+    const ta = container.querySelector("textarea")!;
+    ta.value = "hello ".repeat(60).trim(); // 60 words → 20 lines
+    ta.dispatchEvent(new Event("input"));
+    editor.ensureLayout();
+    editor.ensurePagePopulated(1);
+    editor.ensurePagePopulated(2);
+    editor.ensurePagePopulated(3);
+
+    const state = editor.getState();
+    const para  = state.doc.child(0)!;
+    // Total content size = 60 words × 5 chars + 59 spaces = 359 chars.
+    // nodePos of para = 1 (first child of doc). End of para content = 1 + 359 = 360.
+
+    // --- Part 1: cursor at the very start of the paragraph (page 1) ---
+    editor.moveCursorTo(2); // first character
+    editor.ensureLayout();
+    expect(editor.cursorPage).toBe(1);
+
+    // --- Part 2: cursor in the middle lines (page 2) ---
+    // Page 1 has 8 lines = 8 × 3 words = 24 words. First word on page 2 = word 25.
+    // docPos of first char of word 25 = 1 + (24 words × 6 chars each) = 1 + 144 = 145.
+    editor.moveCursorTo(145);
+    editor.ensureLayout();
+    expect(editor.cursorPage).toBe(2);
+
+    // --- Part 3: cursor in the last lines (page 3) ---
+    // Page 2 has 8 lines = 24 more words (words 25–48). First word on page 3 = word 49.
+    // docPos of first char of word 49 = 1 + (48 words × 6 chars each) = 1 + 288 = 289.
+    editor.moveCursorTo(289);
+    editor.ensureLayout();
+    expect(editor.cursorPage).toBe(3);
+
+    // --- End of paragraph: still page 3 ---
+    editor.moveCursorTo(1 + para.content.size);
+    editor.ensureLayout();
+    expect(editor.cursorPage).toBe(3);
+
+    editor.destroy();
+    container.remove();
+  });
 });
 
 // ── copy / cut ────────────────────────────────────────────────────────────────

@@ -190,6 +190,48 @@ describe("CharacterMap", () => {
       expect(map.coordsAtPos(1)).toBeNull();
     });
   });
+
+  describe("clearPage", () => {
+    it("removes glyphs and lines for the specified page only", () => {
+      // Register a second page alongside the existing page 1
+      map.registerGlyph({ docPos: 20, x: 40, y: 60, lineY: 60, width: 10, height: 20, page: 2, lineIndex: 0 });
+      map.registerLine({ page: 2, lineIndex: 0, y: 60, height: 20, x: 40, contentWidth: 400, startDocPos: 20, endDocPos: 21 });
+
+      map.clearPage(2);
+
+      // Page 2 glyphs/lines are gone
+      expect(map.posAtCoords(40, 60, 2)).toBe(0);
+      // Scope to page 2 — no preceding glyph on page 2 should remain after clear
+      expect(map.coordsAtPos(20, 2)).toBeNull();
+
+      // Page 1 is untouched
+      const coords = map.coordsAtPos(1);
+      expect(coords?.page).toBe(1);
+    });
+
+    it("removes objectRects for the specified page", () => {
+      map.registerObjectRect({ docPos: 50, x: 0, y: 0, width: 100, height: 100, page: 1 });
+      map.registerObjectRect({ docPos: 51, x: 0, y: 0, width: 100, height: 100, page: 2 });
+
+      map.clearPage(1);
+
+      expect(map.getObjectRect(50)).toBeUndefined();
+      expect(map.getObjectRect(51)).toBeDefined();
+    });
+
+    it("is a no-op when the page has no entries", () => {
+      // Should not throw on an empty page
+      expect(() => map.clearPage(99)).not.toThrow();
+      // Existing page 1 data is intact
+      expect(map.coordsAtPos(1)?.page).toBe(1);
+    });
+
+    it("clearing page 1 leaves an empty map (posAtCoords returns 0)", () => {
+      map.clearPage(1);
+      expect(map.posAtCoords(50, 65, 1)).toBe(0);
+      expect(map.coordsAtPos(1)).toBeNull();
+    });
+  });
 });
 
 describe("CharacterMap — posAbove / posBelow (vertical navigation)", () => {

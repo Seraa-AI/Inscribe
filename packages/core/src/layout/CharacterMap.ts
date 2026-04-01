@@ -89,6 +89,15 @@ export class CharacterMap {
     this.objectRects.clear();
   }
 
+  /** Remove all entries belonging to a specific page (selective invalidation). */
+  clearPage(pageNumber: number): void {
+    this.glyphs = this.glyphs.filter(g => g.page !== pageNumber);
+    this.lines  = this.lines.filter(l  => l.page  !== pageNumber);
+    for (const [pos, rect] of this.objectRects) {
+      if (rect.page === pageNumber) this.objectRects.delete(pos);
+    }
+  }
+
   registerGlyph(entry: GlyphEntry): void {
     this.glyphs.push(entry);
   }

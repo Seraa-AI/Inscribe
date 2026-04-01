@@ -67,6 +67,46 @@ export interface FloatLayout {
   anchorPage: number;
 }
 
+/**
+ * One page-part of one source block — the atom the tile renderer paints.
+ *
+ * Unsplit blocks produce a single fragment (fragmentCount = 1).
+ * Blocks split across pages produce N fragments (one per page they span).
+ *
+ * Sorted by page ascending, then y ascending within each page. This ordering
+ * enables O(log N) binary search in pageless mode and O(1) page lookup in
+ * paged mode via DocumentLayout.fragmentsByPage.
+ */
+export interface LayoutFragment {
+  /** 0-based index of this part within its source block. 0 for unsplit. */
+  fragmentIndex: number;
+  /** Total parts this source block was split into. 1 for unsplit. */
+  fragmentCount: number;
+  /** nodePos of the original unsplit source block. */
+  sourceNodePos: number;
+  /** Page number (1-based). */
+  page: number;
+  /** Left edge in page-local coordinates. */
+  x: number;
+  /** Top edge in page-local coordinates. */
+  y: number;
+  /** Width of the block content area. */
+  width: number;
+  /** Height of this fragment (lines only, no spaceBefore/spaceAfter). */
+  height: number;
+  /**
+   * Index of the first line in block.lines that this fragment renders.
+   * Always 0 in the current implementation — reserved for the future
+   * shared-FlowBlock.lines optimization where all fragments of a split
+   * block point into a single LayoutLine[] without copying.
+   */
+  lineStart: number;
+  /** Number of lines this fragment renders (block.lines.length). */
+  lineCount: number;
+  /** The LayoutBlock this fragment was produced from — used by drawBlock(). */
+  block: LayoutBlock;
+}
+
 export interface DocumentLayout {
   pages: LayoutPage[];
   pageConfig: PageConfig;
@@ -105,6 +145,18 @@ export interface DocumentLayout {
    * positions so runFloatPass starts from a correct baseline every time.
    */
   _pass1Pages?: LayoutPage[];
+  /**
+   * Flat fragment index — one entry per page-part of each block, sorted by
+   * page then y. Used by the tile renderer for O(log N) binary search in
+   * pageless mode. Absent on partial (streaming) layouts.
+   */
+  fragments?: LayoutFragment[];
+  /**
+   * Fragments grouped by page (0-indexed: fragmentsByPage[pageNumber - 1]).
+   * Used by the tile renderer for O(1) lookup in paged mode.
+   * Absent on partial (streaming) layouts.
+   */
+  fragmentsByPage?: LayoutFragment[][];
 }
 
 /**
@@ -127,6 +179,12 @@ export interface LayoutResumption {
   prevSpaceAfter: number;
   /** Layout version carried through all chunks. */
   version: number;
+  /**
+   * Number of fully-completed pages as of the end of the previous chunk.
+   * Used by LayoutCoordinator to skip clearing charMap entries for pages
+   * that are already final and have not changed in this chunk.
+   */
+  prevPageCount: number;
 }
 
 /**
@@ -167,6 +225,50 @@ export interface MeasureCacheEntry {
   placedPage?: number;
 }
 
+/**
+ * Geometry-only config for buildBlockFlow — no page height since this stage
+ * performs measurement only; pagination lives in layoutDocument's loop.
+ */
+export interface FlowConfig {
+  margins: PageConfig["margins"];
+  contentWidth: number;
+}
+
+/**
+ * Measurement result for a single block in document flow order.
+ * Position-independent — no page assignments. The pagination loop in
+ * layoutDocument consumes FlowBlock[] and decides page placement.
+ */
+export interface FlowBlock {
+  /** Original ProseMirror node. */
+  node: Node;
+  nodePos: number;
+  /** Measured lines — position-independent (lineHeight only, no absolute Y). */
+  lines: LayoutLine[];
+  height: number;
+  /** Block style spacing (styleKey-aware, e.g. list_item overrides paragraph). */
+  spaceBefore: number;
+  spaceAfter: number;
+  availableWidth: number;
+  blockType: string;
+  align: BlockStyle["align"];
+  listMarker?: string;
+  listMarkerX?: number;
+  indentLeft: number;
+  /** True if any line span is a zero-width float anchor. */
+  hasFloatAnchor: boolean;
+  /** djb2 hash of nodePos + textContent + availableWidth for incremental re-layout. */
+  inputHash: number;
+  /** True when this entry represents a hard page break node. */
+  isPageBreak?: true;
+  /** True when the block measurement was a cache hit. */
+  wasCacheHit: boolean;
+  // Phase 1b: cache snapshot taken before this run's measurement.
+  preCachedTargetY?: number;
+  preCachedPage?: number;
+  prevNodePos?: number;
+}
+
 export interface PageLayoutOptions {
   pageConfig: PageConfig;
   measurer: TextMeasurer;
@@ -182,7 +284,7 @@ export interface PageLayoutOptions {
    * Block measurement cache keyed by Node reference.
    * When provided, unchanged blocks (same ProseMirror Node object) skip the
    * layoutBlock call entirely — O(1) cache hit instead of O(chars) re-measure.
-   * The Editor owns this WeakMap and passes it on every layoutDocument call.
+   * The Editor owns this WeakMap and passes it on every runPipeline call.
    */
   measureCache?: WeakMap<Node, MeasureCacheEntry>;
   /**
@@ -220,18 +322,18 @@ export const defaultPageConfig: PageConfig = {
 };
 
 /**
- * layoutDocument — the top-level layout pass.
+ * runPipeline — top-level layout orchestrator.
  *
- * Walks every block node in the ProseMirror doc, stacks them vertically,
- * detects page boundaries, and returns a fully positioned DocumentLayout.
+ * Drives all three pipeline stages in order:
+ *   Stage 1  buildBlockFlow   — position-independent measurement
+ *   Stage 2  paginateFlow     — assign blocks to pages
+ *   Stage 3  applyFloatLayout — float positions + exclusion reflow
  *
- * Does NOT touch the CharacterMap — that is the PageRenderer's responsibility.
- * This keeps layout pure: same inputs always produce the same output.
- *
- * Y coordinates in LayoutBlock are PAGE-LOCAL (0 = page top edge).
- * Each page's canvas starts at (0,0), so renderers use these directly.
+ * Returns a fully positioned DocumentLayout. Does NOT touch the CharacterMap.
+ * This function is the single source of truth for orchestration; both
+ * LayoutCoordinator and tests call it instead of duplicating the logic.
  */
-export function layoutDocument(
+export function runPipeline(
   doc: Node,
   options: PageLayoutOptions,
 ): DocumentLayout {
@@ -264,19 +366,107 @@ export function layoutDocument(
   let prevSpaceAfter = r ? r.prevSpaceAfter : 0;
   const chunkVersion = r ? r.version : version;
 
-  // Phase 1b: early termination is only valid after we've seen at least one
-  // cache miss. A miss means the node was modified (ProseMirror creates a new
-  // Node object on every change). Until we've passed the edit point, cache
-  // hits might be UPSTREAM of the change and their placement in previousLayout
-  // may still be correct even though downstream blocks have changed.
+  // ── Stage 1: measure ─────────────────────────────────────────────────────
+  const flowConfig: FlowConfig = { margins, contentWidth };
+  const flowResult = buildBlockFlow(
+    items, startIndex, flowConfig, fontConfig,
+    measurer, fontModifiers, measureCache, maxBlocks,
+  );
+
+  // ── Stage 2: paginate ─────────────────────────────────────────────────────
+  const pr = paginateFlow(
+    flowResult.flows, margins, contentHeight,
+    previousLayout, measureCache,
+    pages, currentPage, y, prevSpaceAfter,
+  );
+
+  // ── Streaming layout cutoff ───────────────────────────────────────────────
+  if (flowResult.reachedCutoff && !pr.earlyTerminated) {
+    const resumption: LayoutResumption = {
+      items,
+      nextItemIndex: flowResult.cutoffIndex,
+      completedPages: pr.pages,
+      currentPage: { ...pr.currentPage, blocks: [...pr.currentPage.blocks] },
+      currentY: pr.y,
+      prevSpaceAfter: pr.prevSpaceAfter,
+      version: chunkVersion,
+      prevPageCount: pr.pages.length,
+    };
+    const partialPass1: DocumentLayout = {
+      pages: [...pr.pages, pr.currentPage],
+      pageConfig,
+      version: chunkVersion,
+      isPartial: true,
+      resumption,
+    };
+    // ── Stage 3: float layout (partial chunk) ────────────────────────────────
+    return applyFloatLayout(partialPass1, margins, pageWidth, contentWidth, measurer, fontConfig, fontModifiers);
+  }
+
+  const allPages = pr.earlyTerminated ? pr.pages : [...pr.pages, pr.currentPage];
+
+  // ── Stage 3: float layout ─────────────────────────────────────────────────
+  const pass1Result: DocumentLayout = { pages: allPages, pageConfig, version: chunkVersion };
+  const floated = applyFloatLayout(pass1Result, margins, pageWidth, contentWidth, measurer, fontConfig, fontModifiers);
+
+  // ── Stage 4: fragment index ───────────────────────────────────────────────
+  // buildFragments computes fragmentCount/fragmentIndex from the final page
+  // list, superseding the manual stamping loop that previously lived here.
+  const { fragments, fragmentsByPage } = buildFragments(floated.pages);
+  return { ...floated, fragments, fragmentsByPage };
+}
+
+/**
+ * Stage 3 of the layout pipeline: assign measured FlowBlocks to pages.
+ *
+ * Pure geometry — no measuring, no cache reads (except for Phase 1b shiftBlock).
+ * Returns all completed pages plus the cursor state needed for streaming resumption
+ * or the next chunk in incremental layout.
+ *
+ * @param flows         FlowBlocks from buildBlockFlow().
+ * @param margins       Page margins (top/right/bottom/left).
+ * @param contentHeight Page content height (pageHeight - margins.top - margins.bottom).
+ * @param previousLayout Previous run's layout — enables Phase 1b early termination.
+ * @param measureCache  Weak cache — updated with placedTargetY/placedPage after placement.
+ * @param initPages     Completed pages from the previous chunk (empty on first chunk).
+ * @param initPage      The page currently being built (fresh {pageNumber:1} on first chunk).
+ * @param initY         Y cursor at start (margins.top on first chunk).
+ * @param initPrevSpaceAfter Spacing state from the previous block (0 on first chunk).
+ */
+export function paginateFlow(
+  flows: FlowBlock[],
+  margins: PageConfig["margins"],
+  contentHeight: number,
+  previousLayout: DocumentLayout | undefined,
+  measureCache: WeakMap<Node, MeasureCacheEntry> | undefined,
+  initPages: LayoutPage[],
+  initPage: LayoutPage,
+  initY: number,
+  initPrevSpaceAfter: number,
+): {
+  /** All completed pages. When earlyTerminated, currentPage is already included. */
+  pages: LayoutPage[];
+  /** The page currently being built — only valid when earlyTerminated === false. */
+  currentPage: LayoutPage;
+  /** Y cursor at end of loop — only valid when earlyTerminated === false. */
+  y: number;
+  /** Spacing state at end — only valid when earlyTerminated === false. */
+  prevSpaceAfter: number;
+  /** True when Phase 1b fired and all remaining pages were copied from previousLayout. */
+  earlyTerminated: boolean;
+} {
+  const pages = initPages;
+  let currentPage = initPage;
+  let y = initY;
+  let prevSpaceAfter = initPrevSpaceAfter;
+
+  // Phase 1b: only valid after we've seen at least one cache miss (= the edit point).
   let seenCacheMiss = false;
-  let processedBlocks = 0;
   let earlyTerminated = false;
 
-  for (let itemIdx = startIndex; itemIdx < items.length; itemIdx++) {
-    const item = items[itemIdx]!;
+  for (const flow of flows) {
     // ── Hard page break ──────────────────────────────────────────────────────
-    if (item.isPageBreak) {
+    if (flow.isPageBreak) {
       pages.push(currentPage);
       currentPage = newPage(pages.length + 1);
       y = margins.top;
@@ -284,106 +474,50 @@ export function layoutDocument(
       continue;
     }
 
-    // ── Streaming layout cutoff ───────────────────────────────────────────────
-    // Stop here when maxBlocks is set (initial load optimisation). Save the
-    // cursor state as LayoutResumption so the next chunk can continue in O(N)
-    // without re-iterating already-processed blocks.
-    if (maxBlocks !== undefined && processedBlocks >= maxBlocks) {
-      // Don't push currentPage yet — the next chunk will continue adding to it.
-      const resumption: LayoutResumption = {
-        items,
-        nextItemIndex: itemIdx,
-        completedPages: pages,
-        currentPage: { ...currentPage, blocks: [...currentPage.blocks] },
-        currentY: y,
-        prevSpaceAfter,
-        version: chunkVersion,
-      };
-      const partialPass1: DocumentLayout = { pages: [...pages, currentPage], pageConfig, version: chunkVersion, isPartial: true, resumption };
-      // Run the float pass on already-processed pages so floats visible in the
-      // initial chunk render immediately — avoids the "floats appear on follow-up
-      // render" page-jump. Floats beyond the cutoff will appear when idle layout
-      // completes and produces the full layout, which is the normal update path.
-      return runFloatPass(partialPass1, margins, pageWidth, contentWidth, measurer, fontConfig, fontModifiers);
-    }
+    const { node, nodePos } = flow;
 
-    const { node, nodePos, listMarker, indentLeft, styleKey } = item;
+    if (!flow.wasCacheHit) seenCacheMiss = true;
 
     // ── Margin collapsing ────────────────────────────────────────────────────
-    // Use styleKey when set (e.g. "list_item") so list item spacing comes from
-    // the list_item block style rather than the inner paragraph style.
-    const level = node.attrs["level"] as number | undefined;
-    const blockStyle = getBlockStyle(
-      fontConfig,
-      styleKey ?? node.type.name,
-      level,
-    );
     const isFirstOnPage = currentPage.blocks.length === 0;
     const gap = isFirstOnPage
       ? 0
-      : collapseMargins(prevSpaceAfter, blockStyle.spaceBefore);
+      : collapseMargins(prevSpaceAfter, flow.spaceBefore);
 
     const targetY = y + gap;
-    const blockX = margins.left + indentLeft;
-    const blockWidth = contentWidth - indentLeft;
+    const blockX = margins.left + flow.indentLeft;
+    const blockWidth = flow.availableWidth;
 
-    // ── Phase 1b: peek at cache BEFORE resolving, to track hit/delta/placement ──
-    const preCached = measureCache?.get(node);
-    const isHit = preCached !== undefined && preCached.availableWidth === blockWidth;
-    const prevNodePos = preCached?.nodePos;
-    const preCachedTargetY = preCached?.placedTargetY;
-    const preCachedPage = preCached?.placedPage;
-
-    if (!isHit) seenCacheMiss = true;
-
-    // ── Measure block (cache-first; no CharacterMap — just dimensions) ────────
-    const entry = resolveBlockEntry(
-      node,
-      nodePos,
-      blockX,
-      targetY,
-      blockWidth,
-      currentPage.pageNumber,
-      measurer,
-      fontConfig,
-      fontModifiers,
-      measureCache,
-    );
-
-    // Build a positioned LayoutBlock from the (possibly cached) measurements.
-    // Extracted so both the normal-placement and reflow paths share it.
-    const buildBlock = (x: number, y: number): LayoutBlock => ({
+    // Build a positioned LayoutBlock from the FlowBlock measurements.
+    const buildBlock = (x: number, bY: number): LayoutBlock => ({
       node,
       nodePos,
       x,
-      y,
+      y: bY,
       width: blockWidth,
-      height: entry.height,
-      lines: entry.lines,
-      spaceBefore: entry.spaceBefore,
-      spaceAfter: entry.spaceAfter,
-      blockType: entry.blockType,
-      align: entry.align,
+      height: flow.height,
+      lines: flow.lines,
+      spaceBefore: flow.spaceBefore,
+      spaceAfter: flow.spaceAfter,
+      blockType: flow.blockType,
+      align: flow.align,
       availableWidth: blockWidth,
     });
 
     const block = buildBlock(blockX, targetY);
 
-    if (listMarker !== undefined) {
-      block.listMarker = listMarker;
-      block.listMarkerX = blockX - MARKER_RIGHT_GAP;
+    if (flow.listMarker !== undefined) {
+      block.listMarker = flow.listMarker;
+      block.listMarkerX = flow.listMarkerX!;
       block.blockType = "list_item";
     }
 
     // ── Page overflow check ───────────────────────────────────────────────────
-    const blockBottom = targetY + entry.height;
+    const blockBottom = targetY + flow.height;
     const pageBottom = margins.top + contentHeight;
-    // Text blocks (lines.length > 0) can always be split across pages, even when
-    // first on a page — their split path has its own infinite-loop guard (forces
-    // at least 1 line when partStartY === margins.top). Leaf blocks (lines.length
-    // === 0) still need the !isFirstOnPage guard to avoid creating an endless
-    // stream of empty pages for a leaf that is taller than contentHeight.
-    const overflows = blockBottom > pageBottom && (!isFirstOnPage || entry.lines.length > 0);
+    // Text blocks can always be split; leaf blocks need the !isFirstOnPage guard
+    // to avoid infinite empty-page loops when the block exceeds contentHeight.
+    const overflows = blockBottom > pageBottom && (!isFirstOnPage || flow.lines.length > 0);
 
     // ── Layout debug log ──────────────────────────────────────────────────────
     if ((globalThis as Record<string,unknown>).__LAYOUT_DEBUG__) {
@@ -391,9 +525,9 @@ export function layoutDocument(
         `[layout] block="${node.type.name}" nodePos=${nodePos}` +
         ` page=${currentPage.pageNumber} isFirstOnPage=${isFirstOnPage}` +
         ` gap=${gap.toFixed(1)} y=${y.toFixed(1)} targetY=${targetY.toFixed(1)}` +
-        ` height=${entry.height.toFixed(1)} blockBottom=${blockBottom.toFixed(1)}` +
+        ` height=${flow.height.toFixed(1)} blockBottom=${blockBottom.toFixed(1)}` +
         ` pageBottom=${pageBottom.toFixed(1)} overflows=${overflows}` +
-        ` lines=${entry.lines.length}`
+        ` lines=${flow.lines.length}`
       );
     }
 
@@ -403,20 +537,18 @@ export function layoutDocument(
         console.log(`  → NORMAL PLACEMENT (page ${currentPage.pageNumber})`);
       }
       currentPage.blocks.push(block);
-      y = targetY + entry.height;
-      prevSpaceAfter = blockStyle.spaceAfter;
-    } else if (entry.lines.length === 0) {
+      y = targetY + flow.height;
+      prevSpaceAfter = flow.spaceAfter;
+    } else if (flow.lines.length === 0) {
       // ── Leaf block (image, HR): move whole block to next page ──────────────
-      // Leaf blocks have no lines to split. If the block exceeds the full page
-      // height, place it anyway (overflow) rather than looping forever.
-      const tooTallForAnyPage = entry.height > contentHeight;
+      const tooTallForAnyPage = flow.height > contentHeight;
       if (tooTallForAnyPage) {
         if ((globalThis as Record<string,unknown>).__LAYOUT_DEBUG__) {
           console.log(`  → LEAF too-tall: forced onto current page ${currentPage.pageNumber}`);
         }
         currentPage.blocks.push(block);
-        y = targetY + entry.height;
-        prevSpaceAfter = blockStyle.spaceAfter;
+        y = targetY + flow.height;
+        prevSpaceAfter = flow.spaceAfter;
       } else {
         if ((globalThis as Record<string,unknown>).__LAYOUT_DEBUG__) {
           console.log(`  → LEAF moved to page ${pages.length + 2}`);
@@ -427,31 +559,28 @@ export function layoutDocument(
         prevSpaceAfter = 0;
 
         const reflow = buildBlock(blockX, margins.top);
-
-        if (listMarker !== undefined) {
-          reflow.listMarker = listMarker;
-          reflow.listMarkerX = blockX - MARKER_RIGHT_GAP;
+        if (flow.listMarker !== undefined) {
+          reflow.listMarker = flow.listMarker;
+          reflow.listMarkerX = flow.listMarkerX!;
           reflow.blockType = "list_item";
         }
 
         currentPage.blocks.push(reflow);
-        y = margins.top + entry.height;
-        prevSpaceAfter = blockStyle.spaceAfter;
+        y = margins.top + flow.height;
+        prevSpaceAfter = flow.spaceAfter;
       }
     } else {
       // ── Text block: split lines across page boundaries ─────────────────────
-      // Iterate through remainingLines, placing as many as fit on each page.
-      // Handles blocks that span 2, 3, or more pages in a single pass.
       if ((globalThis as Record<string,unknown>).__LAYOUT_DEBUG__) {
-        console.log(`  → SPLIT PATH entered (${entry.lines.length} lines total)`);
+        console.log(`  → SPLIT PATH entered (${flow.lines.length} lines total)`);
       }
-      let remainingLines = entry.lines;
+      let remainingLines = flow.lines;
       let hasPlacedAnyPart = false;
       let currentPartStartY = targetY;
+      let fragmentIdx = 0;
       // Tracks whether gap-suppression has already been applied for this block.
       // If linesFit=0 fires a second time after gap-suppress, force 1 line
-      // (sub-pixel shortfall: pageBottom - y is just barely less than lineHeight,
-      // e.g. 19.0 vs 19.2, causing the whole block to jump to the next page).
+      // (sub-pixel shortfall: pageBottom - y is just barely less than lineHeight).
       let gapSuppressApplied = false;
 
       while (remainingLines.length > 0) {
@@ -477,28 +606,22 @@ export function layoutDocument(
 
         if (linesFit === 0) {
           if (hasPlacedAnyPart || partStartY === margins.top || gapSuppressApplied) {
-            // Force one line: either we're at the top of a page (infinite-loop
-            // guard for lines taller than the full page), or gap-suppression has
-            // already been applied and a sub-pixel shortfall still prevents a fit
-            // (e.g. pageBottom - y = 19.0 vs lineHeight = 19.2 — 0.2 px gap).
+            // Force one line: top-of-page guard or sub-pixel shortfall.
             if ((globalThis as Record<string,unknown>).__LAYOUT_DEBUG__) {
               console.log(`    → linesFit=0 FORCE 1 line (top-of-page / sub-pixel guard)`);
             }
             linesFit = 1;
             heightFit = remainingLines[0]!.lineHeight;
           } else if (pageBottom - y >= remainingLines[0]!.lineHeight - 0.5) {
-            // The inter-block gap pushed targetY into the dead zone. Suppress
-            // the gap and retry from y. The 0.5 px tolerance handles floating-
-            // point accumulation where the available space is fractionally less
-            // than lineHeight (e.g. 19.0 vs 19.2).
+            // Inter-block gap pushed targetY into dead zone. Suppress and retry.
             if ((globalThis as Record<string,unknown>).__LAYOUT_DEBUG__) {
-              console.log(`    → linesFit=0 GAP SUPPRESS: retry at y=${y.toFixed(1)} (was targetY=${targetY.toFixed(1)})`);
+              console.log(`    → linesFit=0 GAP SUPPRESS: retry at y=${y.toFixed(1)}`);
             }
             currentPartStartY = y;
             gapSuppressApplied = true;
             continue;
           } else {
-            // Nothing placed yet and no room even at y — advance to next page.
+            // No room on this page at all — advance to next.
             if ((globalThis as Record<string,unknown>).__LAYOUT_DEBUG__) {
               console.log(`    → linesFit=0 ADVANCE to page ${pages.length + 2}`);
             }
@@ -523,19 +646,21 @@ export function layoutDocument(
           width: blockWidth,
           height: heightFit,
           lines: partLines,
-          spaceBefore: isCont ? 0 : entry.spaceBefore,
-          spaceAfter: isLastPart ? blockStyle.spaceAfter : 0,
-          blockType: entry.blockType,
-          align: entry.align,
+          spaceBefore: isCont ? 0 : flow.spaceBefore,
+          spaceAfter: isLastPart ? flow.spaceAfter : 0,
+          blockType: flow.blockType,
+          align: flow.align,
           availableWidth: blockWidth,
           ...(isCont ? { isContinuation: true as const } : {}),
           ...(!isLastPart ? { continuesOnNextPage: true as const } : {}),
+          // Only stamp fragment identity on actual split parts (not unsplit blocks).
+          ...(isCont || !isLastPart ? { fragmentIndex: fragmentIdx, sourceNodePos: nodePos } : {}),
         };
 
-        if (listMarker !== undefined) {
+        if (flow.listMarker !== undefined) {
           if (!isCont) {
-            partBlock.listMarker = listMarker;
-            partBlock.listMarkerX = blockX - MARKER_RIGHT_GAP;
+            partBlock.listMarker = flow.listMarker;
+            partBlock.listMarkerX = flow.listMarkerX!;
           }
           partBlock.blockType = "list_item";
         }
@@ -548,6 +673,7 @@ export function layoutDocument(
         }
         currentPage.blocks.push(partBlock);
         hasPlacedAnyPart = true;
+        fragmentIdx++;
 
         if (!isLastPart) {
           pages.push(currentPage);
@@ -557,66 +683,49 @@ export function layoutDocument(
           remainingLines = remainingLines.slice(linesFit);
         } else {
           y = partStartY + heightFit;
-          prevSpaceAfter = blockStyle.spaceAfter;
+          prevSpaceAfter = flow.spaceAfter;
           break;
         }
       }
     }
 
-    processedBlocks++;
-
     // ── Update placement tracking in cache ────────────────────────────────────
-    entry.placedTargetY = targetY;
-    entry.placedPage = currentPage.pageNumber;
+    const cachedEntry = measureCache?.get(node);
+    if (cachedEntry) {
+      cachedEntry.placedTargetY = targetY;
+      cachedEntry.placedPage = currentPage.pageNumber;
+    }
 
     // ── Phase 1b: early termination ───────────────────────────────────────────
-    // If this block is a cache hit and landed at the exact same (targetY, page)
-    // as the previous layout run, every downstream block is guaranteed identical.
-    // Copy remaining pages from previousLayout and exit the loop early.
     if (
       previousLayout &&
       seenCacheMiss &&
-      isHit &&
-      preCachedTargetY !== undefined &&
-      preCachedPage !== undefined &&
-      targetY === preCachedTargetY &&
-      currentPage.pageNumber === preCachedPage
+      flow.wasCacheHit &&
+      flow.preCachedTargetY !== undefined &&
+      flow.preCachedPage !== undefined &&
+      targetY === flow.preCachedTargetY &&
+      currentPage.pageNumber === flow.preCachedPage
     ) {
-      // delta: how much all subsequent blocks' nodePos has shifted this run.
-      // Uniform for everything after the edit point.
-      const delta = prevNodePos !== undefined ? nodePos - prevNodePos : 0;
-      // Use _pass1Pages when available — those are the clean pre-float positions.
-      // previousLayout.pages contains float-adjusted y values (post Pass 3 yDelta);
-      // copying those would cause the new Pass 3 to stack yDelta on top of already-
-      // shifted blocks, doubling displacement and losing paragraphs off the page.
+      const delta = flow.prevNodePos !== undefined ? nodePos - flow.prevNodePos : 0;
       const prevPages = previousLayout._pass1Pages ?? previousLayout.pages;
       const curPageIdx = currentPage.pageNumber - 1;
 
       if (curPageIdx < prevPages.length) {
         const prevCurPage = prevPages[curPageIdx]!;
-        // Find this block in previousLayout by its pre-delta nodePos.
         const oldNodePos = nodePos - delta;
-        const triggerIdx = prevCurPage.blocks.findIndex(
-          (b) => b.nodePos === oldNodePos,
-        );
+        const triggerIdx = prevCurPage.blocks.findIndex((b) => b.nodePos === oldNodePos);
 
         if (triggerIdx >= 0) {
-          // Append remaining blocks on the current page from previousLayout.
           for (let bi = triggerIdx + 1; bi < prevCurPage.blocks.length; bi++) {
-            currentPage.blocks.push(
-              shiftBlock(prevCurPage.blocks[bi]!, delta, measureCache),
-            );
+            currentPage.blocks.push(shiftBlock(prevCurPage.blocks[bi]!, delta, measureCache));
           }
           pages.push(currentPage);
 
-          // Append all subsequent pages.
           for (let pi = curPageIdx + 1; pi < prevPages.length; pi++) {
             const prevPage = prevPages[pi]!;
             pages.push({
               pageNumber: prevPage.pageNumber,
-              blocks: prevPage.blocks.map((b) =>
-                shiftBlock(b, delta, measureCache),
-              ),
+              blocks: prevPage.blocks.map((b) => shiftBlock(b, delta, measureCache)),
             });
           }
 
@@ -627,25 +736,149 @@ export function layoutDocument(
     }
   }
 
-  // Flush last page. When Phase 1b early-terminated, the current page was
-  // already pushed inside the loop (along with all subsequent copied pages).
-  if (!earlyTerminated) {
-    pages.push(currentPage);
-  }
-
-  const pass1Result: DocumentLayout = { pages, pageConfig, version: chunkVersion };
-  return runFloatPass(pass1Result, margins, pageWidth, contentWidth, measurer, fontConfig, fontModifiers);
+  return { pages, currentPage, y, prevSpaceAfter, earlyTerminated };
 }
 
 /**
- * Pass 2 + Pass 3 of layout: compute float positions, populate the
+ * Stage 1 of the layout pipeline: measure every block in document order and
+ * return a flat array of position-independent FlowBlocks.
+ *
+ * No page boundaries are applied here — that is paginateFlow's job.
+ * This function is pure measurement: same inputs always produce the same output.
+ *
+ * @param items      Flat item list from collectLayoutItems() or resumption cache.
+ * @param startIndex First item to process (0 for fresh layout, resumption.nextItemIndex for chunks).
+ * @param config     Content area geometry — no pageHeight, no pagination decisions.
+ * @param maxBlocks  Stop early after this many blocks (streaming layout support).
+ */
+
+// ── Helpers used by buildBlockFlow ───────────────────────────────────────────
+
+function djb2(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) ^ s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+function computeInputHash(nodePos: number, node: Node, availableWidth: number): number {
+  return djb2(`${nodePos}:${(node as { textContent?: string }).textContent ?? ""}:${availableWidth}`);
+}
+
+function blockHasFloatAnchor(lines: LayoutLine[]): boolean {
+  for (const line of lines) {
+    for (const span of line.spans) {
+      if (span.kind !== "object" || span.width !== 0) continue;
+      const wm = span.node.attrs["wrappingMode"] as string | undefined;
+      if (wm && wm !== "inline") return true;
+    }
+  }
+  return false;
+}
+
+export function buildBlockFlow(
+  items: LayoutItem[],
+  startIndex: number,
+  config: FlowConfig,
+  fontConfig: FontConfig,
+  measurer: TextMeasurer,
+  fontModifiers: Map<string, FontModifier> | undefined,
+  measureCache: WeakMap<Node, MeasureCacheEntry> | undefined,
+  maxBlocks?: number,
+): { flows: FlowBlock[]; reachedCutoff: boolean; cutoffIndex: number } {
+  const { margins, contentWidth } = config;
+  const flows: FlowBlock[] = [];
+  let processedBlocks = 0;
+
+  for (let itemIdx = startIndex; itemIdx < items.length; itemIdx++) {
+    const item = items[itemIdx]!;
+
+    if (item.isPageBreak) {
+      flows.push({
+        node: item.node,
+        nodePos: item.nodePos,
+        lines: [],
+        height: 0,
+        spaceBefore: 0,
+        spaceAfter: 0,
+        availableWidth: 0,
+        blockType: "page_break",
+        align: "left",
+        indentLeft: 0,
+        hasFloatAnchor: false,
+        inputHash: 0,
+        isPageBreak: true,
+        wasCacheHit: false,
+      });
+      continue;
+    }
+
+    // ── Streaming cutoff ─────────────────────────────────────────────────────
+    if (maxBlocks !== undefined && processedBlocks >= maxBlocks) {
+      return { flows, reachedCutoff: true, cutoffIndex: itemIdx };
+    }
+
+    const { node, nodePos, listMarker, indentLeft, styleKey } = item;
+    const level = node.attrs["level"] as number | undefined;
+    const blockStyle = getBlockStyle(fontConfig, styleKey ?? node.type.name, level);
+    const blockWidth = contentWidth - indentLeft;
+    const blockX = margins.left + indentLeft;
+
+    // Phase 1b: capture cache snapshot BEFORE resolveBlockEntry may update it.
+    const preCached = measureCache?.get(node);
+    const isHit = preCached !== undefined && preCached.availableWidth === blockWidth;
+
+    // Measure — position-independent (targetY=0, page=1 are not stored in entry).
+    const entry = resolveBlockEntry(
+      node, nodePos, blockX, 0, blockWidth, 1,
+      measurer, fontConfig, fontModifiers, measureCache,
+    );
+
+    flows.push({
+      node,
+      nodePos,
+      lines: entry.lines,
+      height: entry.height,
+      spaceBefore: blockStyle.spaceBefore,
+      spaceAfter: blockStyle.spaceAfter,
+      availableWidth: blockWidth,
+      blockType: entry.blockType,
+      align: entry.align,
+      ...(listMarker !== undefined ? {
+        listMarker,
+        listMarkerX: blockX - MARKER_RIGHT_GAP,
+      } : {}),
+      indentLeft,
+      hasFloatAnchor: blockHasFloatAnchor(entry.lines),
+      inputHash: computeInputHash(nodePos, node, blockWidth),
+      wasCacheHit: isHit,
+      ...(preCached?.placedTargetY !== undefined ? { preCachedTargetY: preCached.placedTargetY } : {}),
+      ...(preCached?.placedPage     !== undefined ? { preCachedPage:    preCached.placedPage    } : {}),
+      ...(preCached?.nodePos        !== undefined ? { prevNodePos:      preCached.nodePos       } : {}),
+    });
+
+    processedBlocks++;
+  }
+
+  return { flows, reachedCutoff: false, cutoffIndex: items.length };
+}
+
+/**
+ * Stage 3 of the layout pipeline: compute float positions, populate the
  * ExclusionManager, and re-flow any blocks that overlap an exclusion zone.
  *
- * Called both for complete layouts and for partial (streaming) layouts so that
- * floats visible in the initial chunk appear immediately rather than jumping
- * into view when the idle-layout follow-up completes.
+ * Pure geometry over paginated blocks — no measuring except targeted reflow of
+ * blocks that intersect an exclusion zone. Called for both complete layouts and
+ * partial (streaming) layouts so floats in the initial chunk appear immediately.
+ *
+ * @param pass1Result  Paginated layout from paginateFlow() (Stages 1+2).
+ * @param margins      Page margins.
+ * @param pageWidth    Full page width (used to compute content area for floats).
+ * @param contentWidth Content width (pageWidth - margins.left - margins.right).
+ * @param measurer     TextMeasurer — used only for targeted block reflow.
+ * @param fontConfig   Font config forwarded to layoutBlock() during reflow.
+ * @param fontModifiers Font modifiers forwarded to layoutBlock() during reflow.
  */
-function runFloatPass(
+export function applyFloatLayout(
   pass1Result: DocumentLayout,
   margins: PageConfig["margins"],
   pageWidth: number,
@@ -1019,6 +1252,71 @@ function runFloatPass(
  * Forces at least one line when the block starts below the page bottom so the
  * block is never completely empty (prevents cursor / hit-test holes).
  */
+/**
+ * Stage 4 of the layout pipeline: build the LayoutFragment index.
+ *
+ * Iterates pages in order and emits one LayoutFragment per LayoutBlock.
+ * Split blocks (fragmentCount > 1) produce multiple fragments — one per
+ * page-slice — with incrementing fragmentIndex values.
+ *
+ * The returned array is sorted by page ascending, then by y ascending within
+ * each page (natural iteration order over pages[].blocks[]).
+ *
+ * Also builds fragmentsByPage: a parallel array indexed by (pageNumber - 1)
+ * for O(1) lookup in paged-mode tile rendering.
+ */
+export function buildFragments(pages: LayoutPage[]): {
+  fragments: LayoutFragment[];
+  fragmentsByPage: LayoutFragment[][];
+} {
+  // Pass 1: count how many page-parts each source block contributes.
+  // This lets us emit the correct fragmentCount on every fragment without
+  // requiring it to be pre-stamped on LayoutBlock.
+  const partCounts = new Map<number, number>();
+  for (const page of pages) {
+    for (const block of page.blocks) {
+      const src = block.sourceNodePos ?? block.nodePos;
+      partCounts.set(src, (partCounts.get(src) ?? 0) + 1);
+    }
+  }
+
+  // Pass 2: emit fragments in page / y order.
+  const fragments: LayoutFragment[] = [];
+  const fragmentsByPage: LayoutFragment[][] = [];
+  const nextIndex = new Map<number, number>(); // tracks fragmentIndex per sourceNodePos
+
+  for (const page of pages) {
+    const pageFrags: LayoutFragment[] = [];
+
+    for (const block of page.blocks) {
+      const sourceNodePos = block.sourceNodePos ?? block.nodePos;
+      const fragmentCount = partCounts.get(sourceNodePos) ?? 1;
+      const fragmentIndex = nextIndex.get(sourceNodePos) ?? 0;
+      nextIndex.set(sourceNodePos, fragmentIndex + 1);
+
+      const frag: LayoutFragment = {
+        fragmentIndex,
+        fragmentCount,
+        sourceNodePos,
+        page: page.pageNumber,
+        x: block.x,
+        y: block.y,
+        width: block.availableWidth,
+        height: block.height,
+        lineStart: 0,
+        lineCount: block.lines.length,
+        block,
+      };
+      fragments.push(frag);
+      pageFrags.push(frag);
+    }
+
+    fragmentsByPage[page.pageNumber - 1] = pageFrags;
+  }
+
+  return { fragments, fragmentsByPage };
+}
+
 function clampBlockToPage(block: LayoutBlock, pageBottom: number): LayoutBlock {
   const available = pageBottom - block.y;
   if (block.height <= available) return block;
@@ -1059,6 +1357,8 @@ function clampBlockToPage(block: LayoutBlock, pageBottom: number): LayoutBlock {
 function splitBlockAtBoundary(
   block: LayoutBlock,
   pageBottom: number,
+  keptFragmentIndex?: number,
+  overflowFragmentIndex?: number,
 ): { kept: LayoutBlock | null; overflow: LayoutBlock } {
   const available = pageBottom - block.y;
   let linesFit = 0;
@@ -1082,6 +1382,10 @@ function splitBlockAtBoundary(
     lines: block.lines.slice(0, linesFit),
     spaceAfter: 0,
     continuesOnNextPage: true as const,
+    ...(keptFragmentIndex !== undefined ? {
+      fragmentIndex: keptFragmentIndex,
+      sourceNodePos: block.sourceNodePos ?? block.nodePos,
+    } : {}),
   };
 
   // Helper: spread block without list marker props (continuation parts don't show markers).
@@ -1095,6 +1399,10 @@ function splitBlockAtBoundary(
     lines: block.lines.slice(linesFit),
     spaceBefore: 0,
     isContinuation: true as const,
+    ...(overflowFragmentIndex !== undefined ? {
+      fragmentIndex: overflowFragmentIndex,
+      sourceNodePos: block.sourceNodePos ?? block.nodePos,
+    } : {}),
   };
 
   return { kept, overflow };
@@ -1217,7 +1525,7 @@ const MARKER_RIGHT_GAP = 6; // px — gap between the marker's right edge and th
  * List container nodes (bulletList, orderedList) are expanded into one item
  * per list item so each renders as an independent LayoutBlock.
  */
-function collectLayoutItems(doc: Node, _fontConfig: FontConfig): LayoutItem[] {
+export function collectLayoutItems(doc: Node, _fontConfig: FontConfig): LayoutItem[] {
   const items: LayoutItem[] = [];
 
   doc.forEach((node, offset) => {
