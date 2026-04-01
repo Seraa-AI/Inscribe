@@ -211,6 +211,8 @@ function drawBlock(
   markDecorators?: Map<string, MarkDecorator>
 ): number {
   const contentWidth = block.availableWidth;
+  // Running Y accumulator — O(n) replacement for the getTotalLineHeight O(n²) reduce.
+  let lineY = block.y;
 
   for (let li = 0; li < block.lines.length; li++) {
     const line = block.lines[li]!;
@@ -220,12 +222,15 @@ function drawBlock(
     // For float-constrained lines, constraintX shifts the line right (square-left floats).
     const lineConstraintX = line.constraintX ?? 0;
     const lineOffsetX = lineConstraintX + computeAlignmentOffset(block.align, line.effectiveWidth ?? contentWidth, line.width);
-    const lineY = block.y + getTotalLineHeight(block.lines, li);
     const baseline = lineY + line.ascent;
     // textY: where the cursor draws — aligned to the text, not the full line.
     const textY = line.textAscent > 0
       ? lineY + line.ascent - line.textAscent
       : lineY + Math.max(0, line.lineHeight - line.cursorHeight) / 2;
+
+    // Tracks the last text span + its measurement within this line.
+    // Reused by the end-of-line sentinel to avoid a second measureRun call.
+    let lastTextRun: { span: typeof line.spans[0] & { kind: "text" }; run: ReturnType<TextMeasurer["measureRun"]> } | null = null;
 
     for (const span of line.spans) {
       if (span.kind === "object") {
@@ -265,6 +270,7 @@ function drawBlock(
 
       const spanX = block.x + lineOffsetX + span.x;
       const run = measurer.measureRun(span.text, span.font);
+      lastTextRun = { span, run };
       const spanRect = {
         x: spanX,
         y: baseline,
@@ -355,12 +361,11 @@ function drawBlock(
     // glyph at docPos+1). Guard with hasGlyph so we don't duplicate when
     // populateCharMap ran first.
     const isLastLine = li === block.lines.length - 1;
-    const lastSpan = line.spans[line.spans.length - 1];
-    if (isLastLine && lastSpan?.kind === "text" && lastSpan.text !== "\u200B") {
+    if (isLastLine && lastTextRun && lastTextRun.span.text !== "\u200B") {
+      const { span: lastSpan, run: lastRun } = lastTextRun;
       const endDocPos = lastSpan.docPos + lastSpan.text.length;
       if (!map.hasGlyph(endDocPos)) {
-        const sentinelX = block.x + lineOffsetX + lastSpan.x +
-          measurer.measureRun(lastSpan.text, lastSpan.font).totalWidth;
+        const sentinelX = block.x + lineOffsetX + lastSpan.x + lastRun.totalWidth;
         const textY = line.textAscent > 0
           ? lineY + line.ascent - line.textAscent
           : lineY + Math.max(0, line.lineHeight - line.cursorHeight) / 2;
@@ -376,15 +381,10 @@ function drawBlock(
         });
       }
     }
+
+    lineY += line.lineHeight;
   }
 
   return lineIndexOffset + block.lines.length;
-}
-
-function getTotalLineHeight(
-  lines: LayoutBlock["lines"],
-  upToIndex: number
-): number {
-  return lines.slice(0, upToIndex).reduce((sum, l) => sum + l.lineHeight, 0);
 }
 
