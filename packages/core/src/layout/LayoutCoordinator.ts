@@ -450,7 +450,7 @@ export class LayoutCoordinator {
     let chunkSize = LayoutCoordinator.LAYOUT_CHUNK_SIZE;
     if (deadline && deadline.timeRemaining() > 8) {
       // ~3 blocks/ms heuristic — process more when the browser has budget.
-      chunkSize = Math.min(300, Math.floor(deadline.timeRemaining() * 3));
+      chunkSize = Math.min(120, Math.floor(deadline.timeRemaining() * 2));
     }
     this._partialLayoutBlocks += chunkSize;
 
