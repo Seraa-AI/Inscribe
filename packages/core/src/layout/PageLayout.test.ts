@@ -969,16 +969,16 @@ describe("runPipeline — pageConfig.fontFamily", () => {
     expect(span?.font).toContain("28px");
   });
 
-  it("absent fontFamily leaves block style fonts unchanged", () => {
+  it("absent fontFamily falls back to DEFAULT_FONT_FAMILY (Arial)", () => {
     const { fontConfig } = buildStarterKitContext();
     const layout = runPipeline(doc(p("Hello")), {
-      pageConfig: defaultPageConfig, // no fontFamily
+      pageConfig: defaultPageConfig, // no fontFamily — pipeline injects DEFAULT_FONT_FAMILY
       fontConfig,
       measurer: createMeasurer(),
     });
     const rawSpan = layout.pages[0]?.blocks[0]?.lines[0]?.spans[0];
     const span = rawSpan?.kind === "text" ? rawSpan : undefined;
-    expect(span?.font).toContain("Georgia");
+    expect(span?.font).toContain("Arial");
   });
 });
 

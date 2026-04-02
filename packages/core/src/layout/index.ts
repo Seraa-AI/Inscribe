@@ -10,7 +10,7 @@ export { layoutBlock, resolveLeafBlockDimensions } from "./BlockLayout";
 export type { LayoutBlock, BlockLayoutOptions } from "./BlockLayout";
 export { runPipeline, buildFragments, defaultPageConfig, defaultPagelessConfig, collapseMargins } from "./PageLayout";
 export type { PageConfig, LayoutPage, DocumentLayout, PageLayoutOptions, FloatLayout, LayoutFragment } from "./PageLayout";
-export { defaultFontConfig, getBlockStyle } from "./FontConfig";
+export { defaultFontConfig, getBlockStyle, DEFAULT_FONT_FAMILY } from "./FontConfig";
 export type { FontConfig, BlockStyle } from "./FontConfig";
 export { resolveFont } from "./StyleResolver";
 export { BlockRegistry } from "./BlockRegistry";

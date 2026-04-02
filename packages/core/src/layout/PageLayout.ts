@@ -4,6 +4,7 @@ import { TextMeasurer } from "./TextMeasurer";
 import {
   FontConfig,
   defaultFontConfig,
+  DEFAULT_FONT_FAMILY,
   getBlockStyle,
   BlockStyle,
   applyPageFont,
@@ -361,9 +362,9 @@ export function runPipeline(
   const { fontModifiers, measureCache, previousLayout,pageConfig, measurer } = options;
   const version = (options.previousVersion ?? 0) + 1;
   const baseConfig = options.fontConfig ?? defaultFontConfig;
-  const fontConfig = pageConfig.fontFamily
-    ? applyPageFont(baseConfig, pageConfig.fontFamily)
-    : baseConfig;
+  // Always inject a family — font strings in defaultFontConfig and extensions
+  // intentionally omit the family so it comes from a single source here.
+  const fontConfig = applyPageFont(baseConfig, pageConfig.fontFamily ?? DEFAULT_FONT_FAMILY);
 
   const { pageWidth, pageHeight, margins } = pageConfig;
   const contentWidth = pageWidth - margins.left - margins.right;

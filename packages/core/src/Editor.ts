@@ -223,8 +223,12 @@ export class Editor {
     this.manager = new ExtensionManager(extensions);
     this.onChange = onChange;
     this.onFocusChange = onFocusChange;
-    this.pageConfig =
-      this.manager.buildPageConfig() ?? pageConfig ?? defaultPageConfig;
+    const builtConfig = this.manager.buildPageConfig();
+    // User-supplied pageConfig overrides extension-built config so that
+    // top-level options like fontFamily are always respected.
+    this.pageConfig = builtConfig && pageConfig
+      ? { ...builtConfig, ...pageConfig }
+      : builtConfig ?? pageConfig ?? defaultPageConfig;
     this.fontConfig = this.manager.buildBlockStyles();
     this.measurer = new TextMeasurer({ lineHeightMultiplier: 1.2 });
     this.fontModifiers = this.manager.buildFontModifiers();
