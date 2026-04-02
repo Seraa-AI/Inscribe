@@ -44,16 +44,16 @@ importers:
       '@floating-ui/dom':
         specifier: ^1.7.6
         version: 1.7.6
-      '@inscribe/core':
+      '@scrivr/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@inscribe/export':
+      '@scrivr/export':
         specifier: workspace:*
         version: link:../../packages/export
-      '@inscribe/plugins':
+      '@scrivr/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
-      '@inscribe/react':
+      '@scrivr/react':
         specifier: workspace:*
         version: link:../../packages/react
       '@tanstack/react-router':
@@ -200,7 +200,7 @@ importers:
 
   packages/export:
     dependencies:
-      '@inscribe/core':
+      '@scrivr/core':
         specifier: workspace:*
         version: link:../core
       pdf-lib:
@@ -219,7 +219,7 @@ importers:
 
   packages/plugins:
     dependencies:
-      '@inscribe/core':
+      '@scrivr/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -260,10 +260,10 @@ importers:
         specifier: ^18.0.0
         version: 18.3.1(react@18.3.1)
     devDependencies:
-      '@inscribe/core':
+      '@scrivr/core':
         specifier: workspace:*
         version: link:../core
-      '@inscribe/plugins':
+      '@scrivr/plugins':
         specifier: workspace:*
         version: link:../plugins
       '@types/react':
