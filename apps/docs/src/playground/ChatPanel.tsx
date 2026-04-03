@@ -3,7 +3,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import type { UIMessage, DataUIPart } from "ai";
 import type { Editor } from "@scrivr/core";
-import { getAiToolkit, applyDiffAsSuggestion, applyMultiBlockDiff } from "@scrivr/plugins";
+import { getAiToolkit } from "@scrivr/plugins";
 import type { ToolOutputData } from "../routes/api/ai";
 
 // ── Typed data layer ─────────────────────────────────────────────────────────
@@ -88,21 +88,24 @@ export function ChatPanel({ editor }: ChatPanelProps) {
     if (toolType === "edit_paragraph") {
       const { nodeId, proposedText } = output as { nodeId?: string; proposedText?: string };
       if (!nodeId || !proposedText) return;
-      applyDiffAsSuggestion(ed.getState(), (tr) => ed._applyTransaction(tr), {
-        nodeId,
-        proposedText,
+      const ai = getAiToolkit(ed);
+      const suggestion = ai?.suggestions?.compute({
+        blocks: [{ nodeId, proposedText }],
         authorID: "AI Assistant",
       });
+      if (suggestion) ai?.suggestions?.show(suggestion);
       return;
     }
 
     if (toolType === "edit_section") {
       const { edits } = output as { edits?: Array<{ nodeId: string; proposedText: string }> };
       if (!edits?.length) return;
-      applyMultiBlockDiff(ed.getState(), (tr) => ed._applyTransaction(tr), {
+      const ai = getAiToolkit(ed);
+      const suggestion = ai?.suggestions?.compute({
         blocks: edits,
         authorID: "AI Assistant",
       });
+      if (suggestion) ai?.suggestions?.show(suggestion);
       return;
     }
 
@@ -287,8 +290,8 @@ function SuggestionCard({ label, text }: { label: string; text: string }) {
     <div className="bg-white border border-emerald-200 rounded-lg px-2.5 py-2 flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-semibold text-indigo-500 uppercase tracking-wider">{label}</span>
-        <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded-full px-2 py-px tracking-wide">
-          Added to document
+        <span className="text-[10px] font-semibold bg-violet-100 text-violet-700 rounded-full px-2 py-px tracking-wide">
+          Review in editor
         </span>
       </div>
       <pre className="m-0 text-[12px] leading-relaxed text-gray-700 whitespace-pre-wrap wrap-break-word bg-gray-50 rounded px-2 py-1.5 max-h-[120px] overflow-y-auto font-[inherit]">

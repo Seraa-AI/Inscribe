@@ -21,7 +21,7 @@ import { Toolbar } from "./Toolbar";
 import { BubbleMenuBar } from "./BubbleMenuBar";
 import { FloatingMenuBar } from "./FloatingMenuBar";
 import { ModeSwitcher } from "./ModeSwitcher";
-import { TrackChangesPopover } from "@scrivr/react";
+import { TrackChangesPopover, AiSuggestionPopover } from "@scrivr/react";
 import { ChatPanel } from "./ChatPanel";
 import { DemoContent } from "./demoContent";
 
@@ -249,6 +249,7 @@ export function Playground() {
       <LinkPopover editor={editor} />
       <ImageMenu editor={editor} />
       <TrackChangesPopover editor={editor} />
+      <AiSuggestionPopover editor={editor} mode="tracked" />
     </div>
   );
 }
