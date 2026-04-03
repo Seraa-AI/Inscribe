@@ -118,6 +118,17 @@ export function Playground() {
     extensions: EXTENSIONS,
     pageConfig: defaultPageConfig,
   });
+
+  // Debug helper — call window.inspectDoc() in the browser console to print
+  // the full ProseMirror document JSON at the current moment.
+  if (typeof window !== "undefined") {
+    (window as unknown as Record<string, unknown>)["inspectDoc"] = () => {
+      if (!editor) { console.warn("editor not ready"); return; }
+      const doc = editor.getState().doc;
+      console.log("[ProseMirror doc]", doc.toJSON());
+      return doc.toJSON();
+    };
+  }
   const toolbar =
     useEditorState({ editor, selector: selectToolbar }) ?? EMPTY_TOOLBAR;
 
