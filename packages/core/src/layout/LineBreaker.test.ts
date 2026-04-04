@@ -265,3 +265,88 @@ describe("LineBreaker — CharacterMap population", () => {
     expect(coords?.x).toBe(0);
   });
 });
+
+describe("LineBreaker — hard_break", () => {
+  it("break token between two text spans produces two lines", () => {
+    const lb = new LineBreaker(makeMeasurer());
+    const lines = lb.breakIntoLines(
+      [
+        { kind: "text" as const, text: "Hello", font: "14px serif", docPos: 1 },
+        { kind: "break" as const, docPos: 6 },
+        { kind: "text" as const, text: "World", font: "14px serif", docPos: 7 },
+      ],
+      400,
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0]!.spans[0]).toMatchObject({ kind: "text", text: "Hello" });
+    expect(lines[0]!.terminalBreakDocPos).toBe(6);
+    expect(lines[1]!.spans[0]).toMatchObject({ kind: "text", text: "World" });
+    expect(lines[1]!.terminalBreakDocPos).toBeUndefined();
+  });
+
+  it("trailing break emits a phantom ZWS last line", () => {
+    const lb = new LineBreaker(makeMeasurer());
+    const lines = lb.breakIntoLines(
+      [
+        { kind: "text" as const, text: "Hello", font: "14px serif", docPos: 1 },
+        { kind: "break" as const, docPos: 6 },
+      ],
+      400,
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0]!.terminalBreakDocPos).toBe(6);
+    // Phantom line: ZWS at docPos = break.docPos + 1
+    const phantomSpan = lines[1]!.spans[0];
+    expect(phantomSpan).toMatchObject({ kind: "text", docPos: 7 });
+    expect((phantomSpan as { text: string }).text).toBe("\u200B");
+  });
+
+  it("leading break is silently skipped — content starts on line 0", () => {
+    const lb = new LineBreaker(makeMeasurer());
+    const lines = lb.breakIntoLines(
+      [
+        { kind: "break" as const, docPos: 1 },
+        { kind: "text" as const, text: "World", font: "14px serif", docPos: 2 },
+      ],
+      400,
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.spans[0]).toMatchObject({ kind: "text", text: "World" });
+  });
+
+  it("break glyph is registered at terminalBreakDocPos in the CharacterMap", () => {
+    const lb = new LineBreaker(makeMeasurer());
+    const map = new CharacterMap();
+    lb.breakIntoLines(
+      [
+        { kind: "text" as const, text: "Hello", font: "14px serif", docPos: 1 },
+        { kind: "break" as const, docPos: 6 },
+        { kind: "text" as const, text: "World", font: "14px serif", docPos: 7 },
+      ],
+      400,
+      map,
+      { page: 1, lineIndexOffset: 0, lineY: 0 },
+    );
+    // Break position must be reachable via coordsAtPos
+    const breakCoords = map.coordsAtPos(6);
+    expect(breakCoords).not.toBeNull();
+    // It sits at the right edge of "Hello" (5 chars × 8px = 40px), zero width
+    expect(breakCoords?.x).toBe(5 * MOCK_CHAR_WIDTH);
+  });
+
+  it("each line has normal text line height — no inflation", () => {
+    const lb = new LineBreaker(makeMeasurer());
+    const lines = lb.breakIntoLines(
+      [
+        { kind: "text" as const, text: "A", font: "14px serif", docPos: 1 },
+        { kind: "break" as const, docPos: 2 },
+        { kind: "text" as const, text: "B", font: "14px serif", docPos: 3 },
+      ],
+      400,
+    );
+    for (const line of lines) {
+      expect(line.lineHeight).toBeGreaterThan(0);
+      expect(line.lineHeight).toBeLessThan(100);
+    }
+  });
+});
