@@ -211,10 +211,9 @@ export const filterMeaninglessMoveSteps = (
   return cleanSteps;
 };
 
-export const trFromHistory = (tr: Transaction): boolean => {
-  return tr.getMeta("history$") !== undefined;
-};
 
+// @ts-ignore
+export const trFromHistory = (tr: Transaction) => Object.keys(tr.meta).find((s) => s.startsWith('history$'))
 export const changeMovedToInsertsOnSourceDeletion = (
   tr: Transaction,
   newTr: Transaction,
