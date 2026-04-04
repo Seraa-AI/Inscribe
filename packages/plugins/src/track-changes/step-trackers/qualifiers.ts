@@ -43,8 +43,7 @@ export const isSplitStep = (
   } = slice;
 
   if (
-    // @ts-expect-error window.event is used for key detection in browser env
-    (window.event?.code === "Enter" || window.event?.code === "NumpadEnter") &&
+    (uiEvent === "Enter" || uiEvent === "NumpadEnter") &&
     firstChild?.type.name === "list_item"
   ) {
     return (
