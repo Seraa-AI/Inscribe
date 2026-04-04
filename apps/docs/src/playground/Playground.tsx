@@ -9,6 +9,7 @@ import {
   SlashMenu,
   ImageMenu,
 } from "@scrivr/react";
+import { useState } from "react";
 import type { EditorStateContext } from "@scrivr/react";
 import { PdfExport } from "@scrivr/export";
 import {
@@ -21,7 +22,7 @@ import { Toolbar } from "./Toolbar";
 import { BubbleMenuBar } from "./BubbleMenuBar";
 import { FloatingMenuBar } from "./FloatingMenuBar";
 import { ModeSwitcher } from "./ModeSwitcher";
-import { TrackChangesPopover, AiSuggestionPopover } from "@scrivr/react";
+import { TrackChangesPopover, AiSuggestionPopover, TrackChangesPanel } from "@scrivr/react";
 import { ChatPanel } from "./ChatPanel";
 import { DemoContent } from "./demoContent";
 
@@ -113,7 +114,11 @@ const EMPTY_TOOLBAR: ToolbarSlice = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+type SidebarTab = "ai" | "changes";
+
 export function Playground() {
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("ai");
+
   const editor = useInscribeEditor({
     extensions: EXTENSIONS,
     pageConfig: defaultPageConfig,
@@ -229,7 +234,42 @@ export function Playground() {
             pageStyle={{ boxShadow: "none", border: "1px solid #e8eaed" }}
           />
         </main>
-        <ChatPanel editor={editor} />
+
+        {/* ── Right sidebar with tabs ── */}
+        <div style={{ display: "flex", flexDirection: "column", width: 300, flexShrink: 0, borderLeft: "1px solid #e8eaed", background: "#fff" }}>
+          {/* Tab bar */}
+          <div style={{ display: "flex", borderBottom: "1px solid #e8eaed", flexShrink: 0 }}>
+            {(["ai", "changes"] as SidebarTab[]).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setSidebarTab(tab)}
+                style={{
+                  flex:          1,
+                  height:        36,
+                  border:        "none",
+                  background:    "none",
+                  cursor:        "pointer",
+                  fontSize:      12,
+                  fontWeight:    sidebarTab === tab ? 600 : 400,
+                  color:         sidebarTab === tab ? "#6366f1" : "#6b7280",
+                  borderBottom:  sidebarTab === tab ? "2px solid #6366f1" : "2px solid transparent",
+                  transition:    "color 0.15s, border-color 0.15s",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {tab === "ai" ? "AI Assistant" : "Track Changes"}
+              </button>
+            ))}
+          </div>
+
+          {/* Panel content — both mounted, only one visible */}
+          <div style={{ flex: 1, overflow: "hidden", display: sidebarTab === "ai" ? "flex" : "none", flexDirection: "column" }}>
+            <ChatPanel editor={editor} hideBorder />
+          </div>
+          <div style={{ flex: 1, overflow: "hidden", display: sidebarTab === "changes" ? "flex" : "none", flexDirection: "column" }}>
+            <TrackChangesPanel editor={editor} />
+          </div>
+        </div>
 
         {USE_COLLAB && loadingState === "syncing" && (
           <div className="absolute inset-0 flex items-center justify-center bg-[rgba(247,248,250,0.85)] backdrop-blur-sm z-10">

@@ -151,17 +151,21 @@ export function applyAiSuggestion(
       };
     });
 
-    const result = applyMultiBlockDiff(state, dispatch, {
+    // Intercept dispatch to inject AI_SUGGESTION_HIDE into the same transaction.
+    // This is critical: if we called hideAiSuggestion(state, dispatch) separately
+    // after applyMultiBlockDiff, the hide transaction would be built from the old
+    // `state`, whose tr.doc is the pre-change doc, reverting the tracked marks.
+    const dispatchWithHide = (tr: Transaction) => {
+      tr.setMeta(AI_SUGGESTION_HIDE, true);
+      dispatch(tr);
+    };
+
+    const result = applyMultiBlockDiff(state, dispatchWithHide, {
       blocks:   blocksForDiff,
       authorID: suggestion.authorID,
     });
 
     if (!result.applied) return { applied: false, reason: "no-change" };
-
-    // Hide the entire suggestion (or just update it if only one group was applied).
-    // For simplicity: always hide after apply. Developers can re-show a trimmed
-    // suggestion if they want partial-accept UX.
-    hideAiSuggestion(state, dispatch);
     return { applied: true };
   }
 
@@ -206,10 +210,9 @@ export function applyAiSuggestion(
 
   if (!anyApplied) return { applied: false, reason: "no-change" };
 
-  tr.setMeta("addToHistory", true);
+  tr.setMeta("addToHistory", true)
+    .setMeta(AI_SUGGESTION_HIDE, true);
   dispatch(tr);
-
-  hideAiSuggestion(state, dispatch);
   return { applied: true };
 }
 

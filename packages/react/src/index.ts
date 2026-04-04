@@ -9,6 +9,7 @@ export { SlashMenu } from "./SlashMenu";
 export type { SlashMenuItem } from "./SlashMenu";
 export { TrackChangesPopover } from "./TrackChangesPopover";
 export { AiSuggestionPopover } from "./AiSuggestionPopover";
+export { TrackChangesPanel } from "./TrackChangesPanel";
 export type { UseCanvasEditorOptions } from "./useInscribeEditor";
 
 export { Inscribe } from "./Inscribe";

@@ -45,47 +45,56 @@ export type AiOpRenderInstruction = DeleteRenderInstruction | InsertRenderInstru
 // ── Phantom insert renderer ───────────────────────────────────────────────────
 
 /**
- * Draw phantom inline text for an AI suggestion insert.
+ * Draw an insertion-point marker for an AI suggestion insert.
  *
- * The text does not exist in the document yet — we paint it as a green
- * underlined string at the insertion point so the user can preview it.
+ * Phantom inline text cannot be rendered correctly without re-running the
+ * layout engine (the new text has no CharacterMap entries and would overlap
+ * existing glyphs). Instead we draw a compact "+" marker at the insertion
+ * point — a green vertical bar with a small pill label above it.
  *
- * Font is intentionally kept at a sensible default ("14px sans-serif") rather
- * than trying to match the paragraph font; the paragraph font is not reliably
- * available at render time. Developers can override via options if needed.
+ * The actual inserted content is shown in the AiSuggestionPopover when the
+ * cursor enters the suggestion range.
  */
 export function renderAiInsert(
   ctx: CanvasRenderingContext2D,
   inst: InsertRenderInstruction,
 ): void {
-  const { text, x, y, lineHeight, color } = inst;
-  if (!text) return;
-
-  const fontSize   = Math.round(lineHeight * 0.75);
-  const fontFamily = "sans-serif";
-  const font       = `${fontSize}px ${fontFamily}`;
+  const { x, y, lineHeight, color } = inst;
 
   ctx.save();
 
-  ctx.font = font;
-  const measured = ctx.measureText(text);
-  const w = measured.width;
+  const barH = lineHeight;
+  const barW = 2;
+  const barX = x;
+  const barY = y;
 
-  // Subtle green background wash
-  ctx.fillStyle = hexToRgba(color, 0.15);
-  ctx.fillRect(x, y, w, lineHeight);
+  // Vertical insertion bar
+  ctx.fillStyle = hexToRgba(color, 0.85);
+  ctx.fillRect(barX, barY, barW, barH);
 
-  // Text itself
+  // Small "+" pill above the bar
+  const labelFont = `bold ${Math.max(8, Math.round(lineHeight * 0.55))}px system-ui, sans-serif`;
+  ctx.font = labelFont;
+  const labelText = "+";
+  const tw  = ctx.measureText(labelText).width;
+  const pad = 3;
+  const lw  = tw + pad * 2;
+  const lh  = Math.round(lineHeight * 0.65);
+  const lx  = barX - lw / 2 + barW / 2;
+  const ly  = barY - lh - 2;
+
   ctx.fillStyle = color;
-  ctx.fillText(text, x, y + lineHeight * 0.8);
+  if (ctx.roundRect) {
+    ctx.beginPath();
+    ctx.roundRect(lx, ly, lw, lh, 3);
+    ctx.fill();
+  } else {
+    ctx.fillRect(lx, ly, lw, lh);
+  }
 
-  // Underline
-  ctx.strokeStyle = hexToRgba(color, 0.9);
-  ctx.lineWidth   = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(x,     y + lineHeight - 1);
-  ctx.lineTo(x + w, y + lineHeight - 1);
-  ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.textBaseline = "middle";
+  ctx.fillText(labelText, lx + pad, ly + lh / 2);
 
   ctx.restore();
 }

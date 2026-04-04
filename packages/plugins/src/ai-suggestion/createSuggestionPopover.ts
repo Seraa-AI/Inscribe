@@ -50,6 +50,7 @@ function buildGroupRanges(
     deleteFrom: number; deleteTo: number; deleteText: string;
     insertText: string;
     hasInsert: boolean;
+    insertAnchor: number | null;
   }>();
 
   let acceptedOffset = 0;
@@ -63,7 +64,7 @@ function buildGroupRanges(
     if (!groups.has(op.groupId)) {
       groups.set(op.groupId, {
         deleteFrom: Infinity, deleteTo: -Infinity,
-        deleteText: "", insertText: "", hasInsert: false,
+        deleteText: "", insertText: "", hasInsert: false, insertAnchor: null,
       });
     }
     const g = groups.get(op.groupId)!;
@@ -77,7 +78,11 @@ function buildGroupRanges(
       g.deleteText += op.text;
       acceptedOffset += op.text.length;
     } else {
-      // insert — anchor point only (no accepted chars consumed)
+      // insert — anchor at current acceptedOffset (no accepted chars consumed)
+      if (!g.hasInsert) {
+        const anchor = acceptedRangeToDocRange(map, acceptedOffset, acceptedOffset);
+        g.insertAnchor = anchor?.from ?? null;
+      }
       g.insertText += op.text;
       g.hasInsert = true;
     }
@@ -86,8 +91,16 @@ function buildGroupRanges(
   const result = new Map<string, { from: number; to: number; replacedText: string; insertedText: string }>();
 
   for (const [groupId, g] of groups) {
-    const from = g.deleteFrom === Infinity ? 0 : g.deleteFrom;
-    const to   = g.deleteTo   === -Infinity ? from : g.deleteTo;
+    let from: number;
+    let to: number;
+    if (g.deleteFrom !== Infinity) {
+      from = g.deleteFrom;
+      to   = g.deleteTo === -Infinity ? from : g.deleteTo;
+    } else {
+      // Pure insert — use the anchor doc position
+      from = g.insertAnchor ?? 0;
+      to   = from;
+    }
     result.set(groupId, {
       from,
       to,
@@ -148,13 +161,42 @@ export function createSuggestionPopover(
       );
       const isStale = liveText !== block.acceptedText;
 
+      // Check if cursor is anywhere inside this block's extent.
+      // This is more discoverable than requiring the cursor to land
+      // precisely on a deleted-text range — clicking anywhere in a
+      // suggestion block surfaces the popover.
+      const blockStart = nodeFound.pos;
+      const blockEnd   = nodeFound.pos + nodeFound.node.nodeSize;
+      if (head < blockStart || head > blockEnd) continue;
+
       const groupRanges = buildGroupRanges(block.ops, map);
+      if (groupRanges.size === 0) continue;
+
+      // Prefer the group whose deleted-text range contains the cursor.
+      // Fall back to the group whose range is nearest to the cursor.
+      let bestGroupId: string | null = null;
+      let bestRange: { from: number; to: number; replacedText: string; insertedText: string } | null = null;
+      let bestDist = Infinity;
 
       for (const [groupId, range] of groupRanges) {
         if (head >= range.from && head <= range.to) {
-          found = { groupId, ...range, isStale };
-          break outer;
+          bestGroupId = groupId;
+          bestRange = range;
+          break;
         }
+        const dist = range.from === range.to
+          ? Math.abs(head - range.from)
+          : head < range.from ? range.from - head : head - range.to;
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestGroupId = groupId;
+          bestRange = range;
+        }
+      }
+
+      if (bestGroupId && bestRange) {
+        found = { groupId: bestGroupId, ...bestRange, isStale };
+        break outer;
       }
     }
 

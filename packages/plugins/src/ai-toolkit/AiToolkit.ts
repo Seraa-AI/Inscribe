@@ -15,8 +15,6 @@ import { aiSuggestionPluginKey } from "../ai-suggestion/AiSuggestionPlugin";
 import type { AiSuggestion as AiSuggestionData, ApplyAiSuggestionOptions, ApplyAiResult, RejectAiSuggestionOptions } from "../ai-suggestion/types";
 import type { ComputeAiSuggestionOptions } from "../ai-suggestion/computeAiSuggestion";
 
-// ── AiSuggestionsAPI ──────────────────────────────────────────────────────────
-
 /**
  * Namespaced API for AI suggestion overlay — accessed via `ai.suggestions`.
  *
@@ -88,8 +86,6 @@ export class AiSuggestionsAPI {
     return aiSuggestionPluginKey.getState(this.editor.getState())?.suggestion ?? null;
   }
 }
-
-// ── AiToolkitAPI ─────────────────────────────────────────────────────────────
 
 /**
  * AiToolkitAPI — the single entry point for all AI interactions with an editor.

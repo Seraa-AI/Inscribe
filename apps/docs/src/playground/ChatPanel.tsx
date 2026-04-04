@@ -12,6 +12,7 @@ type AppUIMessage = UIMessage<unknown, AppDataTypes>;
 
 interface ChatPanelProps {
   editor: Editor | null;
+  hideBorder?: boolean;
 }
 
 // ── Document context ────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ function getDocContext(editor: Editor | null): {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function ChatPanel({ editor }: ChatPanelProps) {
+export function ChatPanel({ editor, hideBorder }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
   const editorRef = useRef(editor);
@@ -134,13 +135,11 @@ export function ChatPanel({ editor }: ChatPanelProps) {
 
   function submit() {
     const text = inputValue.trim();
-    console.log(text, isLoading)
     if (!text || isLoading) return;
     if (editorRef.current) {
       const s = editorRef.current.getState().selection;
       pendingSelection.current = { from: s.from, to: s.to };
     }
-    console.log("Subbimting")
     sendMessage({ text });
     setInputValue("");
   }
@@ -153,7 +152,7 @@ export function ChatPanel({ editor }: ChatPanelProps) {
   }
 
   return (
-    <aside className="w-[300px] shrink-0 flex flex-col bg-white border-l border-[#e8eaed] overflow-hidden">
+    <aside className={`w-full shrink-0 flex flex-col bg-white overflow-hidden${hideBorder ? "" : " border-l border-[#e8eaed]"}`}>
       {/* Header */}
       <div className="flex items-center h-11 px-3.5 bg-white border-b border-[#e8eaed] shrink-0 gap-2">
         <span className="text-[13px] font-semibold text-gray-900 tracking-tight">AI Assistant</span>
