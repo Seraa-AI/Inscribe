@@ -132,6 +132,10 @@ export class TestAiEditor implements IEditor {
     };
   }
 
+  on(_event: string, _handler: unknown): () => void {
+    return () => {};
+  }
+
   // ── IEditor stubs (canvas/DOM — not needed in tests) ─────────────────────
   addOverlayRenderHandler(_handler: unknown): () => void {
     return () => {};
