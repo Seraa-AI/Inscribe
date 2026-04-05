@@ -22,6 +22,7 @@ export {
 
 // ── Extension ─────────────────────────────────────────────────────────────────
 export { AiSuggestion } from "./AiSuggestion";
+export type { AiSuggestionOptions, AiSuggestionRenderMode } from "./AiSuggestion";
 
 // ── Commands ─────────────────────────────────────────────────────────────────
 export { showAiSuggestion, applyAiSuggestion, rejectAiSuggestion } from "./showHideApply";
@@ -35,6 +36,7 @@ export { subscribeToAiSuggestions } from "./subscribeToAiSuggestions";
 export type {
   AiSuggestionCardData,
   AiSuggestionCardActions,
+  AiSuggestionSubscribeOptions,
 } from "./subscribeToAiSuggestions";
 
 // ── Popover controller ────────────────────────────────────────────────────────

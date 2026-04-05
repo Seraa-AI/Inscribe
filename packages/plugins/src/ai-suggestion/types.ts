@@ -39,6 +39,12 @@ export interface AiSuggestionBlock {
   acceptedText: string;
   /** The ordered list of diff operations for this block */
   ops: AiOp[];
+  /**
+   * Optional human-authored summary for this block's change.
+   * e.g. "Simplified tone and removed jargon"
+   * When present, UIs should prefer this over the auto-derived label.
+   */
+  summary?: string;
 }
 
 /**

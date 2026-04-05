@@ -10,9 +10,10 @@
  *             the block or hovering the sidebar card.
  *   Stale   — 0.35 opacity. Block changed since suggestion was set.
  *
- * Design intent: idle blocks are invisible on canvas — the sidebar is the
- * affordance. Active state uses a Notion-style left border as the anchor,
- * not a full background fill, so it feels precise rather than "selected".
+ * renderMode option (configure at setup):
+ *   "active-only" (default) — only the focused block renders on canvas.
+ *   "all"                   — all blocks always render their diffs.
+ *   "none"                  — no canvas rendering; app handles it entirely.
  */
 
 import { Extension } from "@scrivr/core";
@@ -31,8 +32,30 @@ import {
   renderInstructions,
 } from "./renderAiSuggestionOps";
 
-export const AiSuggestion = Extension.create({
+export type AiSuggestionRenderMode = "active-only" | "all" | "none";
+
+export interface AiSuggestionOptions {
+  /**
+   * Controls how the canvas overlay renders suggestion markers.
+   *
+   * "active-only" (default) — only the block under the cursor (or hovered card)
+   *   renders its diff marks. Idle blocks are invisible on canvas.
+   *
+   * "all" — every block always renders its full diff (stripe + underlines).
+   *   Use this for a "show all tracked changes" style view.
+   *
+   * "none" — the extension registers no canvas rendering at all.
+   *   Use this when the app handles all visual feedback itself.
+   */
+  renderMode: AiSuggestionRenderMode;
+}
+
+export const AiSuggestion = Extension.create<AiSuggestionOptions>({
   name: "aiSuggestion",
+
+  defaultOptions: {
+    renderMode: "active-only",
+  },
 
   addProseMirrorPlugins() {
     return [aiSuggestionPlugin];
@@ -40,6 +63,13 @@ export const AiSuggestion = Extension.create({
 
   onEditorReady(editor: IEditor) {
     const cleanups: Array<() => void> = [];
+
+    const { renderMode } = this.options;
+
+    // "none" — app handles all rendering; skip registering a handler entirely.
+    if (renderMode === "none") {
+      return () => { for (const c of cleanups) c(); };
+    }
 
     const handler: OverlayRenderHandler = (
       ctx,
@@ -56,8 +86,8 @@ export const AiSuggestion = Extension.create({
         const isActive =
           ps.activeBlockId === block.nodeId || ps.hoverBlockId === block.nodeId;
 
-        // Idle blocks render nothing on canvas — the sidebar card is the affordance.
-        if (!isActive) continue;
+        // "active-only": idle blocks render nothing — sidebar card is the affordance.
+        if (renderMode === "active-only" && !isActive) continue;
 
         const found = findNodeById(state.doc, block.nodeId);
         if (!found) continue;

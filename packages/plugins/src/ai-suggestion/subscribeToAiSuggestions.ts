@@ -7,6 +7,9 @@
  * Usage:
  *   const unsub = subscribeToAiSuggestions(editor, (cards, actions) => {
  *     renderMyUI(cards);
+ *   }, {
+ *     onFocus: (blockId) => scrollCardIntoView(blockId),
+ *     onBlur:  (blockId) => void,
  *   });
  *   unsub(); // stop listening
  */
@@ -21,19 +24,28 @@ import type { AiSuggestionBlock, AiOp, AiSuggestionPluginState } from "./types";
 /** Derived card data — ready to render in any UI framework. */
 export interface AiSuggestionCardData {
   /** Stable node ID — use as React/Vue key. */
-  blockId:     string;
+  blockId:   string;
   /** The raw block with ops — for custom diff rendering. */
-  block:       AiSuggestionBlock;
-  /** Short human-readable label (truncated accepted text or op text). */
-  label:       string;
-  /** Semantic color hint for the card border: "rewrite" | "insert" | "delete" */
-  kind:        "rewrite" | "insert" | "delete";
+  block:     AiSuggestionBlock;
+  /**
+   * Display label. Prefers block.summary when present (human-authored),
+   * otherwise falls back to auto-derived text from the ops.
+   */
+  label:     string;
+  /**
+   * Optional authored summary passed through from block.summary.
+   * Undefined when no summary was provided at compute time.
+   * UIs can use this to show richer context ("Simplified tone and removed jargon").
+   */
+  summary:   string | undefined;
+  /** Semantic kind: "rewrite" | "insert" | "delete" */
+  kind:      "rewrite" | "insert" | "delete";
   /** True when the document has changed since the suggestion was set. */
-  isStale:     boolean;
+  isStale:   boolean;
   /** True when the cursor is inside this block. */
-  isActive:    boolean;
+  isActive:  boolean;
   /** True when the block is being hovered in the sidebar (set via actions.hover). */
-  isHovered:   boolean;
+  isHovered: boolean;
 }
 
 /** Actions passed to the subscriber callback — call these to drive the editor. */
@@ -52,6 +64,20 @@ export interface AiSuggestionCardActions {
   activate(blockId: string): void;
 }
 
+/** Optional lifecycle callbacks for focus transitions. */
+export interface AiSuggestionSubscribeOptions {
+  /**
+   * Called when a block becomes active (cursor entered the block or card hovered).
+   * Use this to scroll a custom sidebar card into view, animate a panel open, etc.
+   */
+  onFocus?: (blockId: string) => void;
+  /**
+   * Called when a block loses active status.
+   * The blockId is the one that was previously active.
+   */
+  onBlur?: (blockId: string) => void;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function truncate(s: string, n: number): string {
@@ -67,22 +93,38 @@ function deriveCard(
   const hasInsert = block.ops.some((o: AiOp) => o.type === "insert");
   const hasDelete = block.ops.some((o: AiOp) => o.type === "delete");
 
-  let label: string;
+  let autoLabel: string;
   let kind: AiSuggestionCardData["kind"];
 
   if (hasInsert && hasDelete) {
-    kind  = "rewrite";
-    label = truncate(block.acceptedText.trim(), 36) || "Rewrite";
+    kind      = "rewrite";
+    autoLabel = truncate(block.acceptedText.trim(), 36) || "Rewrite";
   } else if (hasInsert) {
-    kind  = "insert";
-    const text = block.ops.filter((o: AiOp) => o.type === "insert").map((o: AiOp) => o.text).join(" ").trim();
-    label = `+ ${truncate(text, 32)}`;
+    kind = "insert";
+    const text = block.ops
+      .filter((o: AiOp) => o.type === "insert")
+      .map((o: AiOp) => o.text)
+      .join(" ")
+      .trim();
+    autoLabel = `+ ${truncate(text, 32)}`;
   } else {
-    kind  = "delete";
-    label = truncate(block.acceptedText.trim(), 36) || "Removal";
+    kind      = "delete";
+    autoLabel = truncate(block.acceptedText.trim(), 36) || "Removal";
   }
 
-  return { blockId: block.nodeId, block, label, kind, isStale, isActive, isHovered };
+  // Prefer authored summary as the display label — it's more meaningful to users.
+  const label = block.summary ? truncate(block.summary, 40) : autoLabel;
+
+  return {
+    blockId: block.nodeId,
+    block,
+    label,
+    summary: block.summary,
+    kind,
+    isStale,
+    isActive,
+    isHovered,
+  };
 }
 
 // ── Main API ──────────────────────────────────────────────────────────────────
@@ -96,12 +138,18 @@ function deriveCard(
  * callback fires only when suggestion, stale set, hover, or active block
  * actually changes.
  *
- * Returns an unsubscribe function.
+ * @param editor   The editor instance.
+ * @param callback Called with current card list + action functions on each change.
+ * @param options  Optional focus/blur transition callbacks.
+ * @returns        Unsubscribe function.
  */
 export function subscribeToAiSuggestions(
   editor: IEditor,
   callback: (cards: AiSuggestionCardData[], actions: AiSuggestionCardActions) => void,
+  options?: AiSuggestionSubscribeOptions,
 ): () => void {
+  const { onFocus, onBlur } = options ?? {};
+
   const actions: AiSuggestionCardActions = {
     accept(blockId, mode = "tracked") {
       applyAiSuggestion(editor, { blockId, mode });
@@ -138,13 +186,22 @@ export function subscribeToAiSuggestions(
   // ProseMirror returns the same plugin-state object reference when nothing in
   // the plugin changed. Track it so we skip callback on unrelated transactions
   // (every keypress, cursor blink, scroll) — no card rebuild, no React re-render.
-  let prevPs: AiSuggestionPluginState | null | undefined = undefined;
+  let prevPs:       AiSuggestionPluginState | null | undefined = undefined;
+  let prevActiveId: string | null = null;
 
   function emit() {
     const state = editor.getState();
     const ps    = aiSuggestionPluginKey.getState(state);
     if (ps === prevPs) return;
     prevPs = ps;
+
+    // ── Focus / blur transition detection ─────────────────────────────────
+    const newActiveId = ps?.activeBlockId ?? null;
+    if (newActiveId !== prevActiveId) {
+      if (prevActiveId !== null) onBlur?.(prevActiveId);
+      if (newActiveId  !== null) onFocus?.(newActiveId);
+      prevActiveId = newActiveId;
+    }
 
     if (!ps?.suggestion) {
       callback([], actions);

@@ -28,7 +28,12 @@ import type { AiSuggestion, AiSuggestionBlock, AiOp } from "./types";
 
 export interface ComputeAiSuggestionOptions {
   /** One entry per block to rewrite. */
-  blocks: Array<{ nodeId: string; proposedText: string }>;
+  blocks: Array<{
+    nodeId:       string;
+    proposedText: string;
+    /** Optional human-authored summary, e.g. "Simplified tone and removed jargon". */
+    summary?:     string;
+  }>;
   /** Author identifier for the suggestion, e.g. "AI Assistant". */
   authorID: string;
 }
@@ -86,7 +91,7 @@ export function computeAiSuggestion(
   const schema = state.schema;
   const resultBlocks: AiSuggestionBlock[] = [];
 
-  for (const { nodeId, proposedText } of inputBlocks) {
+  for (const { nodeId, proposedText, summary } of inputBlocks) {
     const found = findNodeById(state.doc, nodeId);
     if (!found) continue;
 
@@ -107,7 +112,7 @@ export function computeAiSuggestion(
     const hasChange = ops.some((o) => o.type !== "keep");
     if (!hasChange) continue;
 
-    resultBlocks.push({ nodeId, acceptedText, ops });
+    resultBlocks.push({ nodeId, acceptedText, ops, ...(summary ? { summary } : {}) });
   }
 
   if (resultBlocks.length === 0) return null;
