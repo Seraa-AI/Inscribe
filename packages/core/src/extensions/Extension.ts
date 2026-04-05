@@ -4,7 +4,7 @@ import type {
   ExtensionContext,
   Phase1Context,
   ResolvedExtension,
-  IEditor,
+  IBaseEditor,
 } from "./types";
 
 /**
@@ -91,7 +91,7 @@ export class Extension<Options extends object = object> {
       markdownParserTokens: config.addMarkdownParserTokens?.call(p1) ?? {},
       markdownSerializerRules: config.addMarkdownSerializerRules?.call(p1) ?? {},
       ...(config.onEditorReady
-        ? { editorReadyCallback: (editor: IEditor) => config.onEditorReady!.call(p1, editor) }
+        ? { editorReadyCallback: (editor: IBaseEditor) => config.onEditorReady!.call(p1, editor) }
         : {}),
     };
   }

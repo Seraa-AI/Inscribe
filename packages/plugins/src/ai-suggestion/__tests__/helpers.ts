@@ -29,7 +29,7 @@ import type {
   RejectAiSuggestionOptions,
 } from "../types";
 
-// ── Schema ────────────────────────────────────────────────────────────────────
+/** Schema */
 
 export const schema = new Schema({
   nodes: {
@@ -67,7 +67,7 @@ export const schema = new Schema({
   },
 });
 
-// ── Builder helpers ───────────────────────────────────────────────────────────
+/** Builder helpers */
 
 export function p(text: string, nodeId?: string) {
   return schema.nodes.paragraph.create(
@@ -87,7 +87,7 @@ export function doc(...nodes: import("prosemirror-model").Node[]) {
   return schema.nodes.doc.create(null, nodes);
 }
 
-// ── IEditor stub ──────────────────────────────────────────────────────────────
+/** IEditor stub */
 
 /**
  * Minimal IEditor stub — enough for showAiSuggestion / applyAiSuggestion /
@@ -132,7 +132,11 @@ export class TestAiEditor implements IEditor {
     };
   }
 
-  // ── IEditor stubs (canvas/DOM — not needed in tests) ─────────────────────
+  on(_event: string, _handler: unknown): () => void {
+    return () => {};
+  }
+
+  /** IEditor stubs (canvas/DOM — not needed in tests) */
   addOverlayRenderHandler(_handler: unknown): () => void {
     return () => {};
   }
@@ -159,7 +163,7 @@ export class TestAiEditor implements IEditor {
     /* no-op in tests */
   }
 
-  // ── Convenience helpers ───────────────────────────────────────────────────
+  /** Convenience helpers */
 
   get text(): string {
     return this.state.doc.textContent;

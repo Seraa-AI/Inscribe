@@ -62,6 +62,18 @@ export const Link = Extension.create({
           }
           return true;
         },
+      setLinkHref:
+        (from: unknown, to: unknown, href: unknown) =>
+        (state, dispatch) => {
+          const markType = this.schema.marks["link"];
+          if (!markType) return false;
+          if (dispatch) {
+            const tr = state.tr.removeMark(from as number, to as number, markType);
+            tr.addMark(from as number, to as number, markType.create({ href }));
+            dispatch(tr);
+          }
+          return true;
+        },
       unsetLink:
         () =>
         (state, dispatch) => {
@@ -119,7 +131,7 @@ export const Link = Extension.create({
     return {
       marks: {
         link: {
-          open(_state: unknown, mark: { attrs: Record<string, unknown> }) {
+          open(_state: unknown, _mark: { attrs: Record<string, unknown> }) {
             return "[";
           },
           close(_state: unknown, mark: { attrs: Record<string, unknown> }) {
