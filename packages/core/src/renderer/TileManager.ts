@@ -128,6 +128,8 @@ export class TileManager {
     startW: number;
     startH: number;
     docPos: number;
+    pendingWidth: number;
+    pendingHeight: number;
   } | null = null;
   private floatDrag: {
     docPos: number;
@@ -280,8 +282,11 @@ export class TileManager {
       Math.ceil((scrollTop + viewportH) / sh) + this.overscan,
     );
 
-    /** Grow pool to cover the visible range */
-    const needed = lastVisible - firstVisible + 1;
+    /** Grow pool to cover the visible range (pre-allocate on first layout to avoid mid-scroll DOM insertions) */
+    const needed = Math.max(
+      lastVisible - firstVisible + 1,
+      this.pool.length === 1 ? Math.ceil(viewportH / sh) + 2 * this.overscan : 0,
+    );
     this.ensurePoolSize(needed);
 
     /** Release out-of-range tiles (hide, don't remove) */
@@ -559,13 +564,10 @@ export class TileManager {
     if (isNodeSel && pmSel.node.type.name === "image") {
       const objRect = this.editor.charMap.getObjectRect(pmSel.from);
       if (objRect && objRect.page === pageNum) {
-        renderHandles(
-          overlayCtx,
-          objRect.x,
-          objRect.y,
-          objRect.width,
-          objRect.height,
-        );
+        // During resize drag, show ghost handles at the pending (uncommitted) size.
+        const w = this.resizeDrag?.pendingWidth ?? objRect.width;
+        const h = this.resizeDrag?.pendingHeight ?? objRect.height;
+        renderHandles(overlayCtx, objRect.x, objRect.y, w, h);
       }
     }
 
@@ -718,13 +720,17 @@ export class TileManager {
     const resizeHit = this.hitHandleAt(docX, docY, page);
     if (resizeHit) {
       const sel = this.editor.getState().selection as NodeSelection;
+      const startW = sel.node.attrs["width"] as number;
+      const startH = sel.node.attrs["height"] as number;
       this.resizeDrag = {
         handle: resizeHit.id,
         startX: e.clientX,
         startY: e.clientY,
-        startW: sel.node.attrs["width"] as number,
-        startH: sel.node.attrs["height"] as number,
+        startW,
+        startH,
         docPos: sel.from,
+        pendingWidth: startW,
+        pendingHeight: startH,
       };
       this.setCursorAll(resizeHit.cursor);
       return;
@@ -770,10 +776,9 @@ export class TileManager {
   };
 
   private handleMouseMove = (e: MouseEvent): void => {
-    // Resize drag
+    // Resize drag — buffer pending size; commit only on mouseup
     if (this.resizeDrag) {
-      const { handle, startX, startY, startW, startH, docPos } =
-        this.resizeDrag;
+      const { handle, startX, startY, startW, startH } = this.resizeDrag;
       const { pageWidth, margins } = this.editor.layout.pageConfig;
       const maxWidth = pageWidth - margins.left - margins.right;
       const { width, height } = computeNewSize(
@@ -784,7 +789,9 @@ export class TileManager {
         e.clientY - startY,
         maxWidth,
       );
-      this.editor.setNodeAttrs(docPos, { width, height });
+      this.resizeDrag.pendingWidth = width;
+      this.resizeDrag.pendingHeight = height;
+      this.scheduleUpdate();
       return;
     }
 
@@ -819,6 +826,8 @@ export class TileManager {
 
   private handleMouseUp = (): void => {
     if (this.resizeDrag) {
+      const { docPos, pendingWidth, pendingHeight } = this.resizeDrag;
+      this.editor.setNodeAttrs(docPos, { width: pendingWidth, height: pendingHeight });
       this.resizeDrag = null;
       this.setCursorAll("text");
     }
