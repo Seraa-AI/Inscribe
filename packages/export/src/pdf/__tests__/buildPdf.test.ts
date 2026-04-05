@@ -54,8 +54,8 @@ function textLine(
     cursorHeight: 20,
     textAscent: 18,
     xHeight: 8,
-    constraintX: opts.constraintX,
-    effectiveWidth: opts.effectiveWidth,
+    ...(opts.constraintX !== undefined && { constraintX: opts.constraintX }),
+    ...(opts.effectiveWidth !== undefined && { effectiveWidth: opts.effectiveWidth }),
   };
 }
 
@@ -152,30 +152,22 @@ function decodeHexStrings(content: string): string[] {
 }
 
 /**
- * Get the BaseFont names from the Font resource dictionary of the first page.
- * Returns e.g. ["Helvetica", "Times-Roman"].
+ * Get the font family names actually used on pages, extracted from the Tf
+ * (set font) operator in the decompressed content streams.
+ *
+ * pdf-lib builds resource keys as "<BaseFontName>-<hash>" (e.g.
+ * "Helvetica-7098480789"), so stripping the trailing "-<digits>" suffix
+ * gives back the BaseFont name.
  */
-async function getPageFontBaseNames(bytes: Uint8Array): Promise<string[]> {
-  const { PDFDocument, PDFName, PDFDict } = await import("pdf-lib");
-  const doc = await PDFDocument.load(bytes);
-  const [page] = doc.getPages();
-  const resources = page!.node.Resources();
-  let fontDict: ReturnType<typeof resources.lookup>;
-  try {
-    fontDict = resources.lookup(PDFName.of("Font"), PDFDict);
-  } catch {
-    return [];
-  }
-  if (!fontDict) return [];
-
+function getUsedFontNames(bytes: Uint8Array): string[] {
+  const content = decompressStreams(bytes);
   const names: string[] = [];
-  (fontDict as InstanceType<typeof PDFDict>).entries().forEach(([, ref]) => {
-    try {
-      const fontObj = doc.context.lookup(ref as Parameters<typeof doc.context.lookup>[0], PDFDict);
-      const baseFont = fontObj?.lookup(PDFName.of("BaseFont"));
-      if (baseFont) names.push(baseFont.toString().replace(/^\//, ""));
-    } catch { /* skip */ }
-  });
+  // Tf operator: /ResourceKey FontSize Tf
+  const re = /\/([A-Za-z][\w-]*?)-\d+\s+[\d.]+\s+Tf/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    names.push(m[1]!);
+  }
   return names;
 }
 
@@ -210,7 +202,7 @@ describe("buildPdf", () => {
   it("uses Helvetica for default sans-serif font", async () => {
     const layout = makeLayout([paragraphBlock([textLine("Sans text", { font: "16px Helvetica" })])]);
     const bytes = await buildPdf(layout);
-    const fontNames = await getPageFontBaseNames(bytes);
+    const fontNames = getUsedFontNames(bytes);
     expect(fontNames.some((n) => n.startsWith("Helvetica"))).toBe(true);
   });
 
@@ -219,7 +211,7 @@ describe("buildPdf", () => {
       paragraphBlock([textLine("Serif text", { font: "16px Georgia, serif" })]),
     ]);
     const bytes = await buildPdf(layout);
-    const fontNames = await getPageFontBaseNames(bytes);
+    const fontNames = getUsedFontNames(bytes);
     expect(fontNames.some((n) => n.startsWith("Times"))).toBe(true);
   });
 
@@ -228,7 +220,7 @@ describe("buildPdf", () => {
       paragraphBlock([textLine("Mono text", { font: "14px Courier, monospace" })]),
     ]);
     const bytes = await buildPdf(layout);
-    const fontNames = await getPageFontBaseNames(bytes);
+    const fontNames = getUsedFontNames(bytes);
     expect(fontNames.some((n) => n.startsWith("Courier"))).toBe(true);
   });
 
