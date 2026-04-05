@@ -13,7 +13,7 @@
  *     { label: "H1", title: "Heading 1", description: "Large title", command: "setHeading1" },
  *   ]} />
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { computePosition, offset, flip, shift } from "@floating-ui/dom";
 import { createSlashMenu } from "@scrivr/core";
@@ -22,79 +22,82 @@ import type { Editor } from "@scrivr/core";
 export interface SlashMenuItem {
   /** Short icon label shown in the menu (e.g. "H1", "•"). */
   label: string;
-  /** Display name. */
+  /** Display name (also used as the React key — must be unique in the list). */
   title: string;
   /** One-line description shown below the title. */
   description: string;
-  /** Editor command name to call on select. */
-  command: string;
-  /** Optional args forwarded to the command. */
-  args?: unknown[];
+  /** Called when the item is selected. Delete-slash logic runs before this. */
+  action: () => void;
 }
-
-const DEFAULT_ITEMS: SlashMenuItem[] = [
-  {
-    label: "¶",
-    title: "Text",
-    description: "Plain paragraph",
-    command: "setParagraph",
-  },
-  {
-    label: "H1",
-    title: "Heading 1",
-    description: "Large section title",
-    command: "setHeading1",
-  },
-  {
-    label: "H2",
-    title: "Heading 2",
-    description: "Medium section title",
-    command: "setHeading2",
-  },
-  {
-    label: "H3",
-    title: "Heading 3",
-    description: "Small section title",
-    command: "setHeading3",
-  },
-  {
-    label: "•",
-    title: "Bullet list",
-    description: "Unordered list",
-    command: "toggleBulletList",
-  },
-  {
-    label: "1.",
-    title: "Ordered list",
-    description: "Numbered list",
-    command: "toggleOrderedList",
-  },
-  {
-    label: "<>",
-    title: "Code block",
-    description: "Monospace code block",
-    command: "toggleCodeBlock",
-  },
-  {
-    label: "—",
-    title: "Divider",
-    description: "Horizontal rule",
-    command: "insertHorizontalRule",
-  },
-];
 
 interface SlashMenuProps {
   editor: Editor | null;
-  /** Override the default block items. */
+  /** Override the default block items. If omitted, a typed default list is built from editor.commands. */
   items?: SlashMenuItem[];
   className?: string;
 }
 
 export function SlashMenu({
   editor,
-  items = DEFAULT_ITEMS,
+  items: itemsProp,
   className,
 }: SlashMenuProps) {
+  const defaultItems = useMemo((): SlashMenuItem[] => {
+    if (!editor) return [];
+    const c = editor.commands;
+    return [
+      {
+        label: "¶",
+        title: "Text",
+        description: "Plain paragraph",
+        action: () => c.setParagraph(),
+      },
+      {
+        label: "H1",
+        title: "Heading 1",
+        description: "Large section title",
+        action: () => c.setHeading1(),
+      },
+      {
+        label: "H2",
+        title: "Heading 2",
+        description: "Medium section title",
+        action: () => c.setHeading2(),
+      },
+      {
+        label: "H3",
+        title: "Heading 3",
+        description: "Small section title",
+        action: () => c.setHeading3(),
+      },
+      {
+        label: "•",
+        title: "Bullet list",
+        description: "Unordered list",
+        action: () => c.toggleBulletList(),
+      },
+      {
+        label: "1.",
+        title: "Ordered list",
+        description: "Numbered list",
+        action: () => c.toggleOrderedList(),
+      },
+      {
+        label: "<>",
+        title: "Code block",
+        description: "Monospace code block",
+        action: () => c.toggleCodeBlock(),
+      },
+      {
+        label: "—",
+        title: "Divider",
+        description: "Horizontal rule",
+        action: () => c.insertHorizontalRule(),
+      },
+    ];
+  }, [editor]);
+
+  const items = itemsProp ?? defaultItems;
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState("");
   const [slashFrom, setSlashFrom] = useState(0);
@@ -155,9 +158,15 @@ export function SlashMenu({
       placement: "bottom-start",
       middleware: [offset(6), flip(), shift({ padding: 8 })],
     })
-      .then(({ x, y }) => { if (!cancelled) setPos({ x, y }); })
-      .catch((err) => console.error("[SlashMenu] computePosition failed:", err));
-    return () => { cancelled = true; };
+      .then(({ x, y }) => {
+        if (!cancelled) setPos({ x, y });
+      })
+      .catch((err) =>
+        console.error("[SlashMenu] computePosition failed:", err),
+      );
+    return () => {
+      cancelled = true;
+    };
   }, [rect, filtered.length]);
 
   // Keyboard navigation — capture phase intercepts before ProseMirror
@@ -193,13 +202,12 @@ export function SlashMenu({
 
   function selectItem(item: SlashMenuItem | undefined) {
     if (!item || !editor) return;
-    // Delete "/<query>" text, then run the command
     const state = editor.getState();
     const cursor = state.selection.from;
     if (cursor > slashFrom) {
       editor._applyTransaction(state.tr.delete(slashFrom, cursor));
     }
-    editor.commands[item.command]?.(...(item.args ?? []));
+    item.action();
     controllerRef.current?.dismissMenu();
   }
 
@@ -230,7 +238,7 @@ export function SlashMenu({
       ) : (
         filtered.map((item, i) => (
           <button
-            key={item.command}
+            key={item.title}
             onMouseDown={(e) => {
               e.preventDefault();
               selectItem(item);

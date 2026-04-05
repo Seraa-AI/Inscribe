@@ -9,7 +9,7 @@
  * fully typed.
  */
 
-import "@scrivr/core";
+export {};
 
 declare module "@scrivr/core" {
   interface Commands<ReturnType> {
@@ -96,6 +96,8 @@ declare module "@scrivr/core" {
     link: {
       /** Prompt for a URL and apply a link mark to the selection. */
       setLink: () => ReturnType;
+      /** Update the href of an existing link at [from, to]. */
+      setLinkHref: (from: number, to: number, href: string) => ReturnType;
       /** Remove the link mark from the selection. */
       unsetLink: () => ReturnType;
     };
@@ -106,6 +108,10 @@ declare module "@scrivr/core" {
     codeBlock: {
       /** Toggle a code block at the current block. */
       toggleCodeBlock: () => ReturnType;
+    };
+    horizontalRule: {
+      /** Insert a horizontal rule at the cursor. */
+      insertHorizontalRule: () => ReturnType;
     };
   }
 

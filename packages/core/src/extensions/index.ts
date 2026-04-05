@@ -27,6 +27,7 @@ export { Image } from "./built-in/Image";
 export type {
   ExtensionConfig,
   ExtensionContext,
+  IBaseEditor,
   IEditor,
   ResolvedExtension,
   MarkDecorator,

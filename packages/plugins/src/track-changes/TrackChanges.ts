@@ -2,6 +2,11 @@ import { Extension, renderTrackedInsert, renderTrackedDelete, renderTrackedConfl
 import type { GlyphEntry, IEditor, LineEntry, OverlayRenderHandler } from "@scrivr/core";
 import type { EditorState, Transaction } from "prosemirror-state";
 
+import { setAction, skipTracking, TrackChangesAction } from "./actions";
+import { trackChangesPlugin, trackChangesPluginKey } from "./engine/trackChangesPlugin";
+import { addTrackIdIfDoesntExist, createNewDeleteAttrs, createNewInsertAttrs, createNewPendingAttrs } from "./helpers";
+import { CHANGE_OPERATION, CHANGE_STATUS, TrackChangesOptions, TrackChangesStatus } from "./types";
+
 declare module "@scrivr/core" {
   interface Commands<ReturnType> {
     trackChanges: {
@@ -37,10 +42,6 @@ declare module "@scrivr/core" {
   }
 }
 
-import { setAction, skipTracking, TrackChangesAction } from "./actions";
-import { trackChangesPlugin, trackChangesPluginKey } from "./engine/trackChangesPlugin";
-import { addTrackIdIfDoesntExist, createNewDeleteAttrs, createNewInsertAttrs, createNewPendingAttrs } from "./helpers";
-import { CHANGE_OPERATION, CHANGE_STATUS, TrackChangesOptions, TrackChangesStatus } from "./types";
 
 /**
  * Insert palette — green family. Semantic: "adding content".

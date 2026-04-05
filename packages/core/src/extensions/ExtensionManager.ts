@@ -6,7 +6,7 @@ import type { Plugin, Command } from "prosemirror-state";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import type { Extension } from "./Extension";
 import type { MarkDecorator, ResolvedExtension, FontModifier, ToolbarItemSpec, InputHandler, MarkdownBlockRule, MarkdownParserTokenSpec, MarkdownSerializerRules, MarkdownNodeSerializer, MarkdownMarkSerializer } from "./types";
-import type { IEditor } from "./types";
+import type { IBaseEditor } from "./types";
 import { BlockRegistry, InlineRegistry } from "../layout/BlockRegistry";
 import type { FontConfig } from "../layout/FontConfig";
 import { defaultPageConfig } from "../layout/PageLayout";
@@ -40,8 +40,6 @@ export class ExtensionManager {
     this.resolved = extensions.map((ext) => ext.resolve(this.schema));
   }
 
-  // ── Schema ─────────────────────────────────────────────────────────────────
-
   private buildSchema(extensions: Extension[]): Schema {
     // doc and text are always required by ProseMirror — provide them as baseline
     const nodes: Record<string, object> = {
@@ -58,8 +56,6 @@ export class ExtensionManager {
 
     return new Schema({ nodes, marks });
   }
-
-  // ── Plugins ────────────────────────────────────────────────────────────────
 
   /**
    * Create an EditorState using this manager's schema and plugins.
@@ -152,8 +148,6 @@ export class ExtensionManager {
     return merged;
   }
 
-  // ── Commands ───────────────────────────────────────────────────────────────
-
   /**
    * Merged command map from all extensions.
    * Exposed on the Editor as editor.commands.
@@ -165,8 +159,6 @@ export class ExtensionManager {
     }
     return commands;
   }
-
-  // ── Layout ─────────────────────────────────────────────────────────────────
 
   /**
    * Builds a BlockRegistry from all extensions that implement addLayoutHandlers().
@@ -207,8 +199,6 @@ export class ExtensionManager {
     }
     return merged;
   }
-
-  // ── Mark decorators ────────────────────────────────────────────────────────
 
   /**
    * Map of mark type name → MarkDecorator.
@@ -290,7 +280,7 @@ export class ExtensionManager {
    * Called by Editor at the end of construction to let extensions do runtime
    * setup (collaboration providers, overlay handlers, etc.).
    */
-  buildEditorReadyCallbacks(): Array<(editor: IEditor) => (() => void) | void> {
+  buildEditorReadyCallbacks(): Array<(editor: IBaseEditor) => (() => void) | void> {
     return this.resolved
       .filter((ext) => ext.editorReadyCallback !== undefined)
       .map((ext) => ext.editorReadyCallback!);

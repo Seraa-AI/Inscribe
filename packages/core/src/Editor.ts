@@ -4,11 +4,9 @@ import type {
   MarkDecorator,
   ToolbarItemSpec,
   OverlayRenderHandler,
+  IEditor,
 } from "./extensions/types";
-import type { SafeFlatCommands, EditorEvents, ExtensionStorage } from "./types/augmentation";
 import type { Schema } from "prosemirror-model";
-import { MarkdownSerializer } from "prosemirror-markdown";
-import { ExtensionManager } from "./extensions/ExtensionManager";
 import { StarterKit } from "./extensions/StarterKit";
 import { BlockRegistry, InlineRegistry } from "./layout/BlockRegistry";
 import type { Extension } from "./extensions/Extension";
@@ -21,6 +19,8 @@ import { LayoutCoordinator } from "./layout/LayoutCoordinator";
 import type { CharacterMap } from "./layout/CharacterMap";
 import { InputBridge } from "./input/InputBridge";
 import { PasteTransformer } from "./input/PasteTransformer";
+import { BaseEditor } from "./BaseEditor";
+import type { EditorEvents } from "./types/augmentation";
 
 export type EditorChangeHandler = (state: EditorState) => void;
 
@@ -104,16 +104,8 @@ export interface EditorOptions {
 }
 
 /**
- * Editor — the single class consumers instantiate.
- *
- * Owns:
- *   - The ExtensionManager (schema, plugins, commands)
- *   - The ProseMirror EditorState (document + selection)
- *   - The hidden <textarea> that captures all keyboard input
- *
- * Does NOT own:
- *   - The <canvas> element — the renderer does
- *   - Layout — the layout engine does
+ * Editor — the full browser editor. Extends `BaseEditor` with layout,
+ * canvas rendering, input capture, and cursor management.
  *
  * Usage:
  *   const editor = new Editor({ extensions: [StarterKit], onChange })
@@ -124,14 +116,9 @@ export interface EditorOptions {
  *   editor.commands.toggleBold()
  *   editor.commands.undo()
  */
-export class Editor {
-  private readonly manager: ExtensionManager;
-  private state: EditorState;
-  private readonly onChange: EditorChangeHandler | undefined;
-  private readonly onFocusChange: ((focused: boolean) => void) | undefined;
-
-  /** Subscriber set — notified on every state change, focus change, and cursor tick. */
-  private readonly listeners = new Set<() => void>();
+export class Editor extends BaseEditor implements IEditor {
+  private readonly _onChange: EditorChangeHandler | undefined;
+  private readonly _onFocusChange: ((focused: boolean) => void) | undefined;
 
   /**
    * Incremented by redraw() to signal asset-only repaints (e.g. image load).
@@ -203,35 +190,10 @@ export class Editor {
   readonly inlineRegistry: InlineRegistry;
 
   /**
-   * Bound command map — each entry calls the extension command with the
-   * current state + this editor's dispatch. Built once; closures over `this`
-   * so they always read the latest state at call time.
-   *
-   * Type is `SafeFlatCommands` — augment `Commands<ReturnType>` in your
-   * extension to get typed entries here.
-   */
-  readonly commands: SafeFlatCommands;
-
-  /**
-   * Per-extension storage — augment `ExtensionStorage` in your extension to
-   * get typed entries here.
-   */
-  readonly storage: ExtensionStorage = {} as ExtensionStorage;
-
-  /** Typed event emitter — use on() / off() / emit() */
-  private readonly _eventHandlers = new Map<
-    keyof EditorEvents,
-    Set<(payload: EditorEvents[keyof EditorEvents]) => void>
-  >();
-
-  /**
    * Overlay render handlers registered by extensions (e.g. CollaborationCursor).
    * Called by ViewManager.paintOverlay() for each visible page.
    */
   private readonly overlayRenderHandlers = new Set<OverlayRenderHandler>();
-
-  /** Cleanup functions returned by onEditorReady() callbacks — called on destroy(). */
-  private editorReadyCleanup: Array<() => void> = [];
 
   constructor({
     extensions = [StarterKit],
@@ -241,32 +203,30 @@ export class Editor {
     onCursorTick,
     startReady = true,
   }: EditorOptions) {
-    this.manager = new ExtensionManager(extensions);
-    this.onChange = onChange;
-    this.onFocusChange = onFocusChange;
-    const builtConfig = this.manager.buildPageConfig();
+    // BaseEditor handles: manager, state, commands, storage, event emitter
+    super({ extensions });
+
+    this._onChange = onChange;
+    this._onFocusChange = onFocusChange;
+
+    const builtConfig = this._manager.buildPageConfig();
     // User-supplied pageConfig overrides extension-built config so that
     // top-level options like fontFamily are always respected.
     this.pageConfig = builtConfig && pageConfig
       ? { ...builtConfig, ...pageConfig }
       : builtConfig ?? pageConfig ?? defaultPageConfig;
-    this.fontConfig = this.manager.buildBlockStyles();
-    this.measurer = new TextMeasurer({ lineHeightMultiplier: 1.2 });
-    this.fontModifiers = this.manager.buildFontModifiers();
-    this.markDecorators = this.manager.buildMarkDecorators();
-    this.toolbarItems = this.manager.buildToolbarItems();
-    this.blockRegistry = this.manager.buildBlockRegistry();
-    this.inlineRegistry = this.manager.buildInlineRegistry();
+
+    this.fontConfig    = this._manager.buildBlockStyles();
+    this.measurer      = new TextMeasurer({ lineHeightMultiplier: 1.2 });
+    this.fontModifiers = this._manager.buildFontModifiers();
+    this.markDecorators = this._manager.buildMarkDecorators();
+    this.toolbarItems  = this._manager.buildToolbarItems();
+    this.blockRegistry = this._manager.buildBlockRegistry();
+    this.inlineRegistry = this._manager.buildInlineRegistry();
+
     this.cursorManager = new CursorManager(() => {
       onCursorTick?.(this.cursorManager.isVisible);
-      this.notifyListeners();
-    });
-
-    const initialDoc = this.manager.buildInitialDoc();
-    this.state = EditorState.create({
-      schema: this.manager.schema,
-      plugins: this.manager.buildPlugins(),
-      ...(initialDoc ? { doc: initialDoc } : {}),
+      this._notifyListeners();
     });
 
     this.lc = new LayoutCoordinator({
@@ -274,9 +234,9 @@ export class Editor {
       fontConfig: this.fontConfig,
       measurer: this.measurer,
       fontModifiers: this.fontModifiers,
-      getDoc: () => this.state.doc,
-      getHead: () => this.state.selection.head,
-      onUpdate: () => this.notifyListeners(),
+      getDoc: () => this._state.doc,
+      getHead: () => this._state.selection.head,
+      onUpdate: () => this._notifyListeners(),
     });
 
     // If startReady:false, cancel the idle layout and suppress all flushes
@@ -285,18 +245,16 @@ export class Editor {
       this.lc.setReady(false);
     }
 
-    this.commands = this.buildCommands();
-
     const pasteTransformer = new PasteTransformer(
-      this.manager.schema,
-      this.manager.buildMarkdownRules(),
-      this.manager.buildMarkdownParserTokens(),
+      this._manager.schema,
+      this._manager.buildMarkdownRules(),
+      this._manager.buildMarkdownParserTokens(),
     );
 
     this.ib = new InputBridge({
-      getState: () => this.state,
-      dispatch: (tr) => this.dispatch(tr),
-      getSchema: () => this.manager.schema,
+      getState: () => this._state,
+      dispatch: (tr) => { if (tr) this._viewDispatch(tr); },
+      getSchema: () => this._manager.schema,
       getViewportRect: (from, to) => this.getViewportRect(from, to),
       getCharMap: () => this.lc.charMap,
       getFloatPosition: (docPos: number) => {
@@ -304,31 +262,66 @@ export class Editor {
         if (!f) return null;
         return { page: f.page, y: f.y, height: f.height };
       },
-      keymap: this.manager.buildKeymap(),
-      inputHandlers: this.manager.buildInputHandlers(),
+      keymap: this._manager.buildKeymap(),
+      inputHandlers: this._manager.buildInputHandlers(),
       navigator: this,
       pasteTransformer,
       onFocus: () => {
         this.cursorManager.start();
-        this.notifyListeners();
-        this.onFocusChange?.(true);
+        this._notifyListeners();
+        this._onFocusChange?.(true);
         this.emit("focus", undefined as EditorEvents["focus"]);
       },
       onBlur: () => {
         this.cursorManager.stop();
-        this.notifyListeners();
-        this.onFocusChange?.(false);
+        this._notifyListeners();
+        this._onFocusChange?.(false);
         this.emit("blur", undefined as EditorEvents["blur"]);
       },
     });
 
-    // Invoke onEditorReady() for all extensions that define it.
-    // Runs after everything is initialised so extensions can safely subscribe,
-    // read state, register overlay handlers, etc.
-    const readyCallbacks = this.manager.buildEditorReadyCallbacks();
-    this.editorReadyCleanup = readyCallbacks
-      .map((cb) => cb(this))
-      .filter((fn): fn is () => void => typeof fn === "function");
+    // Fire onEditorReady after ALL infrastructure (including view) is set up.
+    this._fireEditorReady();
+  }
+
+  // ── BaseEditor overrides ─────────────────────────────────────────────────
+
+  /**
+   * Override: route through the view-aware dispatch (layout invalidation + rAF).
+   * This ensures external transaction sources (Y.js, AI suggestions) also
+   * trigger layout + paint updates.
+   */
+  override _applyTransaction(tr: Transaction): void {
+    this._viewDispatch(tr);
+  }
+
+  /**
+   * Override: commands also go through the view-aware dispatch so every
+   * command triggers layout + paint.
+   */
+  protected override _dispatchForCommands(tr: Transaction): void {
+    this._viewDispatch(tr);
+  }
+
+  /** Override to use full view dispatch so setNodeAttrs triggers a repaint. */
+  override setNodeAttrs(docPos: number, attrs: Record<string, unknown>): void {
+    const node = this._state.doc.nodeAt(docPos);
+    if (!node) return;
+    this._viewDispatch(
+      this._state.tr.setNodeMarkup(docPos, undefined, { ...node.attrs, ...attrs }),
+    );
+  }
+
+  override destroy(): void {
+    if (this._rafId !== null) {
+      cancelAnimationFrame(this._rafId);
+      this._rafId = null;
+    }
+    super.destroy(); // emits "destroy", fires cleanup callbacks
+    this.lc.destroy();
+    this.overlayRenderHandlers.clear();
+    this.cursorManager.stop();
+    this.unmount();
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -342,37 +335,22 @@ export class Editor {
    *
    * Pass `true` once the provider fires its `synced` event. The editor will
    * do a single full layout + paint of the complete document.
-   *
-   * Example (HocusPocus):
-   *   const editor = new Editor({ startReady: false, ... });
-   *   provider.on('synced', () => editor.setReady(true));
    */
   setReady(ready: boolean): void {
     if (!ready && this._rafId !== null) {
-      // Cancel any pending flush before going unready to prevent a stale render.
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
     this.lc.setReady(ready);
   }
 
-  /**
-   * The merged ProseMirror Schema built from all extensions.
-   * Use this instead of importing schema directly — it reflects whatever
-   * extensions were loaded.
-   */
-  get schema(): Schema {
-    return this.manager.schema;
-  }
-
-  getState(): EditorState {
-    return this.state;
+  /** The merged ProseMirror Schema built from all extensions. */
+  override get schema(): Schema {
+    return this._manager.schema;
   }
 
   /**
    * The CharacterMap — glyph positions for hit-testing and cursor rendering.
-   * Owned by the LayoutCoordinator; exposed here so ViewManager and adapters
-   * can access it without knowing about the coordinator.
    */
   get charMap(): CharacterMap {
     return this.lc.charMap;
@@ -393,17 +371,47 @@ export class Editor {
   }
 
   /**
-   * Convert a doc position range to a viewport DOMRect.
-   *
-   * Uses the CharacterMap for pixel-accurate canvas coordinates, then offsets
-   * by the page element's viewport position (registered by the rendering adapter
-   * via setPageTopLookup). Returns null if either position is not in the
-   * CharacterMap or if no adapter has registered a page element lookup.
-   *
-   * The returned rect spans from the `from` position to the `to` position.
-   * If both positions are on different lines, the rect uses the `from` line's
-   * y/height and extends to the right edge of the available content width.
+   * Three-phase loading state for collaborative documents.
    */
+  get loadingState(): "syncing" | "rendering" | "ready" {
+    return this.lc.loadingState;
+  }
+
+  /**
+   * The page number the cursor currently resides on.
+   */
+  get cursorPage(): number {
+    return this.lc.cursorPage;
+  }
+
+  /**
+   * Convert a doc position range to a viewport DOMRect.
+   */
+  getViewportRect(from: number, to: number): DOMRect | null {
+    this.lc.ensureLayout();
+
+    const fromCoords = this.lc.charMap.coordsAtPos(from);
+    if (!fromCoords) return null;
+
+    const pageScreenRect = this.ib.lookupPageScreenRect(fromCoords.page);
+    if (!pageScreenRect) return null;
+
+    const toCoords = this.lc.charMap.coordsAtPos(to);
+
+    const left = pageScreenRect.screenLeft + fromCoords.x;
+    const top  = pageScreenRect.screenTop  + fromCoords.y;
+    const height = fromCoords.height;
+
+    const sameLine =
+      toCoords &&
+      toCoords.page === fromCoords.page &&
+      Math.abs(toCoords.y - fromCoords.y) < 2;
+    const width =
+      sameLine && toCoords ? Math.abs(toCoords.x - fromCoords.x) : 1;
+
+    return new DOMRect(left, top, Math.max(1, width), height);
+  }
+
   getNodeViewportRect(docPos: number): DOMRect | null {
     this.lc.ensureLayout();
     const rect = this.lc.charMap.getObjectRect(docPos);
@@ -423,99 +431,23 @@ export class Editor {
    */
   selectNode(docPos: number): void {
     try {
-      const sel = NodeSelection.create(this.state.doc, docPos);
-      this.dispatch(this.state.tr.setSelection(sel));
+      const sel = NodeSelection.create(this._state.doc, docPos);
+      this._viewDispatch(this._state.tr.setSelection(sel));
       this.focus();
     } catch {
       this.moveCursorTo(docPos);
     }
   }
 
-  /** Merge attrs into the node at docPos. No-op if no node exists there. */
-  setNodeAttrs(docPos: number, attrs: Record<string, unknown>): void {
-    const node = this.state.doc.nodeAt(docPos);
-    if (!node) return;
-    this.dispatch(this.state.tr.setNodeMarkup(docPos, undefined, { ...node.attrs, ...attrs }));
-  }
-
-  getViewportRect(from: number, to: number): DOMRect | null {
-    this.lc.ensureLayout();
-
-    const fromCoords = this.lc.charMap.coordsAtPos(from);
-    if (!fromCoords) return null;
-
-    const pageScreenRect = this.ib.lookupPageScreenRect(fromCoords.page);
-    if (!pageScreenRect) return null;
-
-    const toCoords = this.lc.charMap.coordsAtPos(to);
-
-    const left = pageScreenRect.screenLeft + fromCoords.x;
-    const top  = pageScreenRect.screenTop  + fromCoords.y;
-    const height = fromCoords.height;
-
-    // Width: span to toCoords if on same line, otherwise use a minimal 1px width
-    const sameLine =
-      toCoords &&
-      toCoords.page === fromCoords.page &&
-      Math.abs(toCoords.y - fromCoords.y) < 2;
-    const width =
-      sameLine && toCoords ? Math.abs(toCoords.x - fromCoords.x) : 1;
-
-    return new DOMRect(left, top, Math.max(1, width), height);
-  }
-
   /**
    * Guarantees the layout reflects the current EditorState.
-   * Cheap when layout is already current (dirty === false).
-   *
-   * Called automatically by `layout`, movement methods, and `getSelectionSnapshot`.
-   * Framework adapters should not need to call this directly.
    */
   ensureLayout(): void {
     this.lc.ensureLayout();
   }
 
   /**
-   * Three-phase loading state for collaborative documents.
-   *
-   *  'syncing'   — editor created, waiting for the Y.js / HocusPocus server to
-   *                deliver the document (setReady(false) is in effect). No
-   *                content is visible yet — show a full-screen loading UI.
-   *
-   *  'rendering' — onSynced fired and the first pages are already painted; idle
-   *                callbacks are completing the rest of the layout in the
-   *                background. Content is visible and interactive — you can hide
-   *                the loading UI and show a subtle progress indicator if you want.
-   *
-   *  'ready'     — all pages are laid out. For non-collaborative editors this is
-   *                the initial state (no sync step needed).
-   *
-   * The value changes are surfaced through the normal notifyListeners() cycle,
-   * so useEditorState() picks them up without any extra wiring:
-   *
-   *   const loadingState = useEditorState({
-   *     editor,
-   *     selector: (ctx) => ctx.editor.loadingState,
-   *     equalityFn: Object.is,
-   *   });
-   */
-  get loadingState(): "syncing" | "rendering" | "ready" {
-    return this.lc.loadingState;
-  }
-
-  /**
-   * The page number the cursor currently resides on.
-   * Computed once per layout cycle in ensureLayout() — free to read on every
-   * overlay paint without re-walking the layout.
-   */
-  get cursorPage(): number {
-    return this.lc.cursorPage;
-  }
-
-  /**
    * Ensures the CharacterMap is populated for the given page.
-   * Called eagerly for cursor page ± 1 after every layout pass.
-   * Also called by ViewManager before painting — idempotent.
    */
   ensurePagePopulated(pageNumber: number): void {
     this.lc.ensurePagePopulated(pageNumber);
@@ -523,14 +455,10 @@ export class Editor {
 
   /**
    * Returns a lightweight snapshot of the current selection state.
-   * Includes everything a toolbar or floating menu needs — no CharacterMap
-   * or layout internals required.
-   *
-   * Ensures layout is current before computing.
    */
   getSelectionSnapshot(): SelectionSnapshot {
     this.lc.ensureLayout();
-    const { selection } = this.state;
+    const { selection } = this._state;
     const blockInfo = this.getBlockInfo();
     return {
       anchor: selection.anchor,
@@ -556,61 +484,9 @@ export class Editor {
   /**
    * Tear down the mounted view (textarea + event listeners) without
    * destroying the Editor itself. Safe to call multiple times.
-   * After unmount the editor can be re-mounted with mount().
    */
   unmount(): void {
     this.ib.unmount();
-  }
-
-  /**
-   * Register a typed event handler.
-   * Returns an unsubscribe function.
-   *
-   * @example
-   * const off = editor.on("focus", () => console.log("focused"));
-   * // later:
-   * off();
-   */
-  on<K extends keyof EditorEvents>(
-    event: K,
-    handler: (payload: EditorEvents[K]) => void,
-  ): () => void {
-    if (!this._eventHandlers.has(event)) {
-      this._eventHandlers.set(event, new Set());
-    }
-    const handlers = this._eventHandlers.get(event)!;
-    handlers.add(handler as (p: EditorEvents[keyof EditorEvents]) => void);
-    return () => this.off(event, handler);
-  }
-
-  /** Unregister a typed event handler. */
-  off<K extends keyof EditorEvents>(
-    event: K,
-    handler: (payload: EditorEvents[K]) => void,
-  ): void {
-    this._eventHandlers
-      .get(event)
-      ?.delete(handler as (p: EditorEvents[keyof EditorEvents]) => void);
-  }
-
-  /** Emit a typed editor event. Called internally — extensions may also call this. */
-  emit<K extends keyof EditorEvents>(event: K, payload: EditorEvents[K]): void {
-    this._eventHandlers.get(event)?.forEach((h) => h(payload));
-  }
-
-  destroy(): void {
-    if (this._rafId !== null) {
-      cancelAnimationFrame(this._rafId);
-      this._rafId = null;
-    }
-    this.emit("destroy", undefined as EditorEvents["destroy"]);
-    this.lc.destroy();
-    for (const cleanup of this.editorReadyCleanup) cleanup();
-    this.editorReadyCleanup = [];
-    this._eventHandlers.clear();
-    this.overlayRenderHandlers.clear();
-    this.cursorManager.stop();
-    this.unmount();
   }
 
   focus(): void {
@@ -621,11 +497,6 @@ export class Editor {
    * Register a canvas draw function on the overlay layer.
    * Called by ViewManager.paintOverlay() after the local cursor and selection.
    * Returns an unregister function.
-   *
-   * @example
-   * const unregister = editor.addOverlayRenderHandler((ctx, pageNum, config, charMap) => {
-   *   // draw remote cursors…
-   * });
    */
   addOverlayRenderHandler(handler: OverlayRenderHandler): () => void {
     this.overlayRenderHandlers.add(handler);
@@ -647,23 +518,13 @@ export class Editor {
   }
 
   /**
-   * Apply a transaction from an external source (Y.js remote sync, etc.).
-   * Bypasses input-bridge positioning that is only relevant for local edits.
-   *
-   * @internal — prefixed with underscore to signal it's infrastructure-facing.
-   */
-  _applyTransaction(tr: Transaction): void {
-    this.dispatch(tr);
-  }
-
-  /**
    * Trigger a UI redraw without a document/selection change.
    * Use when external state (e.g. Y.js awareness) changes and the overlay
    * needs to be repainted with fresh remote cursor positions.
    */
   redraw(): void {
     this.renderGeneration++;
-    this.notifyListeners();
+    this._notifyListeners();
   }
 
   /**
@@ -679,7 +540,6 @@ export class Editor {
 
   /**
    * Positions the hidden textarea at the cursor's visual location.
-   * Delegates to InputBridge.syncPosition().
    */
   syncInputBridge(): void {
     this.ib.syncPosition();
@@ -687,7 +547,6 @@ export class Editor {
 
   /**
    * Scrolls the nearest scrollable ancestor so the cursor is visible.
-   * Called after every state change and after React renders new pages.
    */
   scrollCursorIntoView(): void {
     this.ib.scrollCursorIntoView();
@@ -695,151 +554,62 @@ export class Editor {
 
   /**
    * Collapse the cursor to a specific doc position.
-   * Safe to call with any integer — clamps and resolves to nearest valid text pos.
    */
   moveCursorTo(docPos: number): void {
-    this.applyMovement(docPos, false);
+    this._applyMovement(docPos, false);
     this.focus();
   }
 
   /**
    * Set an explicit anchor + head, creating a non-collapsed selection.
-   * Used for Shift+click and click+drag.
    */
   setSelection(anchor: number, head: number): void {
-    const size = this.state.doc.content.size;
+    const size = this._state.doc.content.size;
     const a = Math.max(0, Math.min(anchor, size));
     const h = Math.max(0, Math.min(head, size));
-    const $a = this.state.doc.resolve(a);
-    const $h = this.state.doc.resolve(h);
-    this.dispatch(this.state.tr.setSelection(TextSelection.between($a, $h)));
+    const $a = this._state.doc.resolve(a);
+    const $h = this._state.doc.resolve(h);
+    this._viewDispatch(this._state.tr.setSelection(TextSelection.between($a, $h)));
     this.focus();
   }
 
   /** Move left one position. Pass extend=true to grow the selection (Shift+←). */
   moveLeft(extend = false): void {
-    const head = this.state.selection.head;
+    const head = this._state.selection.head;
     if (head <= 0) return;
-    const $pos = this.state.doc.resolve(Math.max(0, head - 1));
+    const $pos = this._state.doc.resolve(Math.max(0, head - 1));
     const sel = TextSelection.findFrom($pos, -1);
-    if (sel) this.applyMovement(sel.head, extend);
+    if (sel) this._applyMovement(sel.head, extend);
   }
 
   /** Move right one position. Pass extend=true to grow the selection (Shift+→). */
   moveRight(extend = false): void {
-    const head = this.state.selection.head;
-    const size = this.state.doc.content.size;
+    const head = this._state.selection.head;
+    const size = this._state.doc.content.size;
     if (head >= size) return;
-    const $pos = this.state.doc.resolve(Math.min(size, head + 1));
+    const $pos = this._state.doc.resolve(Math.min(size, head + 1));
     const sel = TextSelection.findFrom($pos, 1);
-    if (sel) this.applyMovement(sel.head, extend);
+    if (sel) this._applyMovement(sel.head, extend);
   }
 
   /** Move up one line preserving x. Pass extend=true for Shift+↑. */
   moveUp(extend = false): void {
     this.lc.ensureLayout();
-    const head = this.state.selection.head;
+    const head = this._state.selection.head;
     const coords = this.lc.charMap.coordsAtPos(head);
     if (!coords) return;
     const pos = this.lc.charMap.posAbove(head, coords.x);
-    if (pos !== null) this.applyMovement(pos, extend);
+    if (pos !== null) this._applyMovement(pos, extend);
   }
 
-  /**
-   * Returns the names of marks active at the current cursor/selection.
-   *
-   * - Collapsed cursor: uses stored marks (pending marks set by toggleMark) or
-   *   the marks of the text node immediately before the cursor.
-   * - Range selection: a mark is considered active only if it spans every text
-   *   node in the range (matches toggleMark's "all-or-nothing" toggle logic).
-   */
-  /**
-   * Returns a MarkdownSerializer configured with all extension-contributed rules.
-   * Use this with exportToMarkdown() from @scrivr/export.
-   */
-  getMarkdownSerializer(): MarkdownSerializer {
-    const { nodes, marks } = this.manager.buildMarkdownSerializerRules();
-    return new MarkdownSerializer(nodes, marks);
-  }
-
-  /** Serialize the full document to Markdown. Implements IEditor.getMarkdown(). */
-  getMarkdown(): string {
-    return this.getMarkdownSerializer().serialize(this.state.doc);
-  }
-
-  getActiveMarks(): string[] {
-    const { selection, storedMarks } = this.state;
-    const { from, to, empty } = selection;
-
-    if (empty) {
-      const marks = storedMarks ?? selection.$from.marks();
-      return marks.map((m) => m.type.name);
-    }
-
-    // Range: active = present on every text node in [from, to)
-    return Object.keys(this.schema.marks).filter((name) => {
-      const markType = this.schema.marks[name]!;
-      let hasText = false;
-      let allHaveMark = true;
-      this.state.doc.nodesBetween(from, to, (node) => {
-        if (node.isText) {
-          hasText = true;
-          if (!markType.isInSet(node.marks)) allHaveMark = false;
-        }
-      });
-      return hasText && allHaveMark;
-    });
-  }
-
-  /**
-   * Attributes of each active mark at the current cursor/selection.
-   * Keys are mark names; values are the mark's attrs object.
-   * For a range selection, only marks active across the entire range are included.
-   */
-  getActiveMarkAttrs(): Record<string, Record<string, unknown>> {
-    const { selection, storedMarks } = this.state;
-    const { from, to, empty } = selection;
-    const result: Record<string, Record<string, unknown>> = {};
-
-    if (empty) {
-      const marks = storedMarks ?? selection.$from.marks();
-      for (const mark of marks) {
-        result[mark.type.name] = mark.attrs as Record<string, unknown>;
-      }
-    } else {
-      for (const name of this.getActiveMarks()) {
-        const markType = this.schema.marks[name]!;
-        // Collect attrs from the first text node that has this mark
-        this.state.doc.nodesBetween(from, to, (node) => {
-          if (node.isText && !(name in result)) {
-            const found = markType.isInSet(node.marks);
-            if (found) result[name] = found.attrs as Record<string, unknown>;
-          }
-        });
-      }
-    }
-
-    return result;
-  }
-
-  getBlockInfo(): { blockType: string; blockAttrs: Record<string, unknown> } {
-    const { $from } = this.state.selection;
-    // Walk up to the direct child of doc (depth 1) so container nodes like
-    // bulletList / orderedList are returned rather than their inner paragraph.
-    // This lets toolbar isActive correctly detect "we are inside a bullet list".
-    for (let d = 1; d <= $from.depth; d++) {
-      const node = $from.node(d);
-      if (node.isBlock && d === 1) {
-        return {
-          blockType: node.type.name,
-          blockAttrs: node.attrs as Record<string, unknown>,
-        };
-      }
-    }
-    return {
-      blockType: $from.parent.type.name,
-      blockAttrs: $from.parent.attrs as Record<string, unknown>,
-    };
+  /** Move down one line preserving x. Pass extend=true for Shift+↓. */
+  moveDown(extend = false): void {
+    this.lc.ensureLayout();
+    const head = this._state.selection.head;
+    const coords = this.lc.charMap.coordsAtPos(head);
+    if (!coords) return;
+    const pos = this.lc.charMap.posBelow(head, coords.x);
+    if (pos !== null) this._applyMovement(pos, extend);
   }
 
   /** Whether the editor's textarea currently has focus. */
@@ -848,133 +618,60 @@ export class Editor {
   }
 
   /**
-   * Subscribe to all editor notifications: state changes, focus, cursor ticks.
-   * Returns an unsubscribe function. Used by useSyncExternalStore in React adapters.
-   *
-   * @example
-   * const unsubscribe = editor.subscribe(() => forceUpdate());
-   */
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  /**
    * Returns the current ProseMirror EditorState.
-   * ProseMirror states are immutable — reference equality detects changes.
    * Used as the getSnapshot function for useSyncExternalStore.
    */
   getSnapshot(): EditorState {
-    return this.state;
-  }
-
-  /**
-   * Returns true when the named mark or block type is active at the cursor.
-   * Mirrors TipTap's editor.isActive() — same call signature.
-   *
-   * @example
-   * editor.isActive('bold')               // mark active?
-   * editor.isActive('heading', { level: 1 }) // h1 active?
-   */
-  isActive(name: string, attrs?: Record<string, unknown>): boolean {
-    if (this.schema.marks[name]) {
-      const active = this.getActiveMarks().includes(name);
-      if (!active || !attrs) return active;
-      const ma = this.getActiveMarkAttrs()[name];
-      if (!ma) return false;
-      return Object.entries(attrs).every(([k, v]) => ma[k] === v);
-    }
-    const { blockType, blockAttrs } = this.getBlockInfo();
-    if (blockType !== name) return false;
-    if (!attrs) return true;
-    return Object.entries(attrs).every(([k, v]) => blockAttrs[k] === v);
-  }
-
-  /** Move down one line preserving x. Pass extend=true for Shift+↓. */
-  moveDown(extend = false): void {
-    this.lc.ensureLayout();
-    const head = this.state.selection.head;
-    const coords = this.lc.charMap.coordsAtPos(head);
-    if (!coords) return;
-    const pos = this.lc.charMap.posBelow(head, coords.x);
-    if (pos !== null) this.applyMovement(pos, extend);
+    return this._state;
   }
 
   // ── Private ─────────────────────────────────────────────────────────────────
 
   /**
    * Core movement primitive.
-   *
    * extend=false → collapsed cursor at newHead
-   * extend=true  → selection from current anchor to newHead (Shift+arrow / drag)
+   * extend=true  → selection from current anchor to newHead (Shift+arrow)
    */
-  private applyMovement(newHead: number, extend: boolean): void {
-    const size = this.state.doc.content.size;
+  private _applyMovement(newHead: number, extend: boolean): void {
+    const size = this._state.doc.content.size;
     const h = Math.max(0, Math.min(newHead, size));
-    const a = extend ? this.state.selection.anchor : h;
-    // TextSelection.between resolves positions safely — handles node boundaries
-    // and position 0 without throwing, unlike TextSelection.create.
-    const $a = this.state.doc.resolve(Math.max(0, Math.min(a, size)));
-    const $h = this.state.doc.resolve(h);
-    this.dispatch(this.state.tr.setSelection(TextSelection.between($a, $h)));
+    const a = extend ? this._state.selection.anchor : h;
+    const $a = this._state.doc.resolve(Math.max(0, Math.min(a, size)));
+    const $h = this._state.doc.resolve(h);
+    this._viewDispatch(this._state.tr.setSelection(TextSelection.between($a, $h)));
   }
 
-  private notifyListeners(): void {
-    this.listeners.forEach((l) => l());
-  }
-
-  private dispatch(tr: Transaction | null): void {
-    if (!tr) return;
-    this.state = this.state.apply(tr);
+  /**
+   * The view-aware dispatch: applies state + invalidates layout + resets
+   * cursor blink + calls onChange + schedules rAF flush.
+   *
+   * All transaction paths in Editor (commands, input, external) converge here.
+   */
+  private _viewDispatch(tr: Transaction): void {
+    // _applyState is in BaseEditor: applies tr, emits "update", notifyListeners
+    this._applyState(tr);
     this.lc.invalidate();
     // resetSilent: reset blink state WITHOUT calling onTick (which fires notifyListeners).
-    // The rAF flush below handles the repaint — calling reset() here was the root cause
-    // of O(N²) repaints during Y.js initial sync (one full canvas paint per dispatch).
+    // Calling reset() here was the root cause of O(N²) repaints during Y.js initial sync.
     this.cursorManager.resetSilent();
-    this.onChange?.(this.state);
-    this.emit("update", { docChanged: tr.docChanged });
-    // Schedule a single rAF flush rather than rendering immediately.
-    // Multiple dispatches within the same frame (e.g. Y.js initial sync
-    // firing hundreds of typeObserver events) share one layout + one paint,
-    // reducing O(N²) sync cost to O(N).
-    this.scheduleFlush();
+    this._onChange?.(this._state);
+    this._scheduleFlush();
   }
 
   /**
    * Schedules a layout + render flush for the next animation frame.
    * Idempotent — calling it multiple times before the frame fires is free.
    */
-  private scheduleFlush(): void {
+  private _scheduleFlush(): void {
     if (!this.lc.isReady) return; // suppress during collaborative sync
     if (this._rafId !== null) return;
     this._rafId = requestAnimationFrame(() => {
       this._rafId = null;
       this.lc.ensureLayout();
       // Scroll first so the viewport is settled, then notify subscribers.
-      // This ensures getNodeViewportRect / getViewportRect return post-scroll
-      // screen coordinates, preventing a one-frame popover position jump.
       this.scrollCursorIntoView();
       this.syncInputBridge();
-      this.notifyListeners();
+      this._notifyListeners();
     });
-  }
-
-  /**
-   * Build bound command wrappers.
-   * Each wrapper reads `this.state` at call time (not construction time)
-   * because the closure captures `this` by reference.
-   */
-  private buildCommands(): SafeFlatCommands {
-    const rawCommands = this.manager.buildCommands();
-    const bound: Record<string, (...args: unknown[]) => void> = {};
-
-    for (const [name, factory] of Object.entries(rawCommands)) {
-      bound[name] = (...args: unknown[]) => {
-        const cmd = factory(...args);
-        cmd(this.state, (tr) => this.dispatch(tr));
-      };
-    }
-
-    return bound as SafeFlatCommands;
   }
 }
