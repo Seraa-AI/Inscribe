@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { layoutBlock, populateCharMap, resolveLeafBlockDimensions } from "./BlockLayout";
+import {
+  layoutBlock,
+  populateCharMap,
+  resolveLeafBlockDimensions,
+} from "./BlockLayout";
 import { TextBlockStrategy } from "./TextBlockStrategy";
 import { CharacterMap } from "./CharacterMap";
 import type { InlineStrategy } from "./BlockRegistry";
@@ -24,7 +28,11 @@ const { schema: skSchema } = buildStarterKitContext();
 
 // Helper: paragraph node with a fontFamily attr set
 function paragraphWithFamily(text: string, fontFamily: string) {
-  return skSchema.node("paragraph", { fontFamily }, text ? [skSchema.text(text)] : []);
+  return skSchema.node(
+    "paragraph",
+    { fontFamily },
+    text ? [skSchema.text(text)] : [],
+  );
 }
 
 // Helper: heading node with a fontFamily attr set
@@ -34,13 +42,17 @@ function headingWithFamily(level: number, text: string, fontFamily: string) {
 
 // lineHeight = (12+3) * 1.2 = 18
 
-
 // ── Basic structure ───────────────────────────────────────────────────────────
 
 describe("layoutBlock — basic", () => {
   it("returns a block positioned at the given x and y", () => {
     const block = layoutBlock(paragraph("Hello"), {
-      nodePos: 0, x: 72, y: 100, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 100,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     expect(block.x).toBe(72);
     expect(block.y).toBe(100);
@@ -48,7 +60,12 @@ describe("layoutBlock — basic", () => {
 
   it("height equals the sum of line heights", () => {
     const block = layoutBlock(paragraph("Hello"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     // "Hello" fits on one line, lineHeight ≈ 18
     expect(block.height).toBeCloseTo(18);
@@ -56,7 +73,12 @@ describe("layoutBlock — basic", () => {
 
   it("exports spaceBefore and spaceAfter from FontConfig", () => {
     const block = layoutBlock(paragraph("Hello"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     // defaultFontConfig paragraph: spaceBefore=0, spaceAfter=10
     expect(block.spaceBefore).toBe(0);
@@ -66,7 +88,12 @@ describe("layoutBlock — basic", () => {
   it("wraps into multiple lines when text exceeds availableWidth", () => {
     // availableWidth=80, "Hello world" = 88px → 2 lines
     const block = layoutBlock(paragraph("Hello world"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 80, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 80,
+      page: 1,
+      measurer: createMeasurer(),
     });
     expect(block.lines.length).toBeGreaterThan(1);
     expect(block.height).toBeCloseTo(18 * block.lines.length);
@@ -74,7 +101,12 @@ describe("layoutBlock — basic", () => {
 
   it("uses heading font for heading nodes", () => {
     const block = layoutBlock(heading(1, "Title"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     // h1 spaceBefore=24, spaceAfter=12
     expect(block.spaceBefore).toBe(24);
@@ -88,14 +120,24 @@ describe("layoutBlock — basic", () => {
 describe("layoutBlock — empty node", () => {
   it("produces one line for an empty paragraph", () => {
     const block = layoutBlock(paragraph(""), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     expect(block.lines).toHaveLength(1);
   });
 
   it("empty paragraph has non-zero height (cursor must have a home)", () => {
     const block = layoutBlock(paragraph(""), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     expect(block.height).toBeGreaterThan(0);
   });
@@ -103,8 +145,14 @@ describe("layoutBlock — empty node", () => {
   it("registers a glyph in CharacterMap for empty paragraph", () => {
     const map = new CharacterMap();
     layoutBlock(paragraph(""), {
-      nodePos: 0, x: 72, y: 60, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), map, lineIndexOffset: 0,
+      nodePos: 0,
+      x: 72,
+      y: 60,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      map,
+      lineIndexOffset: 0,
     });
     // Virtual span at nodePos+1 = 1
     const coords = map.coordsAtPos(1);
@@ -120,7 +168,12 @@ describe("layoutBlock — mark resolution", () => {
     const spy = vi.spyOn(m, "measureWidth");
 
     layoutBlock(boldParagraph("Hello"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: m,
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: m,
     });
 
     const fontUsed = spy.mock.calls[0]?.[1];
@@ -133,7 +186,12 @@ describe("layoutBlock — mark resolution", () => {
 describe("layoutBlock — mark propagation to LayoutSpan", () => {
   it("underline mark appears on layout spans", () => {
     const block = layoutBlock(underlineParagraph("Hello"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     const span = block.lines[0]?.spans[0];
     const textSpan = span?.kind === "text" ? span : undefined;
@@ -143,7 +201,12 @@ describe("layoutBlock — mark propagation to LayoutSpan", () => {
 
   it("strikethrough mark appears on layout spans", () => {
     const block = layoutBlock(strikethroughParagraph("Hello"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     const span = block.lines[0]?.spans[0];
     const textSpan = span?.kind === "text" ? span : undefined;
@@ -152,7 +215,12 @@ describe("layoutBlock — mark propagation to LayoutSpan", () => {
 
   it("plain text has empty marks array", () => {
     const block = layoutBlock(paragraph("Hello"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     const span = block.lines[0]?.spans[0];
     const textSpan = span?.kind === "text" ? span : undefined;
@@ -161,23 +229,42 @@ describe("layoutBlock — mark propagation to LayoutSpan", () => {
 
   it("mixed paragraph: plain span has no underline, underlined span does", () => {
     const block = layoutBlock(mixedParagraph("Hello ", "World"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     // Two children → two spans on the line
     const spans = block.lines[0]?.spans ?? [];
     expect(spans.length).toBeGreaterThanOrEqual(2);
-    const plainSpan = spans.find((s) => s.kind === "text" && s.text === "Hello ");
-    const underlinedSpan = spans.find((s) => s.kind === "text" && s.text === "World");
+    const plainSpan = spans.find(
+      (s) => s.kind === "text" && s.text === "Hello ",
+    );
+    const underlinedSpan = spans.find(
+      (s) => s.kind === "text" && s.text === "World",
+    );
     const plainTextSpan = plainSpan?.kind === "text" ? plainSpan : undefined;
-    const underlinedTextSpan = underlinedSpan?.kind === "text" ? underlinedSpan : undefined;
-    expect(plainTextSpan?.marks?.some((m) => m.name === "underline")).toBe(false);
-    expect(underlinedTextSpan?.marks?.some((m) => m.name === "underline")).toBe(true);
+    const underlinedTextSpan =
+      underlinedSpan?.kind === "text" ? underlinedSpan : undefined;
+    expect(plainTextSpan?.marks?.some((m) => m.name === "underline")).toBe(
+      false,
+    );
+    expect(underlinedTextSpan?.marks?.some((m) => m.name === "underline")).toBe(
+      true,
+    );
   });
 
   it("marks survive word-wrap: multi-word underlined text passes marks to all spans", () => {
     // "Hello world" with underline, narrow width forces a line break
     const block = layoutBlock(underlineParagraph("Hello world"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 80, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 80,
+      page: 1,
+      measurer: createMeasurer(),
     });
     expect(block.lines.length).toBeGreaterThan(1);
     for (const line of block.lines) {
@@ -197,8 +284,14 @@ describe("layoutBlock — CharacterMap", () => {
     const map = new CharacterMap();
     // "Hi" at nodePos=0 → chars at docPos 1 and 2
     layoutBlock(paragraph("Hi"), {
-      nodePos: 0, x: 72, y: 60, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), map, lineIndexOffset: 0,
+      nodePos: 0,
+      x: 72,
+      y: 60,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      map,
+      lineIndexOffset: 0,
     });
     expect(map.glyphsInRange(1, 3)).toHaveLength(2);
   });
@@ -206,8 +299,14 @@ describe("layoutBlock — CharacterMap", () => {
   it("glyph x includes the page left margin", () => {
     const map = new CharacterMap();
     layoutBlock(paragraph("Hi"), {
-      nodePos: 0, x: 72, y: 60, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), map, lineIndexOffset: 0,
+      nodePos: 0,
+      x: 72,
+      y: 60,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      map,
+      lineIndexOffset: 0,
     });
     const coords = map.coordsAtPos(1);
     // First char x = page margin (72) + lineOffsetX (0 for left align) + 0
@@ -216,16 +315,30 @@ describe("layoutBlock — CharacterMap", () => {
 
   it("centred line glyphs are offset by (availableWidth - lineWidth) / 2", () => {
     const map = new CharacterMap();
-    const node = schema.node("paragraph", { align: "center" }, [schema.text("Hi")]);
+    const node = schema.node("paragraph", { align: "center" }, [
+      schema.text("Hi"),
+    ]);
 
     const config: FontConfig = {
       ...defaultFontConfig,
-      paragraph: { font: "14px Georgia, serif", spaceBefore: 0, spaceAfter: 10, align: "center" },
+      paragraph: {
+        font: "14px Georgia, serif",
+        spaceBefore: 0,
+        spaceAfter: 10,
+        align: "center",
+      },
     };
 
     layoutBlock(node, {
-      nodePos: 0, x: 0, y: 60, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), map, lineIndexOffset: 0, fontConfig: config,
+      nodePos: 0,
+      x: 0,
+      y: 60,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      map,
+      lineIndexOffset: 0,
+      fontConfig: config,
     });
 
     // "Hi" = 2 chars × 8px = 16px. center offset = (400 - 16) / 2 = 192
@@ -239,9 +352,17 @@ describe("layoutBlock — CharacterMap", () => {
 describe("layoutBlock — node attr alignment", () => {
   it("node align attr overrides FontConfig align", () => {
     // FontConfig says left, node attr says center — node attr wins
-    const node = schema.nodes["paragraph"]!.create({ align: "center" }, schema.text("Hi"));
+    const node = schema.nodes["paragraph"]!.create(
+      { align: "center" },
+      schema.text("Hi"),
+    );
     const block = layoutBlock(node, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     expect(block.align).toBe("center");
   });
@@ -250,25 +371,47 @@ describe("layoutBlock — node attr alignment", () => {
     // list_item paragraph has no align attr — falls back to blockStyle
     const node = schema.nodes["paragraph"]!.create(null, schema.text("Hi"));
     const block = layoutBlock(node, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     // defaultFontConfig paragraph.align is "left"
     expect(block.align).toBe("left");
   });
 
   it("node align right is respected", () => {
-    const node = schema.nodes["paragraph"]!.create({ align: "right" }, schema.text("Hi"));
+    const node = schema.nodes["paragraph"]!.create(
+      { align: "right" },
+      schema.text("Hi"),
+    );
     const block = layoutBlock(node, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     expect(block.align).toBe("right");
   });
 
   it("CharacterMap glyph x is offset for center alignment from node attr", () => {
     const map = new CharacterMap();
-    const node = schema.nodes["paragraph"]!.create({ align: "center" }, schema.text("Hi"));
+    const node = schema.nodes["paragraph"]!.create(
+      { align: "center" },
+      schema.text("Hi"),
+    );
     layoutBlock(node, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(), map,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      map,
     });
     // "Hi" = 2 chars × 8px = 16px wide. Center offset = (400 - 16) / 2 = 192
     const coords = map.coordsAtPos(1);
@@ -276,9 +419,17 @@ describe("layoutBlock — node attr alignment", () => {
   });
 
   it("ignores invalid align attr values and falls back to FontConfig", () => {
-    const node = schema.nodes["paragraph"]!.create({ align: "garbage" }, schema.text("Hi"));
+    const node = schema.nodes["paragraph"]!.create(
+      { align: "garbage" },
+      schema.text("Hi"),
+    );
     const block = layoutBlock(node, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     expect(block.align).toBe("left");
   });
@@ -294,34 +445,57 @@ describe("layoutBlock — leaf blocks (HR and Image)", () => {
   }
 
   function image(height: number | null = 200) {
-    return fullSchema.nodes["image"]!.create({ src: "http://x.com/img.png", height });
+    return fullSchema.nodes["image"]!.create({
+      src: "http://x.com/img.png",
+      height,
+    });
   }
 
   const hrFontConfig: FontConfig = {
     ...defaultFontConfig,
-    horizontalRule: { font: "8px Georgia, serif", spaceBefore: 8, spaceAfter: 8, align: "left" },
+    horizontalRule: {
+      font: "8px Georgia, serif",
+      spaceBefore: 8,
+      spaceAfter: 8,
+      align: "left",
+    },
   };
 
   it("HR block — lines is always empty (leaf has no inline content)", () => {
     const block = layoutBlock(hr(), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), fontConfig: hrFontConfig,
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig: hrFontConfig,
     });
     expect(block.lines).toHaveLength(0);
   });
 
   it("HR block — height is font-size × 1.5 (8px → 12px)", () => {
     const block = layoutBlock(hr(), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), fontConfig: hrFontConfig,
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig: hrFontConfig,
     });
     expect(block.height).toBe(12); // Math.round(8 * 1.5)
   });
 
   it("HR block — spaceBefore and spaceAfter come from block style", () => {
     const block = layoutBlock(hr(), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), fontConfig: hrFontConfig,
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig: hrFontConfig,
     });
     expect(block.spaceBefore).toBe(8);
     expect(block.spaceAfter).toBe(8);
@@ -330,8 +504,15 @@ describe("layoutBlock — leaf blocks (HR and Image)", () => {
   it("HR block — registers one hit-test line in CharacterMap", () => {
     const map = new CharacterMap();
     layoutBlock(hr(), {
-      nodePos: 0, x: 72, y: 50, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), fontConfig: hrFontConfig, map, lineIndexOffset: 0,
+      nodePos: 0,
+      x: 72,
+      y: 50,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig: hrFontConfig,
+      map,
+      lineIndexOffset: 0,
     });
     expect(map.hasLine(1, 0)).toBe(true);
   });
@@ -341,8 +522,15 @@ describe("layoutBlock — leaf blocks (HR and Image)", () => {
     // availableWidth=400 → halfWidth=200; left glyph x=72..272, right x=272..472
     const map = new CharacterMap();
     layoutBlock(hr(), {
-      nodePos: 10, x: 72, y: 50, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), fontConfig: hrFontConfig, map, lineIndexOffset: 0,
+      nodePos: 10,
+      x: 72,
+      y: 50,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig: hrFontConfig,
+      map,
+      lineIndexOffset: 0,
     });
     // Click left quarter (x=72+50=122, midpoint of left glyph=72+100=172 → 122<=172 → before)
     const pos = map.posAtCoords(72 + 50, 55, 1);
@@ -353,8 +541,15 @@ describe("layoutBlock — leaf blocks (HR and Image)", () => {
     // nodePos=10, nodeSize=1 (leaf) → afterPos=11
     const map = new CharacterMap();
     layoutBlock(hr(), {
-      nodePos: 10, x: 72, y: 50, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), fontConfig: hrFontConfig, map, lineIndexOffset: 0,
+      nodePos: 10,
+      x: 72,
+      y: 50,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig: hrFontConfig,
+      map,
+      lineIndexOffset: 0,
     });
     // Click right side (x=72+350=422, past midpoint of right glyph=72+300=372 → endDocPos=11)
     const pos = map.posAtCoords(72 + 350, 55, 1);
@@ -363,7 +558,12 @@ describe("layoutBlock — leaf blocks (HR and Image)", () => {
 
   it("Image block — height comes from node height attr (200)", () => {
     const block = layoutBlock(image(200), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     expect(block.height).toBe(200);
   });
@@ -371,11 +571,21 @@ describe("layoutBlock — leaf blocks (HR and Image)", () => {
   it("Image block — explicit height attr always wins over font-size fallback", () => {
     const configWithSmallFont: FontConfig = {
       ...defaultFontConfig,
-      image: { font: "16px sans-serif", spaceBefore: 8, spaceAfter: 8, align: "left" },
+      image: {
+        font: "16px sans-serif",
+        spaceBefore: 8,
+        spaceAfter: 8,
+        align: "left",
+      },
     };
     const block = layoutBlock(image(300), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), fontConfig: configWithSmallFont,
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig: configWithSmallFont,
     });
     // Should use the attr (300), not font-size × 1.5 (24)
     expect(block.height).toBe(300);
@@ -384,7 +594,12 @@ describe("layoutBlock — leaf blocks (HR and Image)", () => {
   it("Image block — no fontConfig falls back to IMAGE_DEFAULT_HEIGHT (200)", () => {
     // Image created without height attr uses schema default 200
     const block = layoutBlock(image(200), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
       // fontConfig intentionally omitted
     });
     expect(block.height).toBe(200);
@@ -396,45 +611,85 @@ describe("layoutBlock — leaf blocks (HR and Image)", () => {
 describe("resolveLeafBlockDimensions", () => {
   const { schema: fullSchema } = buildStarterKitContext();
   const IMAGE_DEFAULT = 200;
-  const IMAGE_SPACE   = 8;
+  const IMAGE_SPACE = 8;
 
   it("uses node height attr when positive — ignores font", () => {
     const node = fullSchema.nodes["image"]!.create({ height: 350 });
     const cfg: FontConfig = {
-      image: { font: "16px sans-serif", spaceBefore: 4, spaceAfter: 4, align: "left" },
+      image: {
+        font: "16px sans-serif",
+        spaceBefore: 4,
+        spaceAfter: 4,
+        align: "left",
+      },
     };
-    const { height } = resolveLeafBlockDimensions(node, cfg, IMAGE_DEFAULT, IMAGE_SPACE);
+    const { height } = resolveLeafBlockDimensions(
+      node,
+      cfg,
+      IMAGE_DEFAULT,
+      IMAGE_SPACE,
+    );
     expect(height).toBe(350);
   });
 
   it("falls through to font size when height attr is absent", () => {
     const node = fullSchema.nodes["horizontalRule"]!.create();
     const cfg: FontConfig = {
-      horizontalRule: { font: "8px Georgia, serif", spaceBefore: 8, spaceAfter: 8, align: "left" },
+      horizontalRule: {
+        font: "8px Georgia, serif",
+        spaceBefore: 8,
+        spaceAfter: 8,
+        align: "left",
+      },
     };
-    const { height } = resolveLeafBlockDimensions(node, cfg, IMAGE_DEFAULT, IMAGE_SPACE);
+    const { height } = resolveLeafBlockDimensions(
+      node,
+      cfg,
+      IMAGE_DEFAULT,
+      IMAGE_SPACE,
+    );
     expect(height).toBe(12); // Math.round(8 * 1.5)
   });
 
   it("uses IMAGE_DEFAULT_HEIGHT when fontConfig is undefined", () => {
     const node = fullSchema.nodes["horizontalRule"]!.create();
-    const { height } = resolveLeafBlockDimensions(node, undefined, IMAGE_DEFAULT, IMAGE_SPACE);
+    const { height } = resolveLeafBlockDimensions(
+      node,
+      undefined,
+      IMAGE_DEFAULT,
+      IMAGE_SPACE,
+    );
     expect(height).toBe(IMAGE_DEFAULT);
   });
 
   it("spaceBefore and spaceAfter come from block style when available", () => {
     const node = fullSchema.nodes["horizontalRule"]!.create();
     const cfg: FontConfig = {
-      horizontalRule: { font: "8px Georgia, serif", spaceBefore: 12, spaceAfter: 6, align: "left" },
+      horizontalRule: {
+        font: "8px Georgia, serif",
+        spaceBefore: 12,
+        spaceAfter: 6,
+        align: "left",
+      },
     };
-    const { spaceBefore, spaceAfter } = resolveLeafBlockDimensions(node, cfg, IMAGE_DEFAULT, IMAGE_SPACE);
+    const { spaceBefore, spaceAfter } = resolveLeafBlockDimensions(
+      node,
+      cfg,
+      IMAGE_DEFAULT,
+      IMAGE_SPACE,
+    );
     expect(spaceBefore).toBe(12);
     expect(spaceAfter).toBe(6);
   });
 
   it("spaceBefore and spaceAfter fall back to IMAGE_SPACE when no fontConfig", () => {
     const node = fullSchema.nodes["horizontalRule"]!.create();
-    const { spaceBefore, spaceAfter } = resolveLeafBlockDimensions(node, undefined, IMAGE_DEFAULT, IMAGE_SPACE);
+    const { spaceBefore, spaceAfter } = resolveLeafBlockDimensions(
+      node,
+      undefined,
+      IMAGE_DEFAULT,
+      IMAGE_SPACE,
+    );
     expect(spaceBefore).toBe(IMAGE_SPACE);
     expect(spaceAfter).toBe(IMAGE_SPACE);
   });
@@ -453,8 +708,14 @@ describe("layoutBlock — end-of-line caret sentinel (via layoutBlock map)", () 
     const map = new CharacterMap();
     // "Hi" at nodePos=0 → chars at docPos 1,2 → sentinel at 3
     layoutBlock(paragraph("Hi"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), map, lineIndexOffset: 0,
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      map,
+      lineIndexOffset: 0,
     });
     expect(map.hasGlyph(3)).toBe(true);
   });
@@ -462,11 +723,17 @@ describe("layoutBlock — end-of-line caret sentinel (via layoutBlock map)", () 
   it("sentinel x equals right edge of last character", () => {
     const map = new CharacterMap();
     layoutBlock(paragraph("Hi"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), map, lineIndexOffset: 0,
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      map,
+      lineIndexOffset: 0,
     });
     // 'i' is at docPos 2, sentinel at docPos 3
-    const iCoords   = map.coordsAtPos(2);
+    const iCoords = map.coordsAtPos(2);
     const sentCoords = map.coordsAtPos(3);
     // sentinel.x = iCoords.x + iCoords.width (8px per char in mock)
     expect(sentCoords?.x).toBeCloseTo(iCoords!.x + 8);
@@ -475,8 +742,14 @@ describe("layoutBlock — end-of-line caret sentinel (via layoutBlock map)", () 
   it("sentinel width is 0 (it has no visual extent)", () => {
     const map = new CharacterMap();
     layoutBlock(paragraph("Hi"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), map, lineIndexOffset: 0,
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      map,
+      lineIndexOffset: 0,
     });
     // Access internal glyphs to verify width=0
     const glyphs = map.glyphsInRange(3, 4);
@@ -486,8 +759,14 @@ describe("layoutBlock — end-of-line caret sentinel (via layoutBlock map)", () 
   it("does NOT register a sentinel for an empty paragraph (ZWS)", () => {
     const map = new CharacterMap();
     layoutBlock(paragraph(""), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1,
-      measurer: createMeasurer(), map, lineIndexOffset: 0,
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      map,
+      lineIndexOffset: 0,
     });
     // ZWS at docPos 1 is registered; docPos 2 (past closing token) must NOT be
     expect(map.hasGlyph(1)).toBe(true);
@@ -498,8 +777,14 @@ describe("layoutBlock — end-of-line caret sentinel (via layoutBlock map)", () 
     const map = new CharacterMap();
     // "Hello world" wraps to 2 lines at width=80 (11 chars × 8px = 88 > 80)
     layoutBlock(paragraph("Hello world"), {
-      nodePos: 0, x: 0, y: 0, availableWidth: 80, page: 1,
-      measurer: createMeasurer(), map, lineIndexOffset: 0,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 80,
+      page: 1,
+      measurer: createMeasurer(),
+      map,
+      lineIndexOffset: 0,
     });
     // The first glyph of line 2 ('w' at docPos 7 if "Hello " is line 1)
     // must be reachable via exact match — no sentinel at that position.
@@ -512,7 +797,12 @@ describe("layoutBlock — end-of-line caret sentinel (via layoutBlock map)", () 
 describe("populateCharMap — end-of-line caret sentinel", () => {
   it("registers sentinel glyph at docPos past the last character", () => {
     const block = layoutBlock(paragraph("Hi"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     const map = new CharacterMap();
     populateCharMap(block, map, 1, 0, createMeasurer());
@@ -522,7 +812,12 @@ describe("populateCharMap — end-of-line caret sentinel", () => {
 
   it("sentinel glyph is on the correct page", () => {
     const block = layoutBlock(paragraph("Hi"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     const map = new CharacterMap();
     populateCharMap(block, map, 3, 0, createMeasurer()); // page 3
@@ -537,10 +832,20 @@ describe("populateCharMap — end-of-line caret sentinel", () => {
     // later in the reversed array), returning the wrong page.
     // With sentinel, the exact-match path returns page 1 correctly.
     const blockP3 = layoutBlock(paragraph("Page three text"), {
-      nodePos: 20, x: 72, y: 200, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 20,
+      x: 72,
+      y: 200,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     const blockP1 = layoutBlock(paragraph("Hi"), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     const map = new CharacterMap();
 
@@ -556,17 +861,27 @@ describe("populateCharMap — end-of-line caret sentinel", () => {
 
   it("does NOT register sentinel for empty paragraph (ZWS only line)", () => {
     const block = layoutBlock(paragraph(""), {
-      nodePos: 0, x: 72, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 72,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     const map = new CharacterMap();
     populateCharMap(block, map, 1, 0, createMeasurer());
-    expect(map.hasGlyph(1)).toBe(true);  // ZWS cursor position
+    expect(map.hasGlyph(1)).toBe(true); // ZWS cursor position
     expect(map.hasGlyph(2)).toBe(false); // nothing past closing token
   });
 
   it("sentinel is only on the last line of a wrapped paragraph", () => {
     const block = layoutBlock(paragraph("Hello world"), {
-      nodePos: 0, x: 0, y: 0, availableWidth: 80, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 80,
+      page: 1,
+      measurer: createMeasurer(),
     });
     expect(block.lines).toHaveLength(2);
     const map = new CharacterMap();
@@ -581,7 +896,12 @@ describe("populateCharMap — end-of-line caret sentinel", () => {
 describe("layoutBlock — node fontFamily attr", () => {
   it("span font uses the node fontFamily instead of the block style family", () => {
     const block = layoutBlock(paragraphWithFamily("Hello", "Arial"), {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     const span = block.lines[0]?.spans[0];
     const font = span?.kind === "text" ? span.font : undefined;
@@ -592,7 +912,12 @@ describe("layoutBlock — node fontFamily attr", () => {
 
   it("preserves the block style size when substituting the family", () => {
     const block = layoutBlock(paragraphWithFamily("Hello", "Arial"), {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     const span = block.lines[0]?.spans[0];
     const font = span?.kind === "text" ? span.font : undefined;
@@ -602,7 +927,12 @@ describe("layoutBlock — node fontFamily attr", () => {
 
   it("preserves heading size and weight when substituting the family", () => {
     const block = layoutBlock(headingWithFamily(1, "Title", "Inter"), {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
     });
     const span = block.lines[0]?.spans[0];
     const font = span?.kind === "text" ? span.font : "";
@@ -616,7 +946,12 @@ describe("layoutBlock — node fontFamily attr", () => {
     // the document family. Test that passing a config with a family works.
     const fontConfig = applyPageFont(defaultFontConfig, "Arial, sans-serif");
     const block = layoutBlock(paragraph("Hello"), {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1, measurer: createMeasurer(),
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
       fontConfig,
     });
     const span = block.lines[0]?.spans[0];
@@ -626,10 +961,19 @@ describe("layoutBlock — node fontFamily attr", () => {
 
   it("node fontFamily overrides the fontConfig family", () => {
     const customConfig: FontConfig = {
-      paragraph: { font: "14px Verdana", spaceBefore: 0, spaceAfter: 10, align: "left" },
+      paragraph: {
+        font: "14px Verdana",
+        spaceBefore: 0,
+        spaceAfter: 10,
+        align: "left",
+      },
     };
     const block = layoutBlock(paragraphWithFamily("Hello", "Courier New"), {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400, page: 1,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
       measurer: createMeasurer(),
       fontConfig: customConfig,
     });
@@ -654,31 +998,45 @@ describe("extractSpans — inline node handling", () => {
     const hb = skSchema.nodes["hard_break"]?.create();
     if (!hb) return;
     const para = skSchema.node("paragraph", null, [
-      skSchema.text("Hello"), hb, skSchema.text("World"),
+      skSchema.text("Hello"),
+      hb,
+      skSchema.text("World"),
     ]);
     const block = layoutBlock(para, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400,
-      page: 1, measurer: createMeasurer(), fontConfig,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig,
     });
     expect(block.lines).toHaveLength(2);
     // Line 0: "Hello" text only, terminated by break
     const line0Spans = block.lines[0]!.spans;
-    expect(line0Spans.every(s => s.kind === "text")).toBe(true);
+    expect(line0Spans.every((s) => s.kind === "text")).toBe(true);
     expect(block.lines[0]!.terminalBreakDocPos).toBeDefined();
     // Line 1: "World" text only
     const line1Spans = block.lines[1]!.spans;
-    expect(line1Spans.every(s => s.kind === "text")).toBe(true);
+    expect(line1Spans.every((s) => s.kind === "text")).toBe(true);
   });
 
   it("hard_break does NOT inflate line height — both lines stay at text line height", () => {
     const hb = skSchema.nodes["hard_break"]?.create();
     if (!hb) return;
     const para = skSchema.node("paragraph", null, [
-      skSchema.text("A"), hb, skSchema.text("B"),
+      skSchema.text("A"),
+      hb,
+      skSchema.text("B"),
     ]);
     const block = layoutBlock(para, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400,
-      page: 1, measurer: createMeasurer(), fontConfig,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig,
     });
     expect(block.lines).toHaveLength(2);
     for (const line of block.lines) {
@@ -694,13 +1052,18 @@ describe("extractSpans — inline node handling", () => {
     if (!hb) return;
     const para = skSchema.node("paragraph", null, [hb]);
     const block = layoutBlock(para, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400,
-      page: 1, measurer: createMeasurer(), fontConfig,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig,
     });
     expect(block.lines).toHaveLength(1);
     expect(block.lines[0]?.lineHeight).toBeCloseTo(MOCK_LINE_HEIGHT);
     const spans = block.lines[0]?.spans ?? [];
-    expect(spans.every(s => s.kind === "text")).toBe(true);
+    expect(spans.every((s) => s.kind === "text")).toBe(true);
   });
 
   it("trailing hard_break emits a phantom second line for the cursor after the break", () => {
@@ -708,8 +1071,13 @@ describe("extractSpans — inline node handling", () => {
     if (!hb) return;
     const para = skSchema.node("paragraph", null, [skSchema.text("Hello"), hb]);
     const block = layoutBlock(para, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400,
-      page: 1, measurer: createMeasurer(), fontConfig,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig,
     });
     expect(block.lines).toHaveLength(2);
     // Line 0 ends with the break; line 1 is the phantom ZWS cursor line.
@@ -721,27 +1089,47 @@ describe("extractSpans — inline node handling", () => {
   // ── inline image IS an object span ───────────────────────────────────────
 
   it("inline image with width+height attrs produces exactly one object span", () => {
-    const img = skSchema.nodes["image"]?.create({ src: "a.png", width: 100, height: 80 });
+    const img = skSchema.nodes["image"]?.create({
+      src: "a.png",
+      width: 100,
+      height: 80,
+    });
     if (!img) return;
     const para = skSchema.node("paragraph", null, [
-      skSchema.text("Before"), img, skSchema.text("After"),
+      skSchema.text("Before"),
+      img,
+      skSchema.text("After"),
     ]);
     const block = layoutBlock(para, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 600,
-      page: 1, measurer: createMeasurer(), fontConfig,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 600,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig,
     });
-    const allSpans = block.lines.flatMap(l => l.spans);
-    const objectSpans = allSpans.filter(s => s.kind === "object");
+    const allSpans = block.lines.flatMap((l) => l.spans);
+    const objectSpans = allSpans.filter((s) => s.kind === "object");
     expect(objectSpans).toHaveLength(1);
   });
 
   it("line containing an inline image is as tall as the image when it exceeds text height", () => {
-    const img = skSchema.nodes["image"]?.create({ src: "a.png", width: 200, height: 150 });
+    const img = skSchema.nodes["image"]?.create({
+      src: "a.png",
+      width: 200,
+      height: 150,
+    });
     if (!img) return;
     const para = skSchema.node("paragraph", null, [img]);
     const block = layoutBlock(para, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400,
-      page: 1, measurer: createMeasurer(), fontConfig,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig,
     });
     expect(block.lines[0]?.lineHeight).toBe(150);
     expect(block.height).toBe(150);
@@ -749,26 +1137,45 @@ describe("extractSpans — inline node handling", () => {
 
   it("line height is max(text, image) — small image alongside text keeps text height", () => {
     // Image (8px) is shorter than text (~18px) — line height must not shrink.
-    const img = skSchema.nodes["image"]?.create({ src: "i.png", width: 8, height: 8 });
+    const img = skSchema.nodes["image"]?.create({
+      src: "i.png",
+      width: 8,
+      height: 8,
+    });
     if (!img) return;
     const para = skSchema.node("paragraph", null, [skSchema.text("Hi"), img]);
     const block = layoutBlock(para, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400,
-      page: 1, measurer: createMeasurer(), fontConfig,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig,
     });
     expect(block.lines[0]?.lineHeight).toBeGreaterThanOrEqual(MOCK_LINE_HEIGHT);
   });
 
   it("inline image registers a glyph in the CharacterMap at its docPos", () => {
-    const img = skSchema.nodes["image"]?.create({ src: "a.png", width: 50, height: 50 });
+    const img = skSchema.nodes["image"]?.create({
+      src: "a.png",
+      width: 50,
+      height: 50,
+    });
     if (!img) return;
     // doc structure: doc(para(text"Hi", img)) — image is at docPos 4
     // nodePos=0 → para opens at 0, text "Hi" at 1,2, img at 3
     const para = skSchema.node("paragraph", null, [skSchema.text("Hi"), img]);
     const map = new CharacterMap();
     layoutBlock(para, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400,
-      page: 1, measurer: createMeasurer(), fontConfig, map,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig,
+      map,
     });
     // "Hi" → docPos 1,2; image → docPos 3; sentinel → docPos 4
     expect(map.hasGlyph(3)).toBe(true); // the image glyph
@@ -788,24 +1195,45 @@ describe("TextBlockStrategy — inline image rendering", () => {
 
   function makeMockCtx(): CanvasRenderingContext2D {
     return {
-      save: vi.fn(), restore: vi.fn(),
-      fillText: vi.fn(), strokeRect: vi.fn(), fillRect: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+      fillText: vi.fn(),
+      strokeRect: vi.fn(),
+      fillRect: vi.fn(),
       measureText: vi.fn(() => ({ width: 8 })),
-      beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(),
-      stroke: vi.fn(), fill: vi.fn(), arc: vi.fn(), closePath: vi.fn(),
-      font: "", fillStyle: "", strokeStyle: "", lineWidth: 1,
-      textAlign: "left", textBaseline: "alphabetic",
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      fill: vi.fn(),
+      arc: vi.fn(),
+      closePath: vi.fn(),
+      font: "",
+      fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 1,
+      textAlign: "left",
+      textBaseline: "alphabetic",
       drawImage: vi.fn(),
     } as unknown as CanvasRenderingContext2D;
   }
 
   it("calls InlineStrategy.render() for each inline image span", () => {
-    const img = skSchema.nodes["image"]?.create({ src: "a.png", width: 80, height: 60 });
+    const img = skSchema.nodes["image"]?.create({
+      src: "a.png",
+      width: 80,
+      height: 60,
+    });
     if (!img) return;
     const para = skSchema.node("paragraph", null, [skSchema.text("Hi"), img]);
     const block = layoutBlock(para, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400,
-      page: 1, measurer: createMeasurer(), fontConfig,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig,
     });
 
     const renderFn = vi.fn();
@@ -814,49 +1242,88 @@ describe("TextBlockStrategy — inline image rendering", () => {
     inlineRegistry.register("image", inlineStrategy);
 
     const ctx = makeMockCtx();
-    TextBlockStrategy.render(block, {
-      ctx,
-      pageNumber: 1,
-      lineIndexOffset: 0,
-      dpr: 1,
-      measurer: createMeasurer(),
-      inlineRegistry,
-    }, new CharacterMap());
+    TextBlockStrategy.render(
+      block,
+      {
+        ctx,
+        pageNumber: 1,
+        lineIndexOffset: 0,
+        dpr: 1,
+        measurer: createMeasurer(),
+        inlineRegistry,
+      },
+      new CharacterMap(),
+    );
 
     expect(renderFn).toHaveBeenCalledOnce();
     // Verify it was called with the correct node
-    const [, , , w, h, node] = renderFn.mock.calls[0] as [unknown, unknown, unknown, number, number, unknown];
+    const [, , , w, h, node] = renderFn.mock.calls[0] as [
+      unknown,
+      unknown,
+      unknown,
+      number,
+      number,
+      unknown,
+    ];
     expect(w).toBe(80);
     expect(h).toBe(60);
   });
 
   it("does NOT call InlineStrategy.render() when inlineRegistry is absent", () => {
-    const img = skSchema.nodes["image"]?.create({ src: "a.png", width: 80, height: 60 });
+    const img = skSchema.nodes["image"]?.create({
+      src: "a.png",
+      width: 80,
+      height: 60,
+    });
     if (!img) return;
     const para = skSchema.node("paragraph", null, [img]);
     const block = layoutBlock(para, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 400,
-      page: 1, measurer: createMeasurer(), fontConfig,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 400,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig,
     });
 
     const ctx = makeMockCtx();
     // No inlineRegistry — should not throw, just silently skip drawing
     expect(() => {
-      TextBlockStrategy.render(block, {
-        ctx, pageNumber: 1, lineIndexOffset: 0, dpr: 1, measurer: createMeasurer(),
-      }, new CharacterMap());
+      TextBlockStrategy.render(
+        block,
+        {
+          ctx,
+          pageNumber: 1,
+          lineIndexOffset: 0,
+          dpr: 1,
+          measurer: createMeasurer(),
+        },
+        new CharacterMap(),
+      );
     }).not.toThrow();
   });
 
   it("still renders surrounding text when paragraph contains a mix of text and image", () => {
-    const img = skSchema.nodes["image"]?.create({ src: "a.png", width: 50, height: 50 });
+    const img = skSchema.nodes["image"]?.create({
+      src: "a.png",
+      width: 50,
+      height: 50,
+    });
     if (!img) return;
     const para = skSchema.node("paragraph", null, [
-      skSchema.text("Hello"), img, skSchema.text("World"),
+      skSchema.text("Hello"),
+      img,
+      skSchema.text("World"),
     ]);
     const block = layoutBlock(para, {
-      nodePos: 0, x: 0, y: 0, availableWidth: 600,
-      page: 1, measurer: createMeasurer(), fontConfig,
+      nodePos: 0,
+      x: 0,
+      y: 0,
+      availableWidth: 600,
+      page: 1,
+      measurer: createMeasurer(),
+      fontConfig,
     });
 
     const renderFn = vi.fn();
@@ -864,10 +1331,18 @@ describe("TextBlockStrategy — inline image rendering", () => {
     inlineRegistry.register("image", { render: renderFn });
 
     const ctx = makeMockCtx();
-    TextBlockStrategy.render(block, {
-      ctx, pageNumber: 1, lineIndexOffset: 0, dpr: 1,
-      measurer: createMeasurer(), inlineRegistry,
-    }, new CharacterMap());
+    TextBlockStrategy.render(
+      block,
+      {
+        ctx,
+        pageNumber: 1,
+        lineIndexOffset: 0,
+        dpr: 1,
+        measurer: createMeasurer(),
+        inlineRegistry,
+      },
+      new CharacterMap(),
+    );
 
     // Text was drawn (fillText called for "Hello" and "World" chars)
     expect(ctx.fillText).toHaveBeenCalled();

@@ -15,13 +15,15 @@ import {
   AI_SUGGESTION_SET_HOVER,
   AI_SUGGESTION_SET_ACTIVE,
 } from "../AiSuggestionPlugin";
-import { schema, doc, p } from "./helpers";
+import { doc, p } from "./helpers";
 import type { AiSuggestion } from "../types";
 
-// ── Fixture ───────────────────────────────────────────────────────────────────
 
 function makeState() {
-  return EditorState.create({ doc: doc(p("hello")), plugins: [aiSuggestionPlugin] });
+  return EditorState.create({
+    doc: doc(p("hello")),
+    plugins: [aiSuggestionPlugin],
+  });
 }
 
 const SUGGESTION: AiSuggestion = {
@@ -37,8 +39,6 @@ const SUGGESTION: AiSuggestion = {
   ],
 };
 
-// ── Initial state ─────────────────────────────────────────────────────────────
-
 describe("AiSuggestionPlugin — initial state", () => {
   it("starts with null suggestion and empty sets", () => {
     const ps = aiSuggestionPluginKey.getState(makeState())!;
@@ -48,8 +48,6 @@ describe("AiSuggestionPlugin — initial state", () => {
     expect(ps.activeBlockId).toBeNull();
   });
 });
-
-// ── AI_SUGGESTION_SET ─────────────────────────────────────────────────────────
 
 describe("AiSuggestionPlugin — AI_SUGGESTION_SET", () => {
   it("stores the suggestion payload", () => {
@@ -85,15 +83,11 @@ describe("AiSuggestionPlugin — AI_SUGGESTION_SET", () => {
     state = state.apply(
       state.tr.setMeta(AI_SUGGESTION_SET, { payload: SUGGESTION }),
     );
-    state = state.apply(
-      state.tr.setMeta(AI_SUGGESTION_SET, { payload: null }),
-    );
+    state = state.apply(state.tr.setMeta(AI_SUGGESTION_SET, { payload: null }));
     const ps = aiSuggestionPluginKey.getState(state)!;
     expect(ps.suggestion).toBeNull();
   });
 });
-
-// ── AI_SUGGESTION_SET_STALE ───────────────────────────────────────────────────
 
 describe("AiSuggestionPlugin — AI_SUGGESTION_SET_STALE", () => {
   it("updates staleBlockIds", () => {
@@ -117,12 +111,12 @@ describe("AiSuggestionPlugin — AI_SUGGESTION_SET_STALE", () => {
   });
 });
 
-// ── AI_SUGGESTION_SET_HOVER ───────────────────────────────────────────────────
-
 describe("AiSuggestionPlugin — AI_SUGGESTION_SET_HOVER", () => {
   it("stores hovered block id", () => {
     const state = makeState();
-    const next = state.apply(state.tr.setMeta(AI_SUGGESTION_SET_HOVER, "node-1"));
+    const next = state.apply(
+      state.tr.setMeta(AI_SUGGESTION_SET_HOVER, "node-1"),
+    );
     expect(aiSuggestionPluginKey.getState(next)!.hoverBlockId).toBe("node-1");
   });
 
@@ -134,12 +128,12 @@ describe("AiSuggestionPlugin — AI_SUGGESTION_SET_HOVER", () => {
   });
 });
 
-// ── AI_SUGGESTION_SET_ACTIVE ──────────────────────────────────────────────────
-
 describe("AiSuggestionPlugin — AI_SUGGESTION_SET_ACTIVE", () => {
   it("stores active block id", () => {
     const state = makeState();
-    const next = state.apply(state.tr.setMeta(AI_SUGGESTION_SET_ACTIVE, "node-1"));
+    const next = state.apply(
+      state.tr.setMeta(AI_SUGGESTION_SET_ACTIVE, "node-1"),
+    );
     expect(aiSuggestionPluginKey.getState(next)!.activeBlockId).toBe("node-1");
   });
 
@@ -150,8 +144,6 @@ describe("AiSuggestionPlugin — AI_SUGGESTION_SET_ACTIVE", () => {
     expect(aiSuggestionPluginKey.getState(state)!.activeBlockId).toBeNull();
   });
 });
-
-// ── Identity check ────────────────────────────────────────────────────────────
 
 describe("AiSuggestionPlugin — object identity", () => {
   it("returns the same object reference for unrelated transactions", () => {

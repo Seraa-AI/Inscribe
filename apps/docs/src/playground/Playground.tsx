@@ -22,17 +22,18 @@ import { Toolbar } from "./Toolbar";
 import { BubbleMenuBar } from "./BubbleMenuBar";
 import { FloatingMenuBar } from "./FloatingMenuBar";
 import { ModeSwitcher } from "./ModeSwitcher";
-import { TrackChangesPopover, TrackChangesPanel, AiSuggestionCardsPanel } from "@scrivr/react";
+import {
+  TrackChangesPopover,
+  TrackChangesPanel,
+  AiSuggestionCardsPanel,
+} from "@scrivr/react";
 import { ChatPanel } from "./ChatPanel";
 import { DemoContent } from "./demoContent";
 
-// ── Mode flag ─────────────────────────────────────────────────────────────────
 // Set VITE_COLLAB=true in .env.local to use the local collaboration server
 // instead of the static demo document.
 
 const USE_COLLAB = import.meta.env.VITE_COLLAB === "true";
-
-// ── Collab identity (only used when USE_COLLAB is true) ───────────────────────
 
 const COLORS = [
   "#ef4444",
@@ -61,8 +62,6 @@ const identity = USE_COLLAB
     }
   : null;
 
-// ── Extensions ────────────────────────────────────────────────────────────────
-
 const EXTENSIONS =
   USE_COLLAB && identity
     ? [
@@ -85,8 +84,6 @@ const EXTENSIONS =
         AiToolkit,
         DemoContent,
       ];
-
-// ── Toolbar state ─────────────────────────────────────────────────────────────
 
 interface ToolbarSlice {
   activeMarks: string[];
@@ -112,8 +109,6 @@ const EMPTY_TOOLBAR: ToolbarSlice = {
   blockAttrs: {},
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
 type SidebarTab = "ai" | "changes";
 
 export function Playground() {
@@ -128,7 +123,10 @@ export function Playground() {
   // the full ProseMirror document JSON at the current moment.
   if (typeof window !== "undefined") {
     (window as unknown as Record<string, unknown>)["inspectDoc"] = () => {
-      if (!editor) { console.warn("editor not ready"); return; }
+      if (!editor) {
+        console.warn("editor not ready");
+        return;
+      }
       const doc = editor.getState().doc;
       console.log("[ProseMirror doc]", doc.toJSON());
       return doc.toJSON();
@@ -239,26 +237,35 @@ export function Playground() {
         </main>
 
         {/* ── Right sidebar with tabs ── */}
-        <div style={{ display: "flex", flexDirection: "column", width: 300, flexShrink: 0, borderLeft: "1px solid #e8eaed", background: "#fff" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            width: 300,
+            flexShrink: 0,
+            overflow: "hidden",
+            borderLeft: "1px solid #e8eaed",
+            background: "#fff",
+          }}
+        >
           {/* Tab bar */}
-          <div style={{ display: "flex", borderBottom: "1px solid #e8eaed", flexShrink: 0 }}>
-            {(["ai", "changes"] as SidebarTab[]).map(tab => (
+          <div
+            style={{
+              display: "flex",
+              borderBottom: "1px solid #e8eaed",
+              flexShrink: 0,
+            }}
+          >
+            {(["ai", "changes"] as SidebarTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setSidebarTab(tab)}
-                style={{
-                  flex:          1,
-                  height:        36,
-                  border:        "none",
-                  background:    "none",
-                  cursor:        "pointer",
-                  fontSize:      12,
-                  fontWeight:    sidebarTab === tab ? 600 : 400,
-                  color:         sidebarTab === tab ? "#6366f1" : "#6b7280",
-                  borderBottom:  sidebarTab === tab ? "2px solid #6366f1" : "2px solid transparent",
-                  transition:    "color 0.15s, border-color 0.15s",
-                  letterSpacing: "-0.01em",
-                }}
+                style={{ letterSpacing: "-0.01em" }}
+                className={`flex-1 h-9 border-none bg-transparent cursor-pointer text-xs border-b-2 transition-[color,border-color] duration-150 ${
+                  sidebarTab === tab
+                    ? "font-semibold text-indigo-500 border-indigo-500"
+                    : "font-normal text-gray-500 border-transparent"
+                }`}
               >
                 {tab === "ai" ? "AI Assistant" : "Track Changes"}
               </button>
@@ -266,10 +273,24 @@ export function Playground() {
           </div>
 
           {/* Panel content — both mounted, only one visible */}
-          <div style={{ flex: 1, overflow: "hidden", display: sidebarTab === "ai" ? "flex" : "none", flexDirection: "column" }}>
+          <div
+            style={{
+              flex: 1,
+              overflow: "hidden",
+              display: sidebarTab === "ai" ? "flex" : "none",
+              flexDirection: "column",
+            }}
+          >
             <ChatPanel editor={editor} hideBorder />
           </div>
-          <div style={{ flex: 1, overflow: "hidden", display: sidebarTab === "changes" ? "flex" : "none", flexDirection: "column" }}>
+          <div
+            style={{
+              flex: 1,
+              overflow: "hidden",
+              display: sidebarTab === "changes" ? "flex" : "none",
+              flexDirection: "column",
+            }}
+          >
             <TrackChangesPanel editor={editor} />
           </div>
         </div>

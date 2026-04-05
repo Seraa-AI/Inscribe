@@ -6,7 +6,6 @@ import type { Editor } from "@scrivr/core";
 import { getAiToolkit } from "@scrivr/plugins";
 import type { ToolOutputData } from "../routes/api/ai";
 
-// ── Typed data layer ─────────────────────────────────────────────────────────
 type AppDataTypes = { tool_result: ToolOutputData };
 type AppUIMessage = UIMessage<unknown, AppDataTypes>;
 
@@ -14,8 +13,6 @@ interface ChatPanelProps {
   editor: Editor | null;
   hideBorder?: boolean;
 }
-
-// ── Document context ────────────────────────────────────────────────────────
 
 function getDocContext(editor: Editor | null): {
   blocks?: Array<{ nodeId: string; text: string }>;
@@ -36,8 +33,6 @@ function getDocContext(editor: Editor | null): {
   const blocks = hasSelection ? ai.getBlocks(from, to) : ai.getBlocks();
   return blocks.length > 0 ? { blocks } : {};
 }
-
-// ── Component ───────────────────────────────────────────────────────────────
 
 export function ChatPanel({ editor, hideBorder }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -152,7 +147,7 @@ export function ChatPanel({ editor, hideBorder }: ChatPanelProps) {
   }
 
   return (
-    <aside className={`w-full shrink-0 flex flex-col bg-white overflow-hidden${hideBorder ? "" : " border-l border-[#e8eaed]"}`}>
+    <aside className={`w-full flex-1 flex flex-col bg-white overflow-hidden${hideBorder ? "" : " border-l border-[#e8eaed]"}`}>
       {/* Header */}
       <div className="flex items-center h-11 px-3.5 bg-white border-b border-[#e8eaed] shrink-0 gap-2">
         <span className="text-[13px] font-semibold text-gray-900 tracking-tight">AI Assistant</span>
@@ -216,8 +211,6 @@ export function ChatPanel({ editor, hideBorder }: ChatPanelProps) {
   );
 }
 
-// ── Per-message row ─────────────────────────────────────────────────────────
-
 function MessageRow({ msg }: { msg: UIMessage }) {
   if (msg.role === "user") {
     return (
@@ -273,9 +266,7 @@ function MessageRow({ msg }: { msg: UIMessage }) {
     </div>
   );
 }
-
-// ── Suggestion card ─────────────────────────────────────────────────────────
-
+  
 function SuggestionCard({ label, text }: { label: string; text: string }) {
   if (!text) {
     return (
