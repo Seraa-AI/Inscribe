@@ -168,6 +168,28 @@ describe("LineBreaker — overflow / wide words (regression)", () => {
       expect(line.width).toBeLessThanOrEqual(100);
     }
   });
+
+  it("does not split a surrogate pair when breaking a wide word containing emoji", () => {
+    const lb = new LineBreaker(makeMeasurer());
+    // "AB😀CD" — 😀 is a surrogate pair (JS .length = 2).
+    // maxWidth = 16px (2 ASCII chars). The split must never land inside the emoji.
+    const text = "AB\uD83D\uDE00CD"; // "AB😀CD"
+    const lines = lb.breakIntoLines(
+      [{ kind: "text" as const, text, font: "14px serif", docPos: 1 }],
+      16,
+    );
+    const reconstructed = lines
+      .flatMap((l) => l.spans.filter((s) => s.kind === "text").map((s) => (s as { text: string }).text))
+      .join("");
+    expect(reconstructed).toBe(text);
+    // Every chunk must be a valid (non-broken) string — no lone surrogates.
+    for (const line of lines) {
+      for (const span of line.spans) {
+        if (span.kind !== "text") continue;
+        expect(() => encodeURIComponent((span as { text: string }).text)).not.toThrow();
+      }
+    }
+  });
 });
 
 describe("LineBreaker — skipToY (top-bottom float)", () => {
@@ -301,7 +323,7 @@ describe("LineBreaker — hard_break", () => {
     expect((phantomSpan as { text: string }).text).toBe("\u200B");
   });
 
-  it("leading break is silently skipped — content starts on line 0", () => {
+  it("leading break emits a phantom ZWS line before the content", () => {
     const lb = new LineBreaker(makeMeasurer());
     const lines = lb.breakIntoLines(
       [
@@ -310,8 +332,31 @@ describe("LineBreaker — hard_break", () => {
       ],
       400,
     );
-    expect(lines).toHaveLength(1);
-    expect(lines[0]!.spans[0]).toMatchObject({ kind: "text", text: "World" });
+    expect(lines).toHaveLength(2);
+    // Line 0: phantom ZWS at the break's docPos
+    expect((lines[0]!.spans[0] as { text: string }).text).toBe("\u200B");
+    expect(lines[0]!.spans[0]!.docPos).toBe(1);
+    // Line 1: "World"
+    expect(lines[1]!.spans[0]).toMatchObject({ kind: "text", text: "World" });
+  });
+
+  it("two consecutive breaks produce two separate lines", () => {
+    const lb = new LineBreaker(makeMeasurer());
+    const lines = lb.breakIntoLines(
+      [
+        { kind: "text" as const, text: "A", font: "14px serif", docPos: 1 },
+        { kind: "break" as const, docPos: 2 },
+        { kind: "break" as const, docPos: 3 },
+        { kind: "text" as const, text: "B", font: "14px serif", docPos: 4 },
+      ],
+      400,
+    );
+    // "A" | empty (break2) | "B"
+    expect(lines).toHaveLength(3);
+    expect(lines[0]!.spans[0]).toMatchObject({ kind: "text", text: "A" });
+    expect(lines[0]!.terminalBreakDocPos).toBe(2);
+    expect((lines[1]!.spans[0] as { text: string }).text).toBe("\u200B");
+    expect(lines[2]!.spans[0]).toMatchObject({ kind: "text", text: "B" });
   });
 
   it("break glyph is registered at terminalBreakDocPos in the CharacterMap", () => {

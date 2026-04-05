@@ -153,7 +153,9 @@ export interface LayoutLine {
  * Text spans: docPos + text.length; object spans: docPos + 1 (nodeSize = 1).
  */
 export function spanEndDocPos(span: LayoutSpan | InputSpan): number {
-  return span.kind === "text" ? span.docPos + span.text.length : span.docPos + 1;
+  return span.kind === "text"
+    ? span.docPos + span.text.length
+    : span.docPos + 1;
 }
 
 /**
@@ -210,7 +212,9 @@ export function computeObjectRenderY(
  *          content left and width is the available text width, or null if
  *          no constraint applies at this Y.
  */
-export type ConstraintProvider = (absoluteLineY: number) => { x: number; width: number; skipToY?: number } | null;
+export type ConstraintProvider = (
+  absoluteLineY: number,
+) => { x: number; width: number; skipToY?: number } | null;
 
 /**
  * LineBreaker — greedy word-wrap algorithm.
@@ -245,7 +249,7 @@ export class LineBreaker {
     options?: {
       constraintProvider?: ConstraintProvider;
       startY?: number;
-    }
+    },
   ): LayoutLine[] {
     if (!spans.length) return [];
 
@@ -287,7 +291,9 @@ export class LineBreaker {
       // Determine the effective width for the current line, applying any
       // float constraint from the ConstraintProvider.
       let absoluteLineY = startY + cumulativeLineY;
-      let constraint = constraintProvider ? constraintProvider(absoluteLineY) : null;
+      let constraint = constraintProvider
+        ? constraintProvider(absoluteLineY)
+        : null;
 
       // Handle top-bottom ('full') float: flush any partial line then emit a
       // spacer line whose lineHeight equals the remaining gap to skipToY. The
@@ -295,11 +301,16 @@ export class LineBreaker {
       // height = lines.reduce(sum + lineHeight) correctly reserves the space,
       // and the renderer's lineY advances past the image before drawing the
       // next real line.
-      if (constraint?.skipToY !== undefined && constraint.skipToY > absoluteLineY) {
+      if (
+        constraint?.skipToY !== undefined &&
+        constraint.skipToY > absoluteLineY
+      ) {
         if (currentLine.length > 0) {
           const fl = buildLine(currentLine, this.measurer);
-          if (currentLineEffectiveWidth !== undefined) fl.effectiveWidth = currentLineEffectiveWidth;
-          if (currentLineConstraintX !== undefined) fl.constraintX = currentLineConstraintX;
+          if (currentLineEffectiveWidth !== undefined)
+            fl.effectiveWidth = currentLineEffectiveWidth;
+          if (currentLineConstraintX !== undefined)
+            fl.constraintX = currentLineConstraintX;
           lines.push(fl);
           cumulativeLineY += fl.lineHeight;
           currentLine = [];
@@ -320,7 +331,9 @@ export class LineBreaker {
           cumulativeLineY += gapHeight;
         }
         absoluteLineY = startY + cumulativeLineY;
-        constraint = constraintProvider ? constraintProvider(absoluteLineY) : null;
+        constraint = constraintProvider
+          ? constraintProvider(absoluteLineY)
+          : null;
       }
 
       const effectiveMaxWidth = constraint ? constraint.width : maxWidth;
@@ -328,16 +341,20 @@ export class LineBreaker {
       // Record constraint on the first word of a new line.
       if (currentLine.length === 0) {
         currentLineEffectiveWidth = constraint ? constraint.width : undefined;
-        currentLineConstraintX = (constraint && constraint.x > 0) ? constraint.x : undefined;
+        currentLineConstraintX =
+          constraint && constraint.x > 0 ? constraint.x : undefined;
       }
 
       // Hard line break: flush the current line and start a new one.
       // Handled before wordWidth because BreakToken has no text/font.
       if (word.kind === "break") {
         if (currentLine.length > 0) {
+          // Normal case: flush the content line terminated by this break.
           const finishedLine = buildLine(currentLine, this.measurer);
-          if (currentLineEffectiveWidth !== undefined) finishedLine.effectiveWidth = currentLineEffectiveWidth;
-          if (currentLineConstraintX !== undefined) finishedLine.constraintX = currentLineConstraintX;
+          if (currentLineEffectiveWidth !== undefined)
+            finishedLine.effectiveWidth = currentLineEffectiveWidth;
+          if (currentLineConstraintX !== undefined)
+            finishedLine.constraintX = currentLineConstraintX;
           finishedLine.terminalBreakDocPos = word.docPos;
           lines.push(finishedLine);
           cumulativeLineY += finishedLine.lineHeight;
@@ -345,9 +362,18 @@ export class LineBreaker {
           currentWidth = 0;
           currentLineEffectiveWidth = undefined;
           currentLineConstraintX = undefined;
+        } else {
+          // currentLine is empty: this is either a leading break or a consecutive
+          // break immediately following another break. Emit a phantom ZWS line so
+          // every break produces exactly one line box — N breaks → N new lines.
+          const font = lastSeenFont ?? "14px sans-serif";
+          const phantomLine = buildLine(
+            [{ kind: "text", text: "\u200B", font, x: 0, width: 0, docPos: word.docPos }],
+            this.measurer,
+          );
+          lines.push(phantomLine);
+          cumulativeLineY += phantomLine.lineHeight;
         }
-        // Leading break (currentLine was empty): silently skip — the cursor
-        // position is handled by the first glyph of the following content.
         continue;
       }
 
@@ -361,17 +387,24 @@ export class LineBreaker {
 
       if (!fitsOnCurrentLine && !lineIsEmpty) {
         const finishedLine = buildLine(currentLine, this.measurer);
-        if (currentLineEffectiveWidth !== undefined) finishedLine.effectiveWidth = currentLineEffectiveWidth;
-        if (currentLineConstraintX !== undefined) finishedLine.constraintX = currentLineConstraintX;
+        if (currentLineEffectiveWidth !== undefined)
+          finishedLine.effectiveWidth = currentLineEffectiveWidth;
+        if (currentLineConstraintX !== undefined)
+          finishedLine.constraintX = currentLineConstraintX;
         lines.push(finishedLine);
         cumulativeLineY += finishedLine.lineHeight;
         currentLine = [];
         currentWidth = 0;
         // Sample constraint for the new line that's about to start.
         const newAbsoluteLineY = startY + cumulativeLineY;
-        const newConstraint = constraintProvider ? constraintProvider(newAbsoluteLineY) : null;
-        currentLineEffectiveWidth = newConstraint ? newConstraint.width : undefined;
-        currentLineConstraintX = (newConstraint && newConstraint.x > 0) ? newConstraint.x : undefined;
+        const newConstraint = constraintProvider
+          ? constraintProvider(newAbsoluteLineY)
+          : null;
+        currentLineEffectiveWidth = newConstraint
+          ? newConstraint.width
+          : undefined;
+        currentLineConstraintX =
+          newConstraint && newConstraint.x > 0 ? newConstraint.x : undefined;
       }
 
       if (word.kind === "object") {
@@ -402,8 +435,10 @@ export class LineBreaker {
 
     if (currentLine.length) {
       const lastLine = buildLine(currentLine, this.measurer);
-      if (currentLineEffectiveWidth !== undefined) lastLine.effectiveWidth = currentLineEffectiveWidth;
-      if (currentLineConstraintX !== undefined) lastLine.constraintX = currentLineConstraintX;
+      if (currentLineEffectiveWidth !== undefined)
+        lastLine.effectiveWidth = currentLineEffectiveWidth;
+      if (currentLineConstraintX !== undefined)
+        lastLine.constraintX = currentLineConstraintX;
       lines.push(lastLine);
     } else if (words.length > 0 && words[words.length - 1]!.kind === "break") {
       // Trailing break: the paragraph ends with a hard_break and currentLine is empty.
@@ -413,7 +448,16 @@ export class LineBreaker {
       const trailingBreak = words[words.length - 1]! as BreakToken;
       const font = lastSeenFont ?? "14px sans-serif";
       const phantomLine = buildLine(
-        [{ kind: "text", text: "\u200B", font, x: 0, width: 0, docPos: trailingBreak.docPos + 1 }],
+        [
+          {
+            kind: "text",
+            text: "\u200B",
+            font,
+            x: 0,
+            width: 0,
+            docPos: trailingBreak.docPos + 1,
+          },
+        ],
         this.measurer,
       );
       lines.push(phantomLine);
@@ -428,27 +472,45 @@ export class LineBreaker {
 
   /**
    * Splits a text token that is wider than maxWidth into the largest
-   * character-level chunks that each fit within maxWidth (greedy, left to right).
+   * grapheme-cluster chunks that each fit within maxWidth (greedy, left to right).
+   *
+   * Uses Intl.Segmenter to iterate grapheme clusters so surrogate pairs and
+   * ZWJ sequences (e.g. emoji with skin-tone modifiers) are never split —
+   * the original character-index loop would break UTF-16 surrogate pairs when
+   * the split point landed inside a multi-code-unit character.
    */
   private splitWideWord(word: TextToken, maxWidth: number): TextToken[] {
     const result: TextToken[] = [];
-    let start = 0;
+    const graphemes = [...new Intl.Segmenter().segment(word.text)];
+    let startSeg = 0;
 
-    while (start < word.text.length) {
-      let end = start + 1;
-      while (end < word.text.length) {
-        const w = this.measurer.measureWidth(word.text.slice(start, end + 1), word.font);
-        if (w > maxWidth) break;
-        end++;
+    while (startSeg < graphemes.length) {
+      const chunkStart = graphemes[startSeg]!.index;
+      let endSeg = startSeg; // last included grapheme (inclusive)
+
+      // Greedily extend the chunk one grapheme at a time.
+      while (endSeg + 1 < graphemes.length) {
+        const next = graphemes[endSeg + 1]!;
+        // Measure from chunkStart through the END of the next grapheme.
+        const tentativeEnd = next.index + next.segment.length;
+        if (this.measurer.measureWidth(word.text.slice(chunkStart, tentativeEnd), word.font) > maxWidth) break;
+        endSeg++;
       }
+
+      // chunkEnd = start of the first grapheme NOT included in this chunk.
+      const chunkEnd =
+        endSeg + 1 < graphemes.length
+          ? graphemes[endSeg + 1]!.index
+          : word.text.length;
+
       result.push({
         kind: "text",
-        text: word.text.slice(start, end),
+        text: word.text.slice(chunkStart, chunkEnd),
         font: word.font,
-        docPos: word.docPos + start,
+        docPos: word.docPos + chunkStart,
         ...(word.marks !== undefined ? { marks: word.marks } : {}),
       });
-      start = end;
+      startSeg = endSeg + 1;
     }
 
     return result;
@@ -461,7 +523,7 @@ export class LineBreaker {
   private populateCharacterMap(
     lines: LayoutLine[],
     map: CharacterMap,
-    ctx: { page: number; lineIndexOffset: number; lineY: number }
+    ctx: { page: number; lineIndexOffset: number; lineY: number },
   ): void {
     let y = ctx.lineY;
 
@@ -474,9 +536,10 @@ export class LineBreaker {
       // When a baseline image inflates line.ascent, text sits at the bottom of
       // the line (baseline = y + ascent). We align the cursor to the text, not
       // the full line height.
-      const textY = line.textAscent > 0
-        ? y + line.ascent - line.textAscent
-        : y + Math.max(0, line.lineHeight - line.cursorHeight) / 2;
+      const textY =
+        line.textAscent > 0
+          ? y + line.ascent - line.textAscent
+          : y + Math.max(0, line.lineHeight - line.cursorHeight) / 2;
 
       map.registerLine({
         page: ctx.page,
@@ -486,9 +549,12 @@ export class LineBreaker {
         x: 0,
         contentWidth: 0,
         startDocPos: line.spans[0]?.docPos ?? 0,
-        endDocPos: line.terminalBreakDocPos !== undefined
-          ? line.terminalBreakDocPos + 1
-          : (lastSpan ? spanEndDocPos(lastSpan) : 0),
+        endDocPos:
+          line.terminalBreakDocPos !== undefined
+            ? line.terminalBreakDocPos + 1
+            : lastSpan
+              ? spanEndDocPos(lastSpan)
+              : 0,
       });
 
       for (const span of line.spans) {
@@ -528,9 +594,10 @@ export class LineBreaker {
             x: span.x + run.charPositions[ci]!,
             y: textY,
             lineY: y,
-            width: ci < span.text.length - 1
-              ? run.charPositions[ci + 1]! - run.charPositions[ci]!
-              : run.totalWidth - run.charPositions[ci]!,
+            width:
+              ci < span.text.length - 1
+                ? run.charPositions[ci + 1]! - run.charPositions[ci]!
+                : run.totalWidth - run.charPositions[ci]!,
             height: line.cursorHeight,
             page: ctx.page,
             lineIndex,
@@ -599,7 +666,14 @@ function tokenise(spans: InputSpan[]): Token[] {
 
   for (const span of spans) {
     if (span.kind === "object") {
-      tokens.push({ kind: "object", node: span.node, width: span.width, height: span.height, docPos: span.docPos, verticalAlign: span.verticalAlign });
+      tokens.push({
+        kind: "object",
+        node: span.node,
+        width: span.width,
+        height: span.height,
+        docPos: span.docPos,
+        verticalAlign: span.verticalAlign,
+      });
       continue;
     }
 
@@ -712,7 +786,17 @@ function buildLine(spans: LayoutSpan[], measurer: TextMeasurer): LayoutLine {
   // cursorHeight is text-derived so the caret stays text-sized even when an
   // inline image inflates lineHeight. Falls back to DEFAULT_CURSOR_HEIGHT
   // for object-only lines (no text spans present).
-  const cursorHeight = textLineHeight > 0 ? textLineHeight : DEFAULT_CURSOR_HEIGHT;
+  const cursorHeight =
+    textLineHeight > 0 ? textLineHeight : DEFAULT_CURSOR_HEIGHT;
 
-  return { spans, width, ascent, descent, lineHeight, textAscent, cursorHeight, xHeight };
+  return {
+    spans,
+    width,
+    ascent,
+    descent,
+    lineHeight,
+    textAscent,
+    cursorHeight,
+    xHeight,
+  };
 }
