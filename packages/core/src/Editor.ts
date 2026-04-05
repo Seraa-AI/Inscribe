@@ -4,8 +4,8 @@ import type {
   MarkDecorator,
   ToolbarItemSpec,
   OverlayRenderHandler,
-  IEditor,
 } from "./extensions/types";
+import type { SafeFlatCommands, EditorEvents, ExtensionStorage } from "./types/augmentation";
 import type { Schema } from "prosemirror-model";
 import { MarkdownSerializer } from "prosemirror-markdown";
 import { ExtensionManager } from "./extensions/ExtensionManager";
@@ -206,8 +206,23 @@ export class Editor {
    * Bound command map — each entry calls the extension command with the
    * current state + this editor's dispatch. Built once; closures over `this`
    * so they always read the latest state at call time.
+   *
+   * Type is `SafeFlatCommands` — augment `Commands<ReturnType>` in your
+   * extension to get typed entries here.
    */
-  readonly commands: Record<string, (...args: unknown[]) => void>;
+  readonly commands: SafeFlatCommands;
+
+  /**
+   * Per-extension storage — augment `ExtensionStorage` in your extension to
+   * get typed entries here.
+   */
+  readonly storage: ExtensionStorage = {} as ExtensionStorage;
+
+  /** Typed event emitter — use on() / off() / emit() */
+  private readonly _eventHandlers = new Map<
+    keyof EditorEvents,
+    Set<(payload: EditorEvents[keyof EditorEvents]) => void>
+  >();
 
   /**
    * Overlay render handlers registered by extensions (e.g. CollaborationCursor).
@@ -297,11 +312,13 @@ export class Editor {
         this.cursorManager.start();
         this.notifyListeners();
         this.onFocusChange?.(true);
+        this.emit("focus", undefined as EditorEvents["focus"]);
       },
       onBlur: () => {
         this.cursorManager.stop();
         this.notifyListeners();
         this.onFocusChange?.(false);
+        this.emit("blur", undefined as EditorEvents["blur"]);
       },
     });
 
@@ -545,14 +562,52 @@ export class Editor {
     this.ib.unmount();
   }
 
+  /**
+   * Register a typed event handler.
+   * Returns an unsubscribe function.
+   *
+   * @example
+   * const off = editor.on("focus", () => console.log("focused"));
+   * // later:
+   * off();
+   */
+  on<K extends keyof EditorEvents>(
+    event: K,
+    handler: (payload: EditorEvents[K]) => void,
+  ): () => void {
+    if (!this._eventHandlers.has(event)) {
+      this._eventHandlers.set(event, new Set());
+    }
+    const handlers = this._eventHandlers.get(event)!;
+    handlers.add(handler as (p: EditorEvents[keyof EditorEvents]) => void);
+    return () => this.off(event, handler);
+  }
+
+  /** Unregister a typed event handler. */
+  off<K extends keyof EditorEvents>(
+    event: K,
+    handler: (payload: EditorEvents[K]) => void,
+  ): void {
+    this._eventHandlers
+      .get(event)
+      ?.delete(handler as (p: EditorEvents[keyof EditorEvents]) => void);
+  }
+
+  /** Emit a typed editor event. Called internally — extensions may also call this. */
+  emit<K extends keyof EditorEvents>(event: K, payload: EditorEvents[K]): void {
+    this._eventHandlers.get(event)?.forEach((h) => h(payload));
+  }
+
   destroy(): void {
     if (this._rafId !== null) {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
+    this.emit("destroy", undefined as EditorEvents["destroy"]);
     this.lc.destroy();
     for (const cleanup of this.editorReadyCleanup) cleanup();
     this.editorReadyCleanup = [];
+    this._eventHandlers.clear();
     this.overlayRenderHandlers.clear();
     this.cursorManager.stop();
     this.unmount();
@@ -877,6 +932,7 @@ export class Editor {
     // of O(N²) repaints during Y.js initial sync (one full canvas paint per dispatch).
     this.cursorManager.resetSilent();
     this.onChange?.(this.state);
+    this.emit("update", { docChanged: tr.docChanged });
     // Schedule a single rAF flush rather than rendering immediately.
     // Multiple dispatches within the same frame (e.g. Y.js initial sync
     // firing hundreds of typeObserver events) share one layout + one paint,
@@ -908,7 +964,7 @@ export class Editor {
    * Each wrapper reads `this.state` at call time (not construction time)
    * because the closure captures `this` by reference.
    */
-  private buildCommands(): Record<string, (...args: unknown[]) => void> {
+  private buildCommands(): SafeFlatCommands {
     const rawCommands = this.manager.buildCommands();
     const bound: Record<string, (...args: unknown[]) => void> = {};
 
@@ -919,6 +975,6 @@ export class Editor {
       };
     }
 
-    return bound;
+    return bound as SafeFlatCommands;
   }
 }

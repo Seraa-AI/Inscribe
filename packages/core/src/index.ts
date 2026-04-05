@@ -1,3 +1,15 @@
+export type {
+  Commands,
+  NodeAttributes,
+  MarkAttributes,
+  EditorEvents,
+  ExtensionStorage,
+  SafeFlatCommands,
+  FlatCommands,
+  UnionToIntersection,
+  NodeAttrsFor,
+  MarkAttrsFor,
+} from "./types/augmentation";
 export { Editor } from "./Editor";
 export type { EditorOptions, EditorChangeHandler, SelectionSnapshot } from "./Editor";
 export { ServerEditor } from "./ServerEditor";

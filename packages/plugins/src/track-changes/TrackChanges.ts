@@ -2,6 +2,41 @@ import { Extension, renderTrackedInsert, renderTrackedDelete, renderTrackedConfl
 import type { GlyphEntry, IEditor, LineEntry, OverlayRenderHandler } from "@scrivr/core";
 import type { EditorState, Transaction } from "prosemirror-state";
 
+declare module "@scrivr/core" {
+  interface Commands<ReturnType> {
+    trackChanges: {
+      /**
+       * Toggle or explicitly set the track-changes status.
+       * Pass no argument to toggle between enabled/disabled.
+       */
+      setTrackingStatus: (status?: "enabled" | "disabled" | "viewOnly") => ReturnType;
+      /**
+       * Accept or reject a set of tracked changes by their IDs.
+       * status: "accepted" | "rejected"
+       */
+      setChangeStatuses: (status: "accepted" | "rejected", ids: string[]) => ReturnType;
+      /** Update the userID attributed to future tracked changes. */
+      setTrackChangesUserID: (userID: string) => ReturnType;
+      /** Force a refresh of the tracked-changes decoration state. */
+      refreshChanges: () => ReturnType;
+      /**
+       * Insert text as a pending tracked-insert suggestion.
+       * Any existing text in [from, to] is wrapped in a tracked-delete mark.
+       */
+      insertAsSuggestion: (text: string, from: number, to: number, authorID: string) => ReturnType;
+    };
+  }
+
+  interface MarkAttributes {
+    tracked_insert: {
+      dataTracked: Record<string, unknown> | null;
+    };
+    tracked_delete: {
+      dataTracked: Record<string, unknown> | null;
+    };
+  }
+}
+
 import { setAction, skipTracking, TrackChangesAction } from "./actions";
 import { trackChangesPlugin, trackChangesPluginKey } from "./engine/trackChangesPlugin";
 import { addTrackIdIfDoesntExist, createNewDeleteAttrs, createNewInsertAttrs, createNewPendingAttrs } from "./helpers";
