@@ -80,12 +80,9 @@ function InlineDiff({ ops }: { ops: AiOp[] }) {
         <span
           key={i}
           style={{
-            background:     "rgba(254, 226, 226, 0.6)",
-            color:          "rgba(185, 28, 28, 0.85)",
-            textDecoration: "line-through",
+            color:               "rgba(185, 28, 28, 0.8)",
+            textDecoration:      "line-through",
             textDecorationColor: "rgba(185, 28, 28, 0.5)",
-            borderRadius:   3,
-            padding:        "1px 2px",
           }}
         >
           {op.text}
@@ -96,10 +93,7 @@ function InlineDiff({ ops }: { ops: AiOp[] }) {
         <span
           key={i}
           style={{
-            background:   "rgba(220, 252, 231, 0.7)",
-            color:        "rgba(21, 128, 61, 0.9)",
-            borderRadius: 3,
-            padding:      "1px 2px",
+            color: "rgba(21, 128, 61, 0.9)",
           }}
         >
           {op.text}

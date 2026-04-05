@@ -78,12 +78,6 @@ export const AiSuggestion = Extension.create({
         const top    = Math.min(...lines.map((l) => l.y));
         const bottom = Math.max(...lines.map((l) => l.y + l.height));
 
-        // ── Very faint tint — just enough to frame the block ──────────────
-        ctx.fillStyle = "rgba(99, 102, 241, 0.05)";
-        for (const line of lines) {
-          ctx.fillRect(line.x, line.y, line.contentWidth, line.height);
-        }
-
         // ── Indigo left-border stripe (Notion/Linear style) ────────────────
         const stripeX = pageConfig.margins.left - 5;
         ctx.strokeStyle = "rgba(99, 102, 241, 0.7)";
