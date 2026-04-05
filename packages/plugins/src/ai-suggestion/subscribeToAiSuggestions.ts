@@ -15,7 +15,10 @@
  */
 
 import type { IEditor } from "@scrivr/core";
-import { aiSuggestionPluginKey, AI_SUGGESTION_SET_HOVER } from "./AiSuggestionPlugin";
+import {
+  aiSuggestionPluginKey,
+  AI_SUGGESTION_SET_HOVER,
+} from "./AiSuggestionPlugin";
 import { applyAiSuggestion, rejectAiSuggestion } from "./showHideApply";
 import { findNodeById } from "../ai-toolkit/UniqueId";
 import type { AiSuggestionBlock, AiOp, AiSuggestionPluginState } from "./types";
@@ -25,26 +28,26 @@ import type { AiSuggestionBlock, AiOp, AiSuggestionPluginState } from "./types";
 /** Derived card data — ready to render in any UI framework. */
 export interface AiSuggestionCardData {
   /** Stable node ID — use as React/Vue key. */
-  blockId:   string;
+  blockId: string;
   /** The raw block with ops — for custom diff rendering. */
-  block:     AiSuggestionBlock;
+  block: AiSuggestionBlock;
   /**
    * Display label. Prefers block.summary when present (human-authored),
    * otherwise falls back to auto-derived text from the ops.
    */
-  label:     string;
+  label: string;
   /**
    * Optional authored summary passed through from block.summary.
    * Undefined when no summary was provided at compute time.
    * UIs can use this to show richer context ("Simplified tone and removed jargon").
    */
-  summary:   string | undefined;
+  summary: string | undefined;
   /** Semantic kind: "rewrite" | "insert" | "delete" */
-  kind:      "rewrite" | "insert" | "delete";
+  kind: "rewrite" | "insert" | "delete";
   /** True when the document has changed since the suggestion was set. */
-  isStale:   boolean;
+  isStale: boolean;
   /** True when the cursor is inside this block. */
-  isActive:  boolean;
+  isActive: boolean;
   /** True when the block is being hovered in the sidebar (set via actions.hover). */
   isHovered: boolean;
 }
@@ -98,7 +101,7 @@ function deriveCard(
   let kind: AiSuggestionCardData["kind"];
 
   if (hasInsert && hasDelete) {
-    kind      = "rewrite";
+    kind = "rewrite";
     autoLabel = truncate(block.acceptedText.trim(), 36) || "Rewrite";
   } else if (hasInsert) {
     kind = "insert";
@@ -109,7 +112,7 @@ function deriveCard(
       .trim();
     autoLabel = `+ ${truncate(text, 32)}`;
   } else {
-    kind      = "delete";
+    kind = "delete";
     autoLabel = truncate(block.acceptedText.trim(), 36) || "Removal";
   }
 
@@ -146,7 +149,10 @@ function deriveCard(
  */
 export function subscribeToAiSuggestions(
   editor: IEditor,
-  callback: (cards: AiSuggestionCardData[], actions: AiSuggestionCardActions) => void,
+  callback: (
+    cards: AiSuggestionCardData[],
+    actions: AiSuggestionCardActions,
+  ) => void,
   options?: AiSuggestionSubscribeOptions,
 ): () => void {
   const { onFocus, onBlur } = options ?? {};
@@ -166,8 +172,9 @@ export function subscribeToAiSuggestions(
     },
     hover(blockId) {
       editor._applyTransaction(
-        editor.getState().tr
-          .setMeta(AI_SUGGESTION_SET_HOVER, blockId)
+        editor
+          .getState()
+          .tr.setMeta(AI_SUGGESTION_SET_HOVER, blockId)
           .setMeta("addToHistory", false),
       );
     },
@@ -180,12 +187,12 @@ export function subscribeToAiSuggestions(
   // ProseMirror returns the same plugin-state object reference when nothing in
   // the plugin changed. Track it so we skip callback on unrelated transactions
   // (every keypress, cursor blink, scroll) — no card rebuild, no React re-render.
-  let prevPs:       AiSuggestionPluginState | null | undefined = undefined;
+  let prevPs: AiSuggestionPluginState | null | undefined = undefined;
   let prevActiveId: string | null = null;
 
   function emit() {
     const state = editor.getState();
-    const ps    = aiSuggestionPluginKey.getState(state);
+    const ps = aiSuggestionPluginKey.getState(state);
     if (ps === prevPs) return;
     prevPs = ps;
 
@@ -193,7 +200,7 @@ export function subscribeToAiSuggestions(
     const newActiveId = ps?.activeBlockId ?? null;
     if (newActiveId !== prevActiveId) {
       if (prevActiveId !== null) onBlur?.(prevActiveId);
-      if (newActiveId  !== null) onFocus?.(newActiveId);
+      if (newActiveId !== null) onFocus?.(newActiveId);
       prevActiveId = newActiveId;
     }
 
@@ -207,7 +214,7 @@ export function subscribeToAiSuggestions(
         block,
         ps.staleBlockIds.has(block.nodeId),
         ps.activeBlockId === block.nodeId,
-        ps.hoverBlockId  === block.nodeId,
+        ps.hoverBlockId === block.nodeId,
       ),
     );
 

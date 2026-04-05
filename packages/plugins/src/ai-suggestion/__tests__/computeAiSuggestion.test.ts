@@ -8,15 +8,12 @@
 import { describe, it, expect } from "vitest";
 import { EditorState } from "prosemirror-state";
 import { computeAiSuggestion } from "../computeAiSuggestion";
-import { schema, doc, p, h } from "./helpers";
+import { doc, p, h } from "./helpers";
 
-// ── Fixture ───────────────────────────────────────────────────────────────────
 
 function makeState(d: import("prosemirror-model").Node) {
   return EditorState.create({ doc: d });
 }
-
-// ── No-change cases ───────────────────────────────────────────────────────────
 
 describe("computeAiSuggestion — no-change cases", () => {
   it("returns null when proposed text equals accepted text", () => {
@@ -56,8 +53,6 @@ describe("computeAiSuggestion — no-change cases", () => {
     expect(result).toBeNull();
   });
 });
-
-// ── Op generation ─────────────────────────────────────────────────────────────
 
 describe("computeAiSuggestion — op generation", () => {
   it("produces delete + insert ops for a word replacement", () => {
@@ -130,8 +125,6 @@ describe("computeAiSuggestion — op generation", () => {
   });
 });
 
-// ── Multi-block ───────────────────────────────────────────────────────────────
-
 describe("computeAiSuggestion — multi-block", () => {
   it("processes multiple blocks and returns one AiSuggestion with all blocks", () => {
     const state = makeState(doc(
@@ -172,8 +165,6 @@ describe("computeAiSuggestion — multi-block", () => {
   });
 });
 
-// ── summary field ─────────────────────────────────────────────────────────────
-
 describe("computeAiSuggestion — summary", () => {
   it("passes summary through to the block when provided", () => {
     const nodeId = "p1";
@@ -205,8 +196,6 @@ describe("computeAiSuggestion — summary", () => {
     expect(result!.blocks[0]!.summary).toBeUndefined();
   });
 });
-
-// ── acceptedText ──────────────────────────────────────────────────────────────
 
 describe("computeAiSuggestion — acceptedText", () => {
   it("records the block's current text as acceptedText", () => {

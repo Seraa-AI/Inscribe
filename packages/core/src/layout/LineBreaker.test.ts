@@ -3,7 +3,6 @@ import { LineBreaker } from "./LineBreaker";
 import { CharacterMap } from "./CharacterMap";
 import { createMeasurer, MOCK_CHAR_WIDTH, MOCK_ASCENT } from "../test-utils";
 
-
 /**
  * LineBreaker tests.
  *
@@ -14,8 +13,9 @@ import { createMeasurer, MOCK_CHAR_WIDTH, MOCK_ASCENT } from "../test-utils";
  * This lets tests reason about exact pixel values without real font loading.
  */
 
-
-function makeMeasurer() { return createMeasurer(); }
+function makeMeasurer() {
+  return createMeasurer();
+}
 
 // "Hello " = 6 chars × 8px = 48px
 // "world"  = 5 chars × 8px = 40px
@@ -25,9 +25,16 @@ describe("LineBreaker — basic wrapping", () => {
   it("puts everything on one line when it fits", () => {
     const lb = new LineBreaker(makeMeasurer());
     const lines = lb.breakIntoLines(
-      [{ kind: "text" as const, text: "Hello world", font: "14px serif", docPos: 1 }],
+      [
+        {
+          kind: "text" as const,
+          text: "Hello world",
+          font: "14px serif",
+          docPos: 1,
+        },
+      ],
       200,
-      { defaultFontFamily: "serif", defaultFontSize: 14 }
+      { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     expect(lines).toHaveLength(1);
     expect(lines[0]?.width).toBe(11 * MOCK_CHAR_WIDTH); // 88px
@@ -37,9 +44,16 @@ describe("LineBreaker — basic wrapping", () => {
     const lb = new LineBreaker(makeMeasurer());
     // maxWidth=80: "Hello " (48px) fits, "world" (40px) pushes to 88px → wrap
     const lines = lb.breakIntoLines(
-      [{ kind: "text" as const, text: "Hello world", font: "14px serif", docPos: 1 }],
+      [
+        {
+          kind: "text" as const,
+          text: "Hello world",
+          font: "14px serif",
+          docPos: 1,
+        },
+      ],
       80,
-      { defaultFontFamily: "serif", defaultFontSize: 14 }
+      { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     expect(lines).toHaveLength(2);
   });
@@ -47,9 +61,16 @@ describe("LineBreaker — basic wrapping", () => {
   it("no line exceeds maxWidth", () => {
     const lb = new LineBreaker(makeMeasurer());
     const lines = lb.breakIntoLines(
-      [{ kind: "text" as const, text: "The quick brown fox jumps over the lazy dog", font: "14px serif", docPos: 1 }],
+      [
+        {
+          kind: "text" as const,
+          text: "The quick brown fox jumps over the lazy dog",
+          font: "14px serif",
+          docPos: 1,
+        },
+      ],
       100,
-      { defaultFontFamily: "serif", defaultFontSize: 14 }
+      { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     for (const line of lines) {
       expect(line.width).toBeLessThanOrEqual(100);
@@ -62,10 +83,14 @@ describe("LineBreaker — basic wrapping", () => {
     const lines = lb.breakIntoLines(
       [{ kind: "text" as const, text, font: "14px serif", docPos: 1 }],
       100,
-      { defaultFontFamily: "serif", defaultFontSize: 14 }
+      { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     const reconstructed = lines
-      .flatMap((l) => l.spans.filter((s) => s.kind === "text").map((s) => s.kind === "text" ? s.text : ""))
+      .flatMap((l) =>
+        l.spans
+          .filter((s) => s.kind === "text")
+          .map((s) => (s.kind === "text" ? s.text : "")),
+      )
       .join("")
       .trim();
     expect(reconstructed).toBe(text);
@@ -73,7 +98,12 @@ describe("LineBreaker — basic wrapping", () => {
 
   it("returns an empty array for empty input", () => {
     const lb = new LineBreaker(makeMeasurer());
-    expect(lb.breakIntoLines([], 400, { defaultFontFamily: "serif", defaultFontSize: 14 })).toHaveLength(0);
+    expect(
+      lb.breakIntoLines([], 400, {
+        defaultFontFamily: "serif",
+        defaultFontSize: 14,
+      }),
+    ).toHaveLength(0);
   });
 });
 
@@ -83,11 +113,21 @@ describe("LineBreaker — multi-span (mixed fonts)", () => {
     // "Hello " (48px) + "world" (40px) = 88px — fits in 120px
     const lines = lb.breakIntoLines(
       [
-        { kind: "text" as const, text: "Hello ", font: "14px serif", docPos: 1 },
-        { kind: "text" as const, text: "world", font: "bold 14px serif", docPos: 7 },
+        {
+          kind: "text" as const,
+          text: "Hello ",
+          font: "14px serif",
+          docPos: 1,
+        },
+        {
+          kind: "text" as const,
+          text: "world",
+          font: "bold 14px serif",
+          docPos: 7,
+        },
       ],
       120,
-      { defaultFontFamily: "serif", defaultFontSize: 14 }
+      { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     expect(lines).toHaveLength(1);
     expect(lines[0]?.spans).toHaveLength(2);
@@ -98,11 +138,21 @@ describe("LineBreaker — multi-span (mixed fonts)", () => {
     // maxWidth=60: "Hello " (48px) fits, "world" (40px) → 88px > 60 → wrap
     const lines = lb.breakIntoLines(
       [
-        { kind: "text" as const, text: "Hello ", font: "14px serif", docPos: 1 },
-        { kind: "text" as const, text: "world", font: "bold 14px serif", docPos: 7 },
+        {
+          kind: "text" as const,
+          text: "Hello ",
+          font: "14px serif",
+          docPos: 1,
+        },
+        {
+          kind: "text" as const,
+          text: "world",
+          font: "bold 14px serif",
+          docPos: 7,
+        },
       ],
       60,
-      { defaultFontFamily: "serif", defaultFontSize: 14 }
+      { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     expect(lines).toHaveLength(2);
   });
@@ -114,7 +164,7 @@ describe("LineBreaker — vertical metrics", () => {
     const lines = lb.breakIntoLines(
       [{ kind: "text" as const, text: "Hello", font: "14px serif", docPos: 1 }],
       200,
-      { defaultFontFamily: "serif", defaultFontSize: 14 }
+      { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     // (12 + 3) * 1.2 = 18
     expect(lines[0]?.lineHeight).toBeCloseTo(18);
@@ -126,11 +176,16 @@ describe("LineBreaker — vertical metrics", () => {
     const lb = new LineBreaker(makeMeasurer());
     const lines = lb.breakIntoLines(
       [
-        { kind: "text" as const, text: "normal ", font: "14px serif", docPos: 1 },
+        {
+          kind: "text" as const,
+          text: "normal ",
+          font: "14px serif",
+          docPos: 1,
+        },
         { kind: "text" as const, text: "big", font: "24px serif", docPos: 8 },
       ],
       200,
-      { defaultFontFamily: "serif", defaultFontSize: 14 }
+      { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     expect(lines[0]?.ascent).toBe(MOCK_ASCENT);
   });
@@ -142,9 +197,16 @@ describe("LineBreaker — overflow / wide words (regression)", () => {
     // "ABCDEFGHIJ" = 10 chars × 8px = 80px, but maxWidth is 40px (5 chars)
     // Expected: each line is ≤ 40px wide
     const lines = lb.breakIntoLines(
-      [{ kind: "text" as const, text: "ABCDEFGHIJ", font: "14px serif", docPos: 1 }],
+      [
+        {
+          kind: "text" as const,
+          text: "ABCDEFGHIJ",
+          font: "14px serif",
+          docPos: 1,
+        },
+      ],
       40,
-      { defaultFontFamily: "serif", defaultFontSize: 14 }
+      { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     expect(lines.length).toBeGreaterThanOrEqual(2);
     for (const line of lines) {
@@ -158,10 +220,14 @@ describe("LineBreaker — overflow / wide words (regression)", () => {
     const lines = lb.breakIntoLines(
       [{ kind: "text" as const, text, font: "14px serif", docPos: 1 }],
       40,
-      { defaultFontFamily: "serif", defaultFontSize: 14 }
+      { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     const reconstructed = lines
-      .flatMap((l) => l.spans.filter((s) => s.kind === "text").map((s) => s.kind === "text" ? s.text : ""))
+      .flatMap((l) =>
+        l.spans
+          .filter((s) => s.kind === "text")
+          .map((s) => (s.kind === "text" ? s.text : "")),
+      )
       .join("");
     expect(reconstructed).toBe(text);
   });
@@ -173,7 +239,7 @@ describe("LineBreaker — overflow / wide words (regression)", () => {
     const lines = lb.breakIntoLines(
       [{ kind: "text" as const, text, font: "14px serif", docPos: 1 }],
       100,
-      { defaultFontFamily: "serif", defaultFontSize: 14 }
+      { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     for (const line of lines) {
       expect(line.width).toBeLessThanOrEqual(100);
@@ -191,14 +257,20 @@ describe("LineBreaker — overflow / wide words (regression)", () => {
       { defaultFontFamily: "serif", defaultFontSize: 14 },
     );
     const reconstructed = lines
-      .flatMap((l) => l.spans.filter((s) => s.kind === "text").map((s) => (s as { text: string }).text))
+      .flatMap((l) =>
+        l.spans
+          .filter((s) => s.kind === "text")
+          .map((s) => (s as { text: string }).text),
+      )
       .join("");
     expect(reconstructed).toBe(text);
     // Every chunk must be a valid (non-broken) string — no lone surrogates.
     for (const line of lines) {
       for (const span of line.spans) {
         if (span.kind !== "text") continue;
-        expect(() => encodeURIComponent((span as { text: string }).text)).not.toThrow();
+        expect(() =>
+          encodeURIComponent((span as { text: string }).text),
+        ).not.toThrow();
       }
     }
   });
@@ -217,7 +289,12 @@ describe("LineBreaker — skipToY (top-bottom float)", () => {
     };
     const lines = lb.breakIntoLines(
       [
-        { kind: "text" as const, text: "before float after", font: "14px serif", docPos: 1 },
+        {
+          kind: "text" as const,
+          text: "before float after",
+          font: "14px serif",
+          docPos: 1,
+        },
       ],
       200,
       { defaultFontFamily: "serif", defaultFontSize: 14, constraintProvider },
@@ -239,7 +316,11 @@ describe("LineBreaker — skipToY (top-bottom float)", () => {
       { defaultFontFamily: "serif", defaultFontSize: 14, constraintProvider },
     );
     const reconstructed = lines
-      .flatMap((l) => l.spans.filter((s) => s.kind === "text").map((s) => s.kind === "text" ? s.text : ""))
+      .flatMap((l) =>
+        l.spans
+          .filter((s) => s.kind === "text")
+          .map((s) => (s.kind === "text" ? s.text : "")),
+      )
       .join("")
       .trim();
     expect(reconstructed).toBe(text);
@@ -254,7 +335,12 @@ describe("LineBreaker — CharacterMap population", () => {
     lb.breakIntoLines(
       [{ kind: "text" as const, text: "Hi", font: "14px serif", docPos: 1 }],
       200,
-      { defaultFontFamily: "serif", defaultFontSize: 14, map, pageContext: { page: 1, lineIndexOffset: 0, lineY: 60 } }
+      {
+        defaultFontFamily: "serif",
+        defaultFontSize: 14,
+        map,
+        pageContext: { page: 1, lineIndexOffset: 0, lineY: 60 },
+      },
     );
 
     // "H" at docPos 1, "i" at docPos 2
@@ -267,9 +353,21 @@ describe("LineBreaker — CharacterMap population", () => {
 
     // maxWidth=60: wraps into 2 lines
     lb.breakIntoLines(
-      [{ kind: "text" as const, text: "Hello world", font: "14px serif", docPos: 1 }],
+      [
+        {
+          kind: "text" as const,
+          text: "Hello world",
+          font: "14px serif",
+          docPos: 1,
+        },
+      ],
       60,
-      { defaultFontFamily: "serif", defaultFontSize: 14, map, pageContext: { page: 1, lineIndexOffset: 0, lineY: 60 } }
+      {
+        defaultFontFamily: "serif",
+        defaultFontSize: 14,
+        map,
+        pageContext: { page: 1, lineIndexOffset: 0, lineY: 60 },
+      },
     );
 
     // posAtCoords on line 1 y=65 and line 2 y=85 should give different positions
@@ -285,7 +383,12 @@ describe("LineBreaker — CharacterMap population", () => {
     lb.breakIntoLines(
       [{ kind: "text" as const, text: "Hi", font: "14px serif", docPos: 1 }],
       200,
-      { defaultFontFamily: "serif", defaultFontSize: 14, map, pageContext: { page: 1, lineIndexOffset: 0, lineY: 60 } }
+      {
+        defaultFontFamily: "serif",
+        defaultFontSize: 14,
+        map,
+        pageContext: { page: 1, lineIndexOffset: 0, lineY: 60 },
+      },
     );
 
     const coords = map.coordsAtPos(1);
@@ -378,7 +481,12 @@ describe("LineBreaker — hard_break", () => {
         { kind: "text" as const, text: "World", font: "14px serif", docPos: 7 },
       ],
       400,
-      { defaultFontFamily: "serif", defaultFontSize: 14, map, pageContext: { page: 1, lineIndexOffset: 0, lineY: 0 } },
+      {
+        defaultFontFamily: "serif",
+        defaultFontSize: 14,
+        map,
+        pageContext: { page: 1, lineIndexOffset: 0, lineY: 0 },
+      },
     );
     // Break position must be reachable via coordsAtPos
     const breakCoords = map.coordsAtPos(6);
