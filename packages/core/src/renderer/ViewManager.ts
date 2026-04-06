@@ -408,6 +408,7 @@ export class ViewManager {
       return;
     }
 
+    if (this.editor.readOnly) return;
     this.isDragging = true;
     const pos = this.editor.charMap.posAtCoords(canvasX, canvasY, pageNumber);
 

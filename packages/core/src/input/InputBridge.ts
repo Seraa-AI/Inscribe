@@ -1,4 +1,5 @@
 import type { EditorState, Transaction, Command } from "prosemirror-state";
+import { TextSelection } from "prosemirror-state";
 import type { Schema } from "prosemirror-model";
 import type { CharacterMap } from "../layout/CharacterMap";
 import type { InputHandler, EditorNavigator } from "../extensions/types";
@@ -307,7 +308,28 @@ export class InputBridge {
   };
 
   private _handleKeydown = (e: KeyboardEvent): void => {
-    if (this._readOnly) return;
+    if (this._readOnly) {
+      // Allow arrow-key navigation and selection-only shortcuts; block all mutations.
+      const keyStr = keyEventToString(e);
+      // Escape collapses the current selection without moving the cursor.
+      if (e.key === "Escape") {
+        const state = this.opts.getState();
+        const { head } = state.selection;
+        this.opts.dispatch(state.tr.setSelection(TextSelection.create(state.doc, head)));
+        e.preventDefault();
+        return;
+      }
+      if (this._tryInputHandler(e)) {
+        e.preventDefault();
+        return;
+      }
+      // Mod-a (select all) and Mod-c (copy, also handled by clipboard event)
+      if ((keyStr === "Mod-a" || keyStr === "Mod-c") && this._tryKeymapCommand(e)) {
+        e.preventDefault();
+        this._clearTextarea();
+      }
+      return;
+    }
     // Input handlers first — editor-level actions (navigation, etc.)
     // declared by extensions via addInputHandlers().
     if (this._tryInputHandler(e)) {

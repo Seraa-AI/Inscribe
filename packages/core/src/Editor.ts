@@ -318,6 +318,7 @@ export class Editor extends BaseEditor implements IEditor {
    * setting the flag and notifying subscribers.
    */
   override setReadOnly(value: boolean): void {
+    if (this.readOnly === value) return;
     super.setReadOnly(value);
     this.ib.setReadOnly(value);
     if (value) {
