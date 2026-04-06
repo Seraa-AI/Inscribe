@@ -21,6 +21,7 @@ import {
   Image as ImageIcon,
   Link as LinkIcon,
   Link2Off,
+  RemoveFormatting,
   type LucideIcon,
 } from "lucide-react";
 
@@ -64,6 +65,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   insertImage: ImageIcon,
   setLink: LinkIcon,
   unsetLink: Link2Off,
+  clearFormatting: RemoveFormatting,
 };
 
 /**
