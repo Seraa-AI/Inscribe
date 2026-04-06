@@ -25,7 +25,7 @@ export interface UseCanvasEditorOptions {
 }
 
 /**
- * useCanvasEditor — create and manage an Editor instance.
+ * useScrivrEditor — create and manage an Editor instance.
  *
  * Returns Editor | null (null on first render / during SSR).
  * Pass the returned editor to <Canvas editor={editor} />.

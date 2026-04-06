@@ -1,5 +1,6 @@
 import { BubbleMenu } from "@scrivr/react";
 import type { Editor } from "@scrivr/react";
+import { RemoveFormatting } from "lucide-react";
 
 interface BubbleMenuBarProps {
   editor: Editor | null;
@@ -97,6 +98,17 @@ export function BubbleMenuBar({ editor }: BubbleMenuBarProps) {
             ⛓‍💥
           </button>
         )}
+
+        <button
+          title="Clear formatting"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            editor?.commands.clearFormatting();
+          }}
+          className="px-2 py-1 rounded-md border-none text-[13px] leading-none cursor-pointer bg-transparent text-zinc-400 hover:bg-white/10 hover:text-white transition-colors duration-100"
+        >
+          <RemoveFormatting className="w-4 h-4" />
+        </button>
       </div>
     </BubbleMenu>
   );

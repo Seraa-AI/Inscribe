@@ -9,7 +9,7 @@ export interface EditorStateContext {
 }
 
 export interface UseEditorStateOptions<T> {
-  /** The editor instance from useCanvasEditor. */
+  /** The editor instance from useScrivrEditor. */
   editor: Editor | null;
   /**
    * Pure function that derives the value your component needs.
@@ -84,10 +84,10 @@ class EditorStateManager {
   };
 }
 
-// ── useEditorState ────────────────────────────────────────────────────────────
+// ── useScrivrState ────────────────────────────────────────────────────────────
 
 /**
- * useEditorState — subscribe to editor state with fine-grained re-render control.
+ * useScrivrState — subscribe to editor state with fine-grained re-render control.
  *
  * Uses useSyncExternalStore with a versioned snapshot (adapted from TipTap):
  *   1. EditorStateManager wraps editor.subscribe() and tracks a version counter.
@@ -176,7 +176,7 @@ export function useScrivrState<T>(
 // ── deepEqual ────────────────────────────────────────────────────────────────
 
 /**
- * Recursive deep equality. Used as the default equalityFn in useEditorState.
+ * Recursive deep equality. Used as the default equalityFn in useScrivrState.
  *
  * Handles:
  *   - Primitives (Object.is)

@@ -5,7 +5,7 @@ import { TileManager } from "@scrivr/core";
 const DEFAULT_GAP = 24;
 
 export interface ScrivrProps {
-  /** Editor instance from useCanvasEditor. Renders nothing when null. */
+  /** Editor instance from useScrivrEditor. Renders nothing when null. */
   editor: Editor | null;
   /** Gap in pixels between pages in paged mode. Default: 24. */
   gap?: number;
@@ -23,7 +23,7 @@ export interface ScrivrProps {
 }
 
 /**
- * Scrivr — mounts the Scrivr rendering engine onto a container div.
+ * Scrivr — mounts the Scrivr rendering engine onto a container <div>.
  *
  * Uses TileManager for both paged and pageless modes. The engine checks
  * `editor.isPageless` to determine the rendering strategy automatically.

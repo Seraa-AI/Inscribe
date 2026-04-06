@@ -41,19 +41,22 @@ const KEEP_TRIM = 40;
  * re-renders when the editor state changes.
  */
 export function useAiSuggestionCards(
-  editor:  Editor | null,
+  editor: Editor | null,
   options?: AiSuggestionSubscribeOptions,
 ): {
-  cards:   AiSuggestionCardData[];
+  cards: AiSuggestionCardData[];
   actions: AiSuggestionCardActions | null;
 } {
   const [state, setState] = useState<{
-    cards:   AiSuggestionCardData[];
+    cards: AiSuggestionCardData[];
     actions: AiSuggestionCardActions | null;
   }>({ cards: [], actions: null });
 
   useEffect(() => {
-    if (!editor) { setState({ cards: [], actions: null }); return; }
+    if (!editor) {
+      setState({ cards: [], actions: null });
+      return;
+    }
 
     const unsub = subscribeToAiSuggestions(
       editor,
@@ -62,8 +65,8 @@ export function useAiSuggestionCards(
     );
 
     return unsub;
-  // options is intentionally excluded — callers should stabilise it with useMemo/useCallback
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // options is intentionally excluded — callers should stabilise it with useMemo/useCallback
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
   return state;
