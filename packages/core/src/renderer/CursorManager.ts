@@ -41,12 +41,14 @@ export class CursorManager {
     }, CursorManager.BLINK_INTERVAL_MS);
   }
 
-  /** Stop blinking and clear the timer. */
+  /** Stop blinking, hide the cursor, and trigger one repaint to clear it. */
   stop(): void {
     if (this.timerId !== null) {
       clearInterval(this.timerId);
       this.timerId = null;
     }
+    this._isVisible = false;
+    this.onTick();
   }
 
   /**

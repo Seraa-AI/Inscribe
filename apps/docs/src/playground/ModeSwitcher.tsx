@@ -2,18 +2,18 @@ import { useState } from "react";
 import type { Editor } from "@scrivr/core";
 import { TrackChangesStatus } from "@scrivr/plugins";
 
-export type EditorMode = "editing" | "suggesting" | "viewing";
+export type EditorMode = "editing" | "suggesting" | "viewOnly";
 
 const MODES: { value: EditorMode; label: string; icon: string }[] = [
-  { value: "editing",    label: "Editing",    icon: "✎" },
+  { value: "editing", label: "Editing", icon: "✎" },
   { value: "suggesting", label: "Suggesting", icon: "◈" },
-  { value: "viewing",    label: "Viewing",    icon: "◉" },
+  { value: "viewOnly", label: "View Only", icon: "◉" },
 ];
 
 const MODE_STATUS: Record<EditorMode, TrackChangesStatus> = {
-  editing:    TrackChangesStatus.disabled,
+  editing: TrackChangesStatus.disabled,
   suggesting: TrackChangesStatus.enabled,
-  viewing:    TrackChangesStatus.viewSnapshots,
+  viewOnly: TrackChangesStatus.viewSnapshots,
 };
 
 interface ModeSwitcherProps {
@@ -24,21 +24,27 @@ export function ModeSwitcher({ editor }: ModeSwitcherProps) {
   const [mode, setMode] = useState<EditorMode>("editing");
   const [open, setOpen] = useState(false);
 
-  const current = MODES.find(m => m.value === mode)!;
+  const current = MODES.find((m) => m.value === mode)!;
 
   const handleSelect = (next: EditorMode) => {
     setMode(next);
     setOpen(false);
     editor?.commands.setTrackingStatus?.(MODE_STATUS[next]);
+    editor?.setReadOnly(next === "viewOnly");
   };
 
   return (
     <div className="relative inline-block">
       <button
         className="flex items-center gap-1.5 h-[28px] px-2.5 border border-[#e8eaed] rounded-md bg-white text-[12px] text-gray-700 font-medium cursor-pointer select-none tracking-tight"
-        onMouseDown={e => { e.preventDefault(); setOpen(o => !o); }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setOpen((o) => !o);
+        }}
       >
-        <span className="text-[11px] text-indigo-500 leading-none">{current.icon}</span>
+        <span className="text-[11px] text-indigo-500 leading-none">
+          {current.icon}
+        </span>
         <span className="min-w-[62px] text-left">{current.label}</span>
         <span className="text-[10px] opacity-40 ml-0.5">▾</span>
       </button>
@@ -47,7 +53,7 @@ export function ModeSwitcher({ editor }: ModeSwitcherProps) {
         <>
           <div className="fixed inset-0 z-99" onClick={() => setOpen(false)} />
           <div className="absolute top-[calc(100%+5px)] right-0 z-100 bg-white border border-[#e8eaed] rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.08),0_1px_4px_rgba(0,0,0,0.04)] min-w-[148px] overflow-hidden p-1">
-            {MODES.map(m => (
+            {MODES.map((m) => (
               <button
                 key={m.value}
                 className={[
@@ -56,12 +62,19 @@ export function ModeSwitcher({ editor }: ModeSwitcherProps) {
                     ? "bg-indigo-50 text-indigo-700"
                     : "bg-transparent text-gray-700 hover:bg-gray-100",
                 ].join(" ")}
-                onMouseDown={e => { e.preventDefault(); handleSelect(m.value); }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelect(m.value);
+                }}
               >
-                <span className={[
-                  "text-[11px] leading-none w-[14px] text-center",
-                  m.value === mode ? "text-indigo-500" : "text-gray-400",
-                ].join(" ")}>{m.icon}</span>
+                <span
+                  className={[
+                    "text-[11px] leading-none w-[14px] text-center",
+                    m.value === mode ? "text-indigo-500" : "text-gray-400",
+                  ].join(" ")}
+                >
+                  {m.icon}
+                </span>
                 <span>{m.label}</span>
               </button>
             ))}

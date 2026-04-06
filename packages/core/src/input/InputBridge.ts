@@ -1,4 +1,5 @@
 import type { EditorState, Transaction, Command } from "prosemirror-state";
+import { TextSelection } from "prosemirror-state";
 import type { Schema } from "prosemirror-model";
 import type { CharacterMap } from "../layout/CharacterMap";
 import type { InputHandler, EditorNavigator } from "../extensions/types";
@@ -96,6 +97,7 @@ export class InputBridge {
     | ((page: number) => { screenLeft: number; screenTop: number } | null)
     | null = null;
   private _isFocused = false;
+  private _readOnly = false;
 
   constructor(opts: InputBridgeOptions) {
     this.opts = opts;
@@ -106,6 +108,11 @@ export class InputBridge {
   /** True when the textarea currently has DOM focus. */
   get isFocused(): boolean {
     return this._isFocused;
+  }
+
+  /** Block or unblock all document mutations. */
+  setReadOnly(value: boolean): void {
+    this._readOnly = value;
   }
 
   /** The container element passed to mount(). Null when unmounted. */
@@ -301,6 +308,28 @@ export class InputBridge {
   };
 
   private _handleKeydown = (e: KeyboardEvent): void => {
+    if (this._readOnly) {
+      // Allow arrow-key navigation and selection-only shortcuts; block all mutations.
+      const keyStr = keyEventToString(e);
+      // Escape collapses the current selection without moving the cursor.
+      if (e.key === "Escape") {
+        const state = this.opts.getState();
+        const { head } = state.selection;
+        this.opts.dispatch(state.tr.setSelection(TextSelection.create(state.doc, head)));
+        e.preventDefault();
+        return;
+      }
+      if (this._tryInputHandler(e)) {
+        e.preventDefault();
+        return;
+      }
+      // Mod-a (select all) and Mod-c (copy, also handled by clipboard event)
+      if ((keyStr === "Mod-a" || keyStr === "Mod-c") && this._tryKeymapCommand(e)) {
+        e.preventDefault();
+        this._clearTextarea();
+      }
+      return;
+    }
     // Input handlers first — editor-level actions (navigation, etc.)
     // declared by extensions via addInputHandlers().
     if (this._tryInputHandler(e)) {
@@ -317,6 +346,7 @@ export class InputBridge {
   };
 
   private _handleInput = (e: Event): void => {
+    if (this._readOnly) return;
     if ((e as InputEvent).isComposing) return;
     const text = this.textarea!.value;
     if (!text) return;
@@ -325,6 +355,7 @@ export class InputBridge {
   };
 
   private _handleCompositionEnd = (e: CompositionEvent): void => {
+    if (this._readOnly) return;
     const text = e.data;
     if (!text) return;
     // Clear BEFORE dispatching: Chrome/Edge fires `input` with isComposing=false
@@ -357,11 +388,14 @@ export class InputBridge {
     );
     const html = serializeSelectionToHtml(state, this.opts.getSchema());
     if (html) e.clipboardData.setData("text/html", html);
+    // In read-only mode, honour copy but skip the delete.
+    if (this._readOnly) return;
     const tr = deleteSelection(state);
     if (tr) this.opts.dispatch(tr);
   };
 
   private _handlePaste = (e: ClipboardEvent): void => {
+    if (this._readOnly) return;
     e.preventDefault();
     if (!e.clipboardData) return;
     const tr = this.opts.pasteTransformer.transform(

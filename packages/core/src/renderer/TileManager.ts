@@ -716,9 +716,10 @@ export class TileManager {
 
     const { page, docX, docY } = hit;
 
-    // Resize handle
+    // Resize handle — mutation, block in read-only
     const resizeHit = this.hitHandleAt(docX, docY, page);
     if (resizeHit) {
+      if (this.editor.readOnly) return;
       const sel = this.editor.getState().selection as NodeSelection;
       const startW = sel.node.attrs["width"] as number;
       const startH = sel.node.attrs["height"] as number;
@@ -736,9 +737,10 @@ export class TileManager {
       return;
     }
 
-    // Float body drag
+    // Float body drag — mutation, block in read-only
     const floatHit = this.hitFloatAt(docX, docY, page);
     if (floatHit) {
+      if (this.editor.readOnly) return;
       this.editor.selectNode(floatHit.docPos);
       const attrs = floatHit.node.attrs as {
         floatOffset?: { x: number; y: number };
@@ -755,6 +757,15 @@ export class TileManager {
       return;
     }
 
+    if (this.editor.readOnly) {
+      // Collapse any active selection on click without placing the cursor.
+      const state = this.editor.getState();
+      if (!state.selection.empty) {
+        const { head } = state.selection;
+        this.editor.setSelection(head, head);
+      }
+      return;
+    }
     this.isDragging = true;
     const pos = this.editor.charMap.posAtCoords(docX, docY, page);
 

@@ -14,7 +14,7 @@ declare module "@scrivr/core" {
        * Toggle or explicitly set the track-changes status.
        * Pass no argument to toggle between enabled/disabled.
        */
-      setTrackingStatus: (status?: "enabled" | "disabled" | "viewOnly") => ReturnType;
+      setTrackingStatus: (status?: TrackChangesStatus) => ReturnType;
       /**
        * Accept or reject a set of tracked changes by their IDs.
        * status: "accepted" | "rejected"
