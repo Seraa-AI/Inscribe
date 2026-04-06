@@ -2,7 +2,7 @@ name: PR Checks
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
 
 jobs:
   pr-title:
@@ -29,3 +29,33 @@ jobs:
             chore
             revert
           requireScope: false
+
+  changeset:
+    name: Changeset Check
+    runs-on: ubuntu-latest
+    # Skip if the PR is the automated "Version Packages" PR from changesets/action
+    # or if the PR is labeled "no-release"
+    if: |
+      github.head_ref != 'changeset-release/main' &&
+      !contains(github.event.pull_request.labels.*.name, 'no-release')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so `changeset status --since` can diff correctly
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for changeset
+        run: pnpm changeset status --since=origin/main
