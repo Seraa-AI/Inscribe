@@ -1,5 +1,6 @@
 import { BubbleMenu } from "@scrivr/react";
 import type { Editor } from "@scrivr/react";
+import { RemoveFormatting } from "lucide-react";
 
 interface BubbleMenuBarProps {
   editor: Editor | null;
@@ -13,10 +14,30 @@ type Btn = {
 };
 
 const BUTTONS: Btn[] = [
-  { label: "B", title: "Bold",          mark: "bold",          action: (e) => e.commands.toggleBold?.() },
-  { label: "I", title: "Italic",        mark: "italic",        action: (e) => e.commands.toggleItalic?.() },
-  { label: "U", title: "Underline",     mark: "underline",     action: (e) => e.commands.toggleUnderline?.() },
-  { label: "S", title: "Strikethrough", mark: "strikethrough", action: (e) => e.commands.toggleStrikethrough?.() },
+  {
+    label: "B",
+    title: "Bold",
+    mark: "bold",
+    action: (e) => e.commands.toggleBold(),
+  },
+  {
+    label: "I",
+    title: "Italic",
+    mark: "italic",
+    action: (e) => e.commands.toggleItalic(),
+  },
+  {
+    label: "U",
+    title: "Underline",
+    mark: "underline",
+    action: (e) => e.commands.toggleUnderline(),
+  },
+  {
+    label: "S",
+    title: "Strikethrough",
+    mark: "strikethrough",
+    action: (e) => e.commands.toggleStrikethrough(),
+  },
 ];
 
 export function BubbleMenuBar({ editor }: BubbleMenuBarProps) {
@@ -77,6 +98,17 @@ export function BubbleMenuBar({ editor }: BubbleMenuBarProps) {
             ⛓‍💥
           </button>
         )}
+
+        <button
+          title="Clear formatting"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            editor?.commands.clearFormatting();
+          }}
+          className="px-2 py-1 rounded-md border-none text-[13px] leading-none cursor-pointer bg-transparent text-zinc-400 hover:bg-white/10 hover:text-white transition-colors duration-100"
+        >
+          <RemoveFormatting className="w-4 h-4" />
+        </button>
       </div>
     </BubbleMenu>
   );

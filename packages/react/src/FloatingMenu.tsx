@@ -24,8 +24,8 @@ interface FloatingMenuProps {
 }
 
 export function FloatingMenu({ editor, children, shouldShow, className }: FloatingMenuProps) {
-  const [rect, setRect] = useState<DOMRect | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [rect, setRect] = useState<DOMRect | null>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {

@@ -26,17 +26,27 @@ export function AiSuggestionPopover({
   editor,
   mode = "direct",
 }: AiSuggestionPopoverProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [info, setInfo] = useState<SuggestionGroupInfo | null>(null);
-  const [pos,  setPos]  = useState<{ x: number; y: number } | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!editor) return;
     return createSuggestionPopover(editor, {
-      onShow: (r, i) => { setRect(r); setInfo(i); },
-      onMove: (r, i) => { setRect(r); setInfo(i); },
-      onHide: ()     => { setRect(null); setInfo(null); setPos(null); },
+      onShow: (r, i) => {
+        setRect(r);
+        setInfo(i);
+      },
+      onMove: (r, i) => {
+        setRect(r);
+        setInfo(i);
+      },
+      onHide: () => {
+        setRect(null);
+        setInfo(null);
+        setPos(null);
+      },
     });
   }, [editor]);
 
@@ -44,14 +54,18 @@ export function AiSuggestionPopover({
     if (!rect || !menuRef.current) return;
     const virtualEl = {
       getBoundingClientRect: () => rect,
-      getClientRects:        () => [rect] as unknown as DOMRectList,
+      getClientRects: () => [rect] as unknown as DOMRectList,
     };
     let cancelled = false;
     computePosition(virtualEl, menuRef.current, {
-      placement:  "bottom-start",
+      placement: "bottom-start",
       middleware: [offset(8), flip(), shift({ padding: 8 })],
-    }).then(({ x, y }) => { if (!cancelled) setPos({ x, y }); });
-    return () => { cancelled = true; };
+    }).then(({ x, y }) => {
+      if (!cancelled) setPos({ x, y });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [rect, info]);
 
   if (!rect || !info) return null;
@@ -85,29 +99,29 @@ export function AiSuggestionPopover({
   }
 
   const isReplacement = !!(info.replacedText && info.insertedText);
-  const isPureInsert  = !info.replacedText && !!info.insertedText;
+  const isPureInsert = !info.replacedText && !!info.insertedText;
 
   return createPortal(
     <div
       ref={menuRef}
       onMouseDown={(e) => e.preventDefault()}
       style={{
-        position:      "fixed",
-        left:          pos?.x ?? 0,
-        top:           pos?.y ?? 0,
-        zIndex:        60,
-        visibility:    pos ? "visible" : "hidden",
-        background:    "#fff",
-        border:        info.isStale ? "1.5px solid #f59e0b" : "1.5px solid #e2e8f0",
-        borderRadius:  10,
-        boxShadow:     "0 4px 16px rgba(0,0,0,0.12)",
-        padding:       "8px 10px",
-        display:       "flex",
+        position: "fixed",
+        left: pos?.x ?? 0,
+        top: pos?.y ?? 0,
+        zIndex: 60,
+        visibility: pos ? "visible" : "hidden",
+        background: "#fff",
+        border: info.isStale ? "1.5px solid #f59e0b" : "1.5px solid #e2e8f0",
+        borderRadius: 10,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+        padding: "8px 10px",
+        display: "flex",
         flexDirection: "column",
-        gap:           8,
-        fontSize:      13,
-        minWidth:      240,
-        maxWidth:      420,
+        gap: 8,
+        fontSize: 13,
+        minWidth: 240,
+        maxWidth: 420,
       }}
     >
       {/* Header */}
@@ -116,11 +130,17 @@ export function AiSuggestionPopover({
           ✦ AI Suggestion
         </span>
         {info.isStale && (
-          <span style={{ fontSize: 11, color: "#b45309" }}>Document changed</span>
+          <span style={{ fontSize: 11, color: "#b45309" }}>
+            Document changed
+          </span>
         )}
         <div style={{ flex: 1 }} />
-        <button onClick={handleAccept}    style={btnStyle("#15803d", "#fff")}>✓ Accept</button>
-        <button onClick={handleReject}    style={btnStyle("#b91c1c", "#fff")}>✗ Reject</button>
+        <button onClick={handleAccept} style={btnStyle("#15803d", "#fff")}>
+          ✓ Accept
+        </button>
+        <button onClick={handleReject} style={btnStyle("#b91c1c", "#fff")}>
+          ✗ Reject
+        </button>
       </div>
 
       {/* Preview */}
@@ -146,13 +166,15 @@ export function AiSuggestionPopover({
       )}
 
       {/* Footer */}
-      <div style={{
-        display:        "flex",
-        justifyContent: "flex-end",
-        gap:            6,
-        paddingTop:     2,
-        borderTop:      "1px solid #f1f5f9",
-      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 6,
+          paddingTop: 2,
+          borderTop: "1px solid #f1f5f9",
+        }}
+      >
         <button onClick={handleAcceptAll} style={btnStyle("#6d28d9", "#fff")}>
           Accept All
         </button>
@@ -168,41 +190,41 @@ export function AiSuggestionPopover({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const badge = {
-  display:      "inline-flex",
-  alignItems:   "center",
-  gap:          3,
-  padding:      "2px 7px",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 3,
+  padding: "2px 7px",
   borderRadius: 99,
-  fontSize:     11,
-  fontWeight:   600,
-  flexShrink:   0,
+  fontSize: 11,
+  fontWeight: 600,
+  flexShrink: 0,
 } as const;
 
 function previewStyle(bg: string, color: string) {
   return {
-    background:   bg,
+    background: bg,
     color,
     borderRadius: 4,
-    padding:      "4px 8px",
-    fontSize:     12,
-    lineHeight:   1.4,
-    fontFamily:   "Georgia, serif",
-    wordBreak:    "break-word" as const,
-    maxHeight:    60,
-    overflowY:    "auto" as const,
+    padding: "4px 8px",
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontFamily: "Georgia, serif",
+    wordBreak: "break-word" as const,
+    maxHeight: 60,
+    overflowY: "auto" as const,
   };
 }
 
 function btnStyle(bg: string, color: string) {
   return {
-    background:   bg,
+    background: bg,
     color,
-    border:       "none",
+    border: "none",
     borderRadius: 5,
-    padding:      "4px 10px",
-    cursor:       "pointer",
-    fontSize:     12,
-    fontWeight:   600,
-    flexShrink:   0,
+    padding: "4px 10px",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 600,
+    flexShrink: 0,
   } as const;
 }

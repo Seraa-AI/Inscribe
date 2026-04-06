@@ -14,10 +14,10 @@ interface TrackChangesPopoverProps {
 }
 
 export function TrackChangesPopover({ editor }: TrackChangesPopoverProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [info, setInfo] = useState<ChangePopoverInfo | null>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!editor) return;
