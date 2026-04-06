@@ -26,6 +26,7 @@
     "coverage": "turbo test -- --coverage",
     "clean": "rm -rf {dist,node_modules} apps/*/{dist,node_modules} packages/*/{dist,node_modules}",
     "changeset": "changeset",
+    "changeset:empty": "changeset --empty",
     "version-packages": "changeset version",
     "release": "pnpm build && pnpm --filter './packages/**' publish --access public --no-git-checks --provenance"
   },
