@@ -1,6 +1,6 @@
 {
   "name": "@scrivr/plugins",
-  "version": "0.1.2",
+  "version": "1.0.0",
   "description": "ProseMirror plugins and collaboration extensions for Scrivr",
   "license": "Apache-2.0",
   "author": "Seraa AI <hello@seraa.ai>",
@@ -58,9 +58,15 @@
     "yjs": ">=13.0.0"
   },
   "peerDependenciesMeta": {
-    "@hocuspocus/provider": { "optional": true },
-    "y-prosemirror": { "optional": true },
-    "yjs": { "optional": true }
+    "@hocuspocus/provider": {
+      "optional": true
+    },
+    "y-prosemirror": {
+      "optional": true
+    },
+    "yjs": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@hocuspocus/provider": "^3.4.4",
