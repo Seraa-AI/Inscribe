@@ -12,6 +12,12 @@ import {
 import { layoutBlock, LayoutBlock } from "./BlockLayout";
 import type { LayoutLine, ConstraintProvider } from "./LineBreaker";
 import { ExclusionManager } from "./ExclusionManager";
+import {
+  computePageMetrics,
+  EMPTY_RESOLVED_CHROME,
+  type PageMetrics,
+  type ResolvedChrome,
+} from "./PageMetrics";
 
 export interface PageConfig {
   pageWidth: number;
@@ -171,6 +177,60 @@ export interface DocumentLayout {
    * Absent on partial (streaming) layouts.
    */
   fragmentsByPage?: LayoutFragment[][];
+
+  // ── Phase 0 additions (multi-surface foundation) ──────────────────────────
+  //
+  // These fields are populated by runPipeline starting with the Phase 0 PR
+  // (refactor/layout-primitives). They're optional so older call sites that
+  // construct DocumentLayout literals without them continue to compile during
+  // the staged rollout. Consumers that actually rely on the values check for
+  // presence or fall back to legacy behavior.
+  //
+  // See docs/header-footer-plan.md §3 and docs/multi-surface-architecture.md
+  // §3.4/§8.6 for the full design.
+
+  /**
+   * Per-page metrics bundle, one entry per `pages[i]`.
+   * Always set by runPipeline going forward, even with zero chrome contributors
+   * (Phase 0 state) — in that case every entry reduces to the hand-computed
+   * `margins.top` / `pageHeight - margins.bottom` formula for its page number.
+   *
+   * Optional because tests and legacy paths may construct DocumentLayout
+   * without running the pipeline (e.g. synthesizing a single-page fixture).
+   */
+  metrics?: PageMetrics[];
+
+  /**
+   * Monotonic identity for this layout run. Incremented per full run. Used
+   * by the Phase 1b early-termination cache to distinguish "this block was
+   * placed in the run we're comparing against" from "this block was placed
+   * in some older run we can no longer trust."
+   *
+   * In Phase 0 this is aliased to `version` since the two counters serve
+   * the same purpose (per-run identity). Future PRs may split them if a
+   * second identity lane is needed (e.g., to decouple render-staleness
+   * tracking from cache-invalidation tracking).
+   */
+  runId?: number;
+
+  /**
+   * Whether the iterative chrome loop reached a fixed point. Always
+   * `"stable"` in Phase 0 because there are no iterative contributors yet
+   * (the aggregator effectively runs 1 iteration). Later PRs that wire real
+   * contributors (footnotes) set this to `"exhausted"` when MAX_ITERATIONS
+   * fires without convergence.
+   *
+   * `convergence: "exhausted"` is a valid, usable layout — just non-optimal.
+   * Strict-mode export (see `docs/export-extensibility.md` §12.1) can
+   * choose to throw rather than ship an exhausted layout.
+   */
+  convergence?: "stable" | "exhausted";
+
+  /**
+   * Number of iterations the chrome aggregator ran. Always `1` in Phase 0
+   * (no iteration). Debug/telemetry only — no layout logic reads this.
+   */
+  iterationCount?: number;
 }
 
 /**
@@ -237,6 +297,31 @@ export interface MeasureCacheEntry {
    */
   placedTargetY?: number;
   placedPage?: number;
+
+  /**
+   * Phase 1b — two-guard cache invariant (Phase 0 additions).
+   *
+   * These fields make the early-termination shortcut safe across chrome
+   * configuration changes. See docs/header-footer-plan.md §3.4 and
+   * docs/multi-surface-architecture.md §8.6 for the full rationale.
+   *
+   * - `placedRunId`: the `runId` of the layout run that placed this block.
+   *   Phase 1b only accepts the shortcut when the block's placed run equals
+   *   `previousLayout.runId`, i.e. the cache entry is fresh from the run
+   *   whose pages we'd be copying.
+   *
+   * - `placedContentTop`: the `PageMetrics.contentTop` of the specific page
+   *   this block was placed on. If that page's contentTop differs between
+   *   runs (e.g. a header plugin activated and reserved 40px), the cached
+   *   `placedTargetY` is stale by exactly that delta and the shortcut is
+   *   invalid. Storing placedContentTop lets us detect this.
+   *
+   * Both are optional because legacy entries written before Phase 0 don't
+   * have them set — in that case the Phase 1b guard bails out and the
+   * shortcut is skipped, which is the safe default.
+   */
+  placedRunId?: number;
+  placedContentTop?: number;
 }
 
 /**
@@ -280,6 +365,14 @@ export interface FlowBlock {
   // Phase 1b: cache snapshot taken before this run's measurement.
   preCachedTargetY?: number;
   preCachedPage?: number;
+  /**
+   * Phase 1b two-guard additions (Phase 0). See MeasureCacheEntry.placedRunId
+   * / placedContentTop for the rationale. These are the snapshot of those
+   * values at the time buildBlockFlow ran for THIS layout run — copied from
+   * the previous run's cache entry so the Phase 1b guard can compare them.
+   */
+  preCachedRunId?: number;
+  preCachedContentTop?: number;
   prevNodePos?: number;
 }
 
@@ -361,6 +454,12 @@ export function runPipeline(
   // Destructured once — avoids repeated property access inside the hot loop.
   const { fontModifiers, measureCache, previousLayout,pageConfig, measurer } = options;
   const version = (options.previousVersion ?? 0) + 1;
+  // Phase 0: runId is aliased to version. They serve the same "per-run
+  // identity" purpose today. Future PRs may split them if render-staleness
+  // tracking (version) and cache-invalidation tracking (runId) need to
+  // diverge. Keeping them the same means existing callers that observe
+  // `version` bumps see identical behavior.
+  const runId = version;
   const baseConfig = options.fontConfig ?? defaultFontConfig;
   // Always inject a family — font strings in defaultFontConfig and extensions
   // intentionally omit the family so it comes from a single source here.
@@ -368,9 +467,30 @@ export function runPipeline(
 
   const { pageWidth, pageHeight, margins } = pageConfig;
   const contentWidth = pageWidth - margins.left - margins.right;
-  // In pageless mode pageHeight is 0 — contentHeight is unused (overflow is disabled).
-  const contentHeight = pageConfig.pageless ? Infinity : pageHeight - margins.top - margins.bottom;
   const maxBlocks = options.maxBlocks;
+
+  // ── Phase 0: chrome aggregation ──────────────────────────────────────────
+  // In Phase 0 the aggregator is inert — no contributors are registered yet,
+  // so we use the stable EMPTY_RESOLVED_CHROME reference. Phase 1b wires real
+  // chrome contributors (headers, footers) through the extension lane and
+  // replaces this line with a call to `aggregateChrome(extensions, ...)`.
+  const resolved = EMPTY_RESOLVED_CHROME;
+
+  // ── Per-page metrics lookup ──────────────────────────────────────────────
+  // Single-entry cache keyed by pageNumber. paginateFlow advances pages
+  // sequentially, so the cache hits on ~99% of calls — only missing on the
+  // first call per new page. Stateless from the caller's perspective: looks
+  // like a pure function `(pageNumber) => PageMetrics`.
+  let cachedMetricsPage = -1;
+  let cachedMetrics: PageMetrics | null = null;
+  const metricsFor = (pageNumber: number): PageMetrics => {
+    if (cachedMetricsPage === pageNumber && cachedMetrics !== null) {
+      return cachedMetrics;
+    }
+    cachedMetrics = computePageMetrics(pageConfig, resolved, pageNumber);
+    cachedMetricsPage = pageNumber;
+    return cachedMetrics;
+  };
 
   // ── Resumption support: O(N) incremental chunked layout ───────────────────
   // When resumption is provided, restore the cursor state from the previous
@@ -384,7 +504,7 @@ export function runPipeline(
   // Restore page cursor from previous chunk, or start fresh.
   const pages: LayoutPage[] = r ? r.completedPages : [];
   let currentPage: LayoutPage = r ? r.currentPage : { pageNumber: 1, blocks: [] };
-  let y = r ? r.currentY : margins.top;
+  let y = r ? r.currentY : metricsFor(1).contentTop;
   let prevSpaceAfter = r ? r.prevSpaceAfter : 0;
   const chunkVersion = r ? r.version : version;
 
@@ -397,11 +517,18 @@ export function runPipeline(
 
   // ── Stage 2: paginate ─────────────────────────────────────────────────────
   const pr = paginateFlow(
-    flowResult.flows, margins, contentHeight,
+    flowResult.flows, pageConfig, resolved, metricsFor, runId,
     previousLayout, measureCache,
     pages, currentPage, y, prevSpaceAfter,
     pageConfig.pageless,
   );
+
+  // ── Helper: compute per-page metrics array for a given page list ─────────
+  // Used by both the partial and final return paths. Mirrors what paginateFlow
+  // threaded through metricsFor(), but with a fresh 1-entry cache so we don't
+  // pollute the metricsFor cache at the end of the run.
+  const buildMetricsArray = (pageList: LayoutPage[]): PageMetrics[] =>
+    pageList.map((p) => computePageMetrics(pageConfig, resolved, p.pageNumber));
 
   // ── Streaming layout cutoff ───────────────────────────────────────────────
   if (flowResult.reachedCutoff && !pr.earlyTerminated) {
@@ -425,6 +552,10 @@ export function runPipeline(
       totalContentHeight: pageConfig.pageless
         ? pr.y + margins.bottom
         : partialPages.length * pageHeight,
+      metrics: buildMetricsArray(partialPages),
+      runId,
+      convergence: "stable",
+      iterationCount: 1,
     };
     // ── Stage 3: float layout (partial chunk) ────────────────────────────────
     return applyFloatLayout(partialPass1, margins, pageWidth, contentWidth, measurer, fontConfig, fontModifiers);
@@ -433,7 +564,16 @@ export function runPipeline(
   const allPages = pr.earlyTerminated ? pr.pages : [...pr.pages, pr.currentPage];
 
   // ── Stage 3: float layout ─────────────────────────────────────────────────
-  const pass1Result: DocumentLayout = { pages: allPages, pageConfig, version: chunkVersion, totalContentHeight: 0 };
+  const pass1Result: DocumentLayout = {
+    pages: allPages,
+    pageConfig,
+    version: chunkVersion,
+    totalContentHeight: 0,
+    metrics: buildMetricsArray(allPages),
+    runId,
+    convergence: "stable",
+    iterationCount: 1,
+  };
   const floated = applyFloatLayout(pass1Result, margins, pageWidth, contentWidth, measurer, fontConfig, fontModifiers);
 
   // ── Stage 4: fragment index ───────────────────────────────────────────────
@@ -450,26 +590,39 @@ export function runPipeline(
 }
 
 /**
- * Stage 3 of the layout pipeline: assign measured FlowBlocks to pages.
+ * Stage 2 of the layout pipeline: assign measured FlowBlocks to pages.
  *
  * Pure geometry — no measuring, no cache reads (except for Phase 1b shiftBlock).
  * Returns all completed pages plus the cursor state needed for streaming resumption
  * or the next chunk in incremental layout.
  *
+ * Per-page metrics: every vertical-position read inside this function routes
+ * through `metricsFor(pageNumber)` rather than the old `margins.top` /
+ * `contentHeight` constants. This is what lets differentFirstPage headers and
+ * footnote bands produce different reservations per page. In Phase 0 with zero
+ * chrome contributors, `metricsFor` returns identical values for every page,
+ * so the behavior is unchanged from the pre-refactor formula.
+ *
  * @param flows         FlowBlocks from buildBlockFlow().
- * @param margins       Page margins (top/right/bottom/left).
- * @param contentHeight Page content height (pageHeight - margins.top - margins.bottom).
+ * @param pageConfig    The PageConfig for this run (used for margins.left, etc.).
+ * @param resolved      The chrome aggregator output (EMPTY_RESOLVED_CHROME in Phase 0).
+ * @param metricsFor    Per-page metrics lookup. Callers are expected to memoize
+ *                      at their level; paginateFlow treats this as a pure function.
+ * @param runId         Monotonic id of THIS layout run. Written into MeasureCacheEntry.placedRunId
+ *                      for Phase 1b two-guard cache invariants.
  * @param previousLayout Previous run's layout — enables Phase 1b early termination.
- * @param measureCache  Weak cache — updated with placedTargetY/placedPage after placement.
+ * @param measureCache  Weak cache — updated with placement data after each block.
  * @param initPages     Completed pages from the previous chunk (empty on first chunk).
  * @param initPage      The page currently being built (fresh {pageNumber:1} on first chunk).
- * @param initY         Y cursor at start (margins.top on first chunk).
+ * @param initY         Y cursor at start (metricsFor(1).contentTop on first chunk).
  * @param initPrevSpaceAfter Spacing state from the previous block (0 on first chunk).
  */
 export function paginateFlow(
   flows: FlowBlock[],
-  margins: PageConfig["margins"],
-  contentHeight: number,
+  pageConfig: PageConfig,
+  resolved: ResolvedChrome,
+  metricsFor: (pageNumber: number) => PageMetrics,
+  runId: number,
   previousLayout: DocumentLayout | undefined,
   measureCache: WeakMap<Node, MeasureCacheEntry> | undefined,
   initPages: LayoutPage[],
@@ -489,6 +642,13 @@ export function paginateFlow(
   /** True when Phase 1b fired and all remaining pages were copied from previousLayout. */
   earlyTerminated: boolean;
 } {
+  // `resolved` is consumed indirectly via `metricsFor` — the aggregator
+  // already baked contributions into the per-page metrics. Kept as a
+  // parameter for future expansion (e.g., passing payloads through to
+  // layout-time hooks) and to keep the signature aligned with runPipeline.
+  void resolved;
+
+  const { margins } = pageConfig;
   const pages = initPages;
   let currentPage = initPage;
   let y = initY;
@@ -503,7 +663,7 @@ export function paginateFlow(
     if (flow.isPageBreak && !pageless) {
       pages.push(currentPage);
       currentPage = newPage(pages.length + 1);
-      y = margins.top;
+      y = metricsFor(currentPage.pageNumber).contentTop;
       prevSpaceAfter = 0;
       continue;
     }
@@ -546,9 +706,17 @@ export function paginateFlow(
       block.blockType = "list_item";
     }
 
+    // ── Per-page geometry snapshot ───────────────────────────────────────────
+    // Computed once per outer-loop iteration. `currentMetrics` is stable for
+    // the duration of this block's placement — it only changes when we advance
+    // to a new page (leaf reflow or split-loop advance), at which point we
+    // re-fetch with the new page number.
+    const currentMetrics = metricsFor(currentPage.pageNumber);
+
     // ── Page overflow check (disabled in pageless mode) ───────────────────────
     const blockBottom = targetY + flow.height;
-    const pageBottom = margins.top + contentHeight;
+    const pageBottom = currentMetrics.contentBottom;
+    const contentHeight = currentMetrics.contentHeight;
     // Text blocks can always be split; leaf blocks need the !isFirstOnPage guard
     // to avoid infinite empty-page loops when the block exceeds contentHeight.
     const overflows = !pageless && blockBottom > pageBottom && (!isFirstOnPage || flow.lines.length > 0);
@@ -589,10 +757,13 @@ export function paginateFlow(
         }
         pages.push(currentPage);
         currentPage = newPage(pages.length + 1);
-        y = margins.top;
+        // Fetch the NEW page's metrics — differentFirstPage or footnote bands
+        // can make this differ from the page we just left.
+        const newPageContentTop = metricsFor(currentPage.pageNumber).contentTop;
+        y = newPageContentTop;
         prevSpaceAfter = 0;
 
-        const reflow = buildBlock(blockX, margins.top);
+        const reflow = buildBlock(blockX, newPageContentTop);
         if (flow.listMarker !== undefined) {
           reflow.listMarker = flow.listMarker;
           reflow.listMarkerX = flow.listMarkerX!;
@@ -600,7 +771,7 @@ export function paginateFlow(
         }
 
         currentPage.blocks.push(reflow);
-        y = margins.top + flow.height;
+        y = newPageContentTop + flow.height;
         prevSpaceAfter = flow.spaceAfter;
       }
     } else {
@@ -619,7 +790,11 @@ export function paginateFlow(
 
       while (remainingLines.length > 0) {
         const partStartY = currentPartStartY;
-        const pageAvailable = (margins.top + contentHeight) - partStartY;
+        // Per-page metrics snapshot for THIS iteration of the split loop.
+        // Re-fetched on every pass because the page may have advanced via
+        // the "advance to next" branch below.
+        const splitMetrics = metricsFor(currentPage.pageNumber);
+        const pageAvailable = splitMetrics.contentBottom - partStartY;
 
         let linesFit = 0;
         let heightFit = 0;
@@ -639,14 +814,14 @@ export function paginateFlow(
         }
 
         if (linesFit === 0) {
-          if (hasPlacedAnyPart || partStartY === margins.top || gapSuppressApplied) {
+          if (hasPlacedAnyPart || partStartY === splitMetrics.contentTop || gapSuppressApplied) {
             // Force one line: top-of-page guard or sub-pixel shortfall.
             if ((globalThis as Record<string,unknown>).__LAYOUT_DEBUG__) {
               console.log(`    → linesFit=0 FORCE 1 line (top-of-page / sub-pixel guard)`);
             }
             linesFit = 1;
             heightFit = remainingLines[0]!.lineHeight;
-          } else if (pageBottom - y >= remainingLines[0]!.lineHeight - 0.5) {
+          } else if (splitMetrics.contentBottom - y >= remainingLines[0]!.lineHeight - 0.5) {
             // Inter-block gap pushed targetY into dead zone. Suppress and retry.
             if ((globalThis as Record<string,unknown>).__LAYOUT_DEBUG__) {
               console.log(`    → linesFit=0 GAP SUPPRESS: retry at y=${y.toFixed(1)}`);
@@ -662,7 +837,7 @@ export function paginateFlow(
             pages.push(currentPage);
             currentPage = newPage(pages.length + 1);
             prevSpaceAfter = 0;
-            currentPartStartY = margins.top;
+            currentPartStartY = metricsFor(currentPage.pageNumber).contentTop;
             gapSuppressApplied = false;
             continue;
           }
@@ -713,7 +888,7 @@ export function paginateFlow(
           pages.push(currentPage);
           currentPage = newPage(pages.length + 1);
           prevSpaceAfter = 0;
-          currentPartStartY = margins.top;
+          currentPartStartY = metricsFor(currentPage.pageNumber).contentTop;
           remainingLines = remainingLines.slice(linesFit);
         } else {
           y = partStartY + heightFit;
@@ -728,17 +903,44 @@ export function paginateFlow(
     if (cachedEntry) {
       cachedEntry.placedTargetY = targetY;
       cachedEntry.placedPage = currentPage.pageNumber;
+      // Phase 1b two-guard additions: runId identifies THIS run, contentTop
+      // snapshots the specific page's reserved-top value. Both are read by
+      // the next run's early-termination guard to detect chrome configuration
+      // changes that would make the cached targetY stale.
+      cachedEntry.placedRunId = runId;
+      cachedEntry.placedContentTop = metricsFor(currentPage.pageNumber).contentTop;
     }
 
     // ── Phase 1b: early termination ───────────────────────────────────────────
+    //
+    // Safe to take the shortcut only when ALL of the following match between
+    // the previous run and this one:
+    //   1. targetY is the same (block landed at the same vertical position)
+    //   2. pageNumber is the same (block landed on the same page)
+    //   3. preCachedRunId === previousLayout.runId (the cache entry is from
+    //      the run we'd be copying from, not an older run)
+    //   4. preCachedContentTop === current page's contentTop (the page's
+    //      reserved-top hasn't shifted due to chrome configuration changes)
+    //
+    // Conditions 3 and 4 are the Phase 0 additions for the multi-surface
+    // refactor. With zero chrome contributors (Phase 0 default), condition
+    // 4 is always true (contentTop = margins.top on every run) and condition
+    // 3 is true whenever the cache entry was written by the immediately
+    // previous run, which is the normal case. So the shortcut rate is
+    // unchanged from the pre-refactor behavior in Phase 0.
     if (
       previousLayout &&
       seenCacheMiss &&
       flow.wasCacheHit &&
       flow.preCachedTargetY !== undefined &&
       flow.preCachedPage !== undefined &&
+      flow.preCachedRunId !== undefined &&
+      flow.preCachedContentTop !== undefined &&
       targetY === flow.preCachedTargetY &&
-      currentPage.pageNumber === flow.preCachedPage
+      currentPage.pageNumber === flow.preCachedPage &&
+      previousLayout.runId !== undefined &&
+      flow.preCachedRunId === previousLayout.runId &&
+      flow.preCachedContentTop === currentMetrics.contentTop
     ) {
       const delta = flow.prevNodePos !== undefined ? nodePos - flow.prevNodePos : 0;
       const prevPages = previousLayout._pass1Pages ?? previousLayout.pages;
@@ -885,9 +1087,11 @@ export function buildBlockFlow(
       hasFloatAnchor: blockHasFloatAnchor(entry.lines),
       inputHash: computeInputHash(nodePos, node, blockWidth),
       wasCacheHit: isHit,
-      ...(preCached?.placedTargetY !== undefined ? { preCachedTargetY: preCached.placedTargetY } : {}),
-      ...(preCached?.placedPage     !== undefined ? { preCachedPage:    preCached.placedPage    } : {}),
-      ...(preCached?.nodePos        !== undefined ? { prevNodePos:      preCached.nodePos       } : {}),
+      ...(preCached?.placedTargetY    !== undefined ? { preCachedTargetY:    preCached.placedTargetY    } : {}),
+      ...(preCached?.placedPage        !== undefined ? { preCachedPage:       preCached.placedPage       } : {}),
+      ...(preCached?.placedRunId       !== undefined ? { preCachedRunId:      preCached.placedRunId      } : {}),
+      ...(preCached?.placedContentTop  !== undefined ? { preCachedContentTop: preCached.placedContentTop } : {}),
+      ...(preCached?.nodePos           !== undefined ? { prevNodePos:         preCached.nodePos          } : {}),
     });
 
     processedBlocks++;
