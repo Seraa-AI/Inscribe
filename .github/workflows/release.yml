@@ -46,8 +46,6 @@ jobs:
       id-token: write
       contents: write
       pull-requests: write
-    outputs:
-      published: ${{ steps.changesets.outputs.published }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -70,31 +68,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  deploy-docs:
-    name: Deploy Docs (Docker)
-    runs-on: ubuntu-latest
-    needs: release
-    if: needs.release.outputs.published == 'true'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Log in to DigitalOcean Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: registry.digitalocean.com
-          username: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-          password: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Docker image
-        run: pnpm --filter @scrivr/docs deploy:production:build
-
-      - name: Push Docker image
-        run: |
-          pnpm --filter @scrivr/docs deploy:production:push
+# Docs app deployment (apps/docs → DigitalOcean container registry) lives in
+# a separate workflow: .github/workflows/deploy-docs.yml. Release.yml is now
+# scoped exclusively to npm package publishing via changesets. See that file
+# for the rationale behind the split.
