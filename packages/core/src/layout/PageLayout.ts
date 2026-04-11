@@ -178,22 +178,18 @@ export interface DocumentLayout {
    */
   fragmentsByPage?: LayoutFragment[][];
 
-  // ── Phase 0 additions (multi-surface foundation) ──────────────────────────
+  // ── Multi-surface layout fields ───────────────────────────────────────────
   //
-  // These fields are populated by runPipeline starting with the Phase 0 PR
-  // (refactor/layout-primitives). They're optional so older call sites that
-  // construct DocumentLayout literals without them continue to compile during
-  // the staged rollout. Consumers that actually rely on the values check for
-  // presence or fall back to legacy behavior.
-  //
-  // See docs/header-footer-plan.md §3 and docs/multi-surface-architecture.md
-  // §3.4/§8.6 for the full design.
+  // Optional so older call sites that construct DocumentLayout literals
+  // without them continue to compile. Consumers that rely on the values
+  // check for presence or fall back to legacy behavior.
 
   /**
    * Per-page metrics bundle, one entry per `pages[i]`.
-   * Always set by runPipeline going forward, even with zero chrome contributors
-   * (Phase 0 state) — in that case every entry reduces to the hand-computed
-   * `margins.top` / `pageHeight - margins.bottom` formula for its page number.
+   * Always set by runPipeline going forward, even when there are no chrome
+   * contributors — in the zero-contributor case, every entry reduces to the
+   * hand-computed `margins.top` / `pageHeight - margins.bottom` formula for
+   * its page number.
    *
    * Optional because tests and legacy paths may construct DocumentLayout
    * without running the pipeline (e.g. synthesizing a single-page fixture).
@@ -202,32 +198,40 @@ export interface DocumentLayout {
 
   /**
    * Monotonic identity for this layout run. Incremented per full run. Used
-   * by the Phase 1b early-termination cache to distinguish "this block was
-   * placed in the run we're comparing against" from "this block was placed
-   * in some older run we can no longer trust."
+   * by the early-termination cache to distinguish "this block was placed in
+   * the run we're comparing against" from "this block was placed in some
+   * older run we can no longer trust."
    *
-   * In Phase 0 this is aliased to `version` since the two counters serve
-   * the same purpose (per-run identity). Future PRs may split them if a
-   * second identity lane is needed (e.g., to decouple render-staleness
-   * tracking from cache-invalidation tracking).
+   * Currently aliased to `version` since the two counters serve the same
+   * per-run-identity purpose. They can be split later if render-staleness
+   * tracking (version) and cache-invalidation tracking (runId) need to
+   * diverge — e.g. if runs that don't change the document still need a
+   * fresh render pass but not a fresh placement invalidation.
    */
   runId?: number;
 
   /**
    * Whether the iterative chrome loop reached a fixed point. Always
-   * `"stable"` in Phase 0 because there are no iterative contributors yet
-   * (the aggregator effectively runs 1 iteration). Later PRs that wire real
-   * contributors (footnotes) set this to `"exhausted"` when MAX_ITERATIONS
-   * fires without convergence.
+   * `"stable"` currently because there are no iterative contributors yet
+   * and the aggregator effectively runs 1 iteration.
+   *
+   * Becomes meaningful once contributors whose output depends on the flow
+   * layout exist — e.g. a footnote contributor that needs to see where
+   * flow content lands before computing which footnote bodies belong on
+   * which page. Such contributors may need several iterations before their
+   * per-page reservations stabilize. If the iteration loop hits its max-
+   * iteration safety cap without converging, this field is set to
+   * `"exhausted"` and the last iteration's layout is returned as-is.
    *
    * `convergence: "exhausted"` is a valid, usable layout — just non-optimal.
-   * Strict-mode export (see `docs/export-extensibility.md` §12.1) can
-   * choose to throw rather than ship an exhausted layout.
+   * A strict export pipeline can choose to throw rather than ship one, but
+   * for interactive editing it's better to show the exhausted layout than
+   * to hang or error.
    */
   convergence?: "stable" | "exhausted";
 
   /**
-   * Number of iterations the chrome aggregator ran. Always `1` in Phase 0
+   * Number of iterations the chrome aggregator ran. Always `1` currently
    * (no iteration). Debug/telemetry only — no layout logic reads this.
    */
   iterationCount?: number;
@@ -299,26 +303,35 @@ export interface MeasureCacheEntry {
   placedPage?: number;
 
   /**
-   * Phase 1b — two-guard cache invariant (Phase 0 additions).
+   * Two additional invariants for the early-termination shortcut, making it
+   * safe across chrome configuration changes between runs.
    *
-   * These fields make the early-termination shortcut safe across chrome
-   * configuration changes. See docs/header-footer-plan.md §3.4 and
-   * docs/multi-surface-architecture.md §8.6 for the full rationale.
+   * The early-termination shortcut copies block placements from a previous
+   * run's layout when it detects that nothing interesting has changed since
+   * then. The pre-existing check compares `placedTargetY` and `placedPage`,
+   * which is sufficient when the only thing that varies between runs is
+   * edit positions. It's NOT sufficient when chrome configuration changes
+   * between runs — e.g. a header plugin activates and reserves 40px at
+   * the top of every page, making the cached `placedTargetY` values stale
+   * by exactly that 40px delta.
    *
-   * - `placedRunId`: the `runId` of the layout run that placed this block.
-   *   Phase 1b only accepts the shortcut when the block's placed run equals
-   *   `previousLayout.runId`, i.e. the cache entry is fresh from the run
-   *   whose pages we'd be copying.
+   * The two extra guards:
    *
-   * - `placedContentTop`: the `PageMetrics.contentTop` of the specific page
-   *   this block was placed on. If that page's contentTop differs between
-   *   runs (e.g. a header plugin activated and reserved 40px), the cached
-   *   `placedTargetY` is stale by exactly that delta and the shortcut is
-   *   invalid. Storing placedContentTop lets us detect this.
+   *   - `placedRunId`: the `runId` of the layout run that last placed this
+   *     block. The early-termination shortcut only accepts the cache entry
+   *     when the block's placed run equals the previous run's runId — i.e.
+   *     the cache entry is fresh from the run whose pages we'd be copying,
+   *     not an even older run that may have had different chrome.
    *
-   * Both are optional because legacy entries written before Phase 0 don't
-   * have them set — in that case the Phase 1b guard bails out and the
-   * shortcut is skipped, which is the safe default.
+   *   - `placedContentTop`: the `PageMetrics.contentTop` of the specific
+   *     page this block was placed on. If that page's contentTop differs
+   *     between runs (a header plugin activated, a footnote band changed
+   *     size, etc.), the cached `placedTargetY` is stale by the delta and
+   *     the shortcut must be skipped.
+   *
+   * Both are optional because legacy entries written before these fields
+   * existed don't have them set — in that case the guard bails out and
+   * the shortcut is skipped, which is the safe default.
    */
   placedRunId?: number;
   placedContentTop?: number;
@@ -366,10 +379,11 @@ export interface FlowBlock {
   preCachedTargetY?: number;
   preCachedPage?: number;
   /**
-   * Phase 1b two-guard additions (Phase 0). See MeasureCacheEntry.placedRunId
-   * / placedContentTop for the rationale. These are the snapshot of those
-   * values at the time buildBlockFlow ran for THIS layout run — copied from
-   * the previous run's cache entry so the Phase 1b guard can compare them.
+   * Snapshot of `MeasureCacheEntry.placedRunId` / `placedContentTop` taken
+   * when buildBlockFlow reads the cache for THIS run. See the doc comments
+   * on those two fields for what they carry. These are the FlowBlock-side
+   * copies that the early-termination guard compares against the current
+   * run's actual placement to decide whether the shortcut is safe.
    */
   preCachedRunId?: number;
   preCachedContentTop?: number;
@@ -447,24 +461,34 @@ export const defaultPagelessConfig: PageConfig = {
  * This function is the single source of truth for orchestration; both
  * LayoutCoordinator and tests call it instead of duplicating the logic.
  */
-// ── runPipeline recursion guard (Phase 0 belt-and-suspenders) ─────────────
+// ── runPipeline recursion guard (belt-and-suspenders) ────────────────────
 //
-// `runPipeline` will eventually call `aggregateChrome` (Phase 1b) which invokes
-// plugin measure() hooks. A hook that accidentally calls back into runPipeline
-// instead of `runMiniPipeline` would cause infinite recursion via re-entry
-// into aggregation. This counter trips the throw on any such call.
+// `runPipeline` will eventually call a chrome aggregator which invokes
+// plugin `measure()` hooks. A hook that accidentally calls back into
+// `runPipeline` instead of `runMiniPipeline` would cause infinite recursion
+// via re-entry into aggregation — the aggregator would invoke the hook,
+// the hook would call `runPipeline`, `runPipeline` would call the aggregator,
+// and so on.
 //
-// In Phase 0 the aggregator is inert, so the guard is dormant — nothing can
-// actually trigger recursion yet. Ships now so Phase 1b doesn't have to
-// retrofit a safety net while also adding real contributors. See
-// `docs/export-extensibility.md` §6.1 for the rationale.
+// This counter trips a throw on any such call. The intended correct call
+// from inside a `measure()` hook is `runMiniPipeline`, which lives in a
+// separate file, doesn't import the aggregator, and can't cause re-entry.
+//
+// Currently dormant because the aggregator is inert — no contributors
+// exist yet, so nothing can actually trigger recursion. Ships now so that
+// when real contributors land, the safety net is already in place and
+// doesn't have to be retrofitted alongside the features it protects.
 let _runPipelineDepth = 0;
 
 /**
  * Test-only: artificially set the runPipeline depth counter. Used by the
- * recursion-guard tests to simulate a re-entry condition without wiring up
- * a full contributor stack. Prefix `__` signals "not public API"; any
- * production code that calls this will break in future refactors.
+ * recursion-guard tests to simulate a re-entry condition without wiring
+ * up a full contributor stack — without this, the guard would be
+ * completely unreachable from tests until real contributors exist.
+ *
+ * Prefix `__` signals "not public API"; any production code that calls
+ * this is explicitly opting into unstable behavior and will break at
+ * some point.
  */
 export function __setRunPipelineDepthForTest(n: number): void {
   _runPipelineDepth = n;
@@ -502,10 +526,10 @@ function _runPipelineBody(
   // Destructured once — avoids repeated property access inside the hot loop.
   const { fontModifiers, measureCache, previousLayout,pageConfig, measurer } = options;
   const version = (options.previousVersion ?? 0) + 1;
-  // Phase 0: runId is aliased to version. They serve the same "per-run
-  // identity" purpose today. Future PRs may split them if render-staleness
-  // tracking (version) and cache-invalidation tracking (runId) need to
-  // diverge. Keeping them the same means existing callers that observe
+  // `runId` is aliased to `version` because they currently serve the same
+  // per-run-identity purpose. They can be split later if render-staleness
+  // tracking (version) needs to diverge from cache-invalidation tracking
+  // (runId). Keeping them the same means existing callers that observe
   // `version` bumps see identical behavior.
   const runId = version;
   const baseConfig = options.fontConfig ?? defaultFontConfig;
@@ -517,11 +541,14 @@ function _runPipelineBody(
   const contentWidth = pageWidth - margins.left - margins.right;
   const maxBlocks = options.maxBlocks;
 
-  // ── Phase 0: chrome aggregation ──────────────────────────────────────────
-  // In Phase 0 the aggregator is inert — no contributors are registered yet,
-  // so we use the stable EMPTY_RESOLVED_CHROME reference. Phase 1b wires real
-  // chrome contributors (headers, footers) through the extension lane and
-  // replaces this line with a call to `aggregateChrome(extensions, ...)`.
+  // ── Chrome aggregation ───────────────────────────────────────────────────
+  // Currently inert — no contributors are registered yet, so we use the
+  // stable EMPTY_RESOLVED_CHROME reference. When a chrome extension lane
+  // lands, this line becomes a call to an aggregator function that walks
+  // every registered contributor and sums their per-page reservations.
+  // Everything downstream (paginateFlow, applyFloatLayout) already routes
+  // through the resolved chrome, so wiring real contributors is an additive
+  // change that won't touch the pipeline itself.
   const resolved = EMPTY_RESOLVED_CHROME;
 
   // ── Per-page metrics lookup ──────────────────────────────────────────────
@@ -640,25 +667,29 @@ function _runPipelineBody(
 /**
  * Stage 2 of the layout pipeline: assign measured FlowBlocks to pages.
  *
- * Pure geometry — no measuring, no cache reads (except for Phase 1b shiftBlock).
- * Returns all completed pages plus the cursor state needed for streaming resumption
- * or the next chunk in incremental layout.
+ * Pure geometry — no measuring, no cache reads (except for the early-
+ * termination shiftBlock path). Returns all completed pages plus the cursor
+ * state needed for streaming resumption or the next chunk in incremental
+ * layout.
  *
  * Per-page metrics: every vertical-position read inside this function routes
- * through `metricsFor(pageNumber)` rather than the old `margins.top` /
- * `contentHeight` constants. This is what lets differentFirstPage headers and
- * footnote bands produce different reservations per page. In Phase 0 with zero
- * chrome contributors, `metricsFor` returns identical values for every page,
- * so the behavior is unchanged from the pre-refactor formula.
+ * through `metricsFor(pageNumber)` rather than reading `margins.top` /
+ * `contentHeight` directly. This is what lets different-first-page headers
+ * and footnote bands produce different reservations per page. With zero
+ * chrome contributors, `metricsFor` returns identical values for every page
+ * and the behavior reduces to the raw `margins.top` / `pageHeight - margins.bottom`
+ * formula the function used to compute by hand.
  *
  * @param flows         FlowBlocks from buildBlockFlow().
  * @param pageConfig    The PageConfig for this run (used for margins.left, etc.).
- * @param resolved      The chrome aggregator output (EMPTY_RESOLVED_CHROME in Phase 0).
+ * @param resolved      The chrome aggregator output (currently EMPTY_RESOLVED_CHROME).
  * @param metricsFor    Per-page metrics lookup. Callers are expected to memoize
  *                      at their level; paginateFlow treats this as a pure function.
- * @param runId         Monotonic id of THIS layout run. Written into MeasureCacheEntry.placedRunId
- *                      for Phase 1b two-guard cache invariants.
- * @param previousLayout Previous run's layout — enables Phase 1b early termination.
+ * @param runId         Monotonic id of THIS layout run. Written into
+ *                      MeasureCacheEntry.placedRunId as one of the two guards
+ *                      for the cross-run early-termination cache.
+ * @param previousLayout Previous run's layout — enables early termination when
+ *                      the current run's placements match what was cached.
  * @param measureCache  Weak cache — updated with placement data after each block.
  * @param initPages     Completed pages from the previous chunk (empty on first chunk).
  * @param initPage      The page currently being built (fresh {pageNumber:1} on first chunk).
@@ -951,31 +982,40 @@ export function paginateFlow(
     if (cachedEntry) {
       cachedEntry.placedTargetY = targetY;
       cachedEntry.placedPage = currentPage.pageNumber;
-      // Phase 1b two-guard additions: runId identifies THIS run, contentTop
-      // snapshots the specific page's reserved-top value. Both are read by
-      // the next run's early-termination guard to detect chrome configuration
-      // changes that would make the cached targetY stale.
+      // runId identifies THIS run; contentTop snapshots the specific page's
+      // reserved-top value at placement time. Both are read by the next run's
+      // early-termination guard to detect chrome configuration changes that
+      // would invalidate the cached targetY.
       cachedEntry.placedRunId = runId;
       cachedEntry.placedContentTop = metricsFor(currentPage.pageNumber).contentTop;
     }
 
-    // ── Phase 1b: early termination ───────────────────────────────────────────
+    // ── Early termination ─────────────────────────────────────────────────────
     //
-    // Safe to take the shortcut only when ALL of the following match between
-    // the previous run and this one:
-    //   1. targetY is the same (block landed at the same vertical position)
-    //   2. pageNumber is the same (block landed on the same page)
-    //   3. preCachedRunId === previousLayout.runId (the cache entry is from
-    //      the run we'd be copying from, not an older run)
-    //   4. preCachedContentTop === current page's contentTop (the page's
-    //      reserved-top hasn't shifted due to chrome configuration changes)
+    // Safe to copy the rest of this block's downstream layout from the
+    // previous run only when ALL of the following match between the previous
+    // run and this one:
     //
-    // Conditions 3 and 4 are the Phase 0 additions for the multi-surface
-    // refactor. With zero chrome contributors (Phase 0 default), condition
-    // 4 is always true (contentTop = margins.top on every run) and condition
-    // 3 is true whenever the cache entry was written by the immediately
-    // previous run, which is the normal case. So the shortcut rate is
-    // unchanged from the pre-refactor behavior in Phase 0.
+    //   1. targetY is the same
+    //      The block landed at the same vertical position. If the edit only
+    //      shifted content earlier in the doc, targetY downstream matches.
+    //
+    //   2. pageNumber is the same
+    //      The block landed on the same page.
+    //
+    //   3. preCachedRunId === previousLayout.runId
+    //      The cache entry is fresh from the run we'd be copying from, not
+    //      from an even older run with potentially different chrome.
+    //
+    //   4. preCachedContentTop === current page's contentTop
+    //      The page's reserved-top hasn't shifted due to a chrome change
+    //      (e.g. a header plugin activated, a footnote band grew). If it
+    //      had, the cached targetY would be stale by the delta.
+    //
+    // With zero chrome contributors, conditions 3 and 4 are trivially true
+    // whenever the cache entry was written by the immediately previous run
+    // (which is the normal case), so the shortcut hit rate is unchanged
+    // from when only conditions 1 and 2 existed.
     if (
       previousLayout &&
       seenCacheMiss &&
@@ -1338,9 +1378,9 @@ export function applyFloatLayout(
   // cascade any height change to every subsequent block on the same page.
   //
   // `pageBottom` is fetched per-page inside the loop (not hoisted) because
-  // different pages may reserve different footer band heights once chrome
-  // contributors land. In Phase 0 with zero contributors, every page has
-  // the same contentBottom so there's no functional difference.
+  // different pages can reserve different footer band heights once chrome
+  // contributors produce per-page variations. With zero contributors every
+  // page has the same contentBottom so there's no functional difference.
   for (const page of pages) {
     if (!exclusionMgr.hasExclusionsOnPage(page.pageNumber)) continue;
 
@@ -1473,8 +1513,9 @@ export function applyFloatLayout(
     const page = pages[pi]!;
     const overflowBlocks: LayoutBlock[] = [];
     // Per-page pageBottom (was hoisted in the pre-refactor code). With zero
-    // chrome contributors (Phase 0) every page has the same value, so
-    // behavior is unchanged; Phase 1b+ uses this per-page.
+    // chrome contributors every page has the same value so behavior is
+    // unchanged; when contributors produce per-page variations this reads
+    // the correct clamp bound for each page independently.
     const pagePageBottom = metricsForPage(page.pageNumber).contentBottom;
 
     for (let bi = 0; bi < page.blocks.length; bi++) {

@@ -2,31 +2,45 @@
  * Shared line-fitting primitive used by every layout consumer that needs
  * to split a flat line list against a single vertical capacity.
  *
- * This is the smallest reusable kernel inside `paginateFlow`'s split loop
- * (`PageLayout.ts:606-723` today) — the inner "walk lines, accumulate height,
- * stop when capacity runs out" step. `paginateFlow`'s enclosing control flow
- * (gap suppression, margin collapsing, leaf-block handling, hard page breaks)
- * is NOT shared here because it's body-specific and can't be cleanly factored
- * without a larger refactor. But the inner accumulator is genuinely reusable,
- * and extracting it means:
+ * This is the smallest reusable kernel inside `paginateFlow`'s split loop —
+ * the inner "walk lines, accumulate height, stop when capacity runs out"
+ * step. `paginateFlow`'s enclosing control flow (gap suppression, margin
+ * collapsing, leaf-block handling, hard page breaks) is NOT shared here
+ * because it's body-pagination-specific and can't be cleanly factored
+ * without a larger refactor. But the inner accumulator is genuinely
+ * reusable: any future consumer that needs to split a line list against
+ * a capacity (a footnote-band filler, a balanced-column equalizer, a
+ * line-number gutter, a widow/orphan enforcer) can call this function
+ * instead of reimplementing the walk.
  *
- * - The footnote plugin's `bandFill` (see `docs/multi-surface-architecture.md`
- *   §8.7.3) calls this instead of reimplementing the walk
- * - Future iterative chrome contributors (balanced columns, line-number gutters,
- *   widow/orphan enforcement) get it for free
- * - `paginateFlow`'s split loop can eventually call this too, collapsing the
- *   two implementations into one (not done in Phase 0 because it touches the
- *   hot loop — revisit after footnotes land when we have a second real caller
- *   to validate the shape against)
+ * Why extract this small helper rather than reuse `paginateFlow` itself:
+ *
+ *   - `paginateFlow` is top-down page-fill — it walks flow blocks in order
+ *     and advances pages when they overflow. That control flow is wrong for
+ *     consumers that need to fill a band (bottom-up) or a column (parallel
+ *     streams) rather than a sequence of pages.
+ *
+ *   - `paginateFlow`'s hot loop is entangled with body-specific concerns
+ *     that don't apply outside body pagination: margin collapsing between
+ *     adjacent blocks, gap suppression on the first block of a page,
+ *     leaf-block too-tall handling. Any consumer that tried to reuse the
+ *     full loop would either inherit those concerns (wrong) or paper over
+ *     them with config flags (fragile).
+ *
+ *   - The inner kernel — "given a line list and a capacity, how many lines
+ *     fit?" — is genuinely identical across every consumer. Extracting it
+ *     gives the small reusable piece without dragging the body-pagination
+ *     control flow along.
  *
  * The function is intentionally boring: no fancy break-point selection, no
  * widow/orphan awareness, no lookahead. It just walks lines top-down, takes
  * as many as fit, and returns the split point. Callers that want smarter
  * rules layer them on top.
  *
- * See `docs/weekend-plan-2026-04-12.md` §PR 1 step 1.2 and
- * `docs/multi-surface-architecture.md` §8.7.1 ("Reuse what exists; don't
- * build a 'subflow engine'") for the full rationale.
+ * At some point `paginateFlow`'s own split loop should call this function
+ * too, collapsing the two implementations. That's deferred until there's a
+ * second real caller to validate the shape against — refactoring the hot
+ * loop without a validation point risks introducing a subtle regression.
  */
 
 import type { LayoutLine } from "./LineBreaker";

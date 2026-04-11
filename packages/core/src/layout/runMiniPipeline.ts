@@ -4,46 +4,52 @@
  * secondary content that needs to be measured without triggering the
  * main pagination pipeline's chrome aggregator).
  *
- * Phase 0 step 1.8 (see `docs/weekend-plan-2026-04-12.md` §PR 1 and
- * `docs/export-extensibility.md` §6.1).
- *
  * ## What it does
  *
  * Runs a stripped-down variant of the main pipeline:
  *
  *   1. `collectLayoutItems` — walk the doc, produce flat items
- *   2. `buildBlockFlow` — measure every block's lines (Stage 1)
+ *   2. `buildBlockFlow` — measure every block's lines
  *   3. `paginateFlow` (pageless) — stack blocks vertically with margin collapsing
  *
  * Does NOT run:
  *
- *   - `aggregateChrome` (doesn't exist yet in Phase 0; will exist in Phase 1b)
- *   - `applyFloatLayout` (floats don't exist in mini-docs — a header or
+ *   - The chrome aggregator (it doesn't exist yet, and won't be called from
+ *     this function even after it does — that's the whole point of having
+ *     a separate entry point)
+ *   - `applyFloatLayout` — floats don't exist in mini-docs. A header or
  *     footnote body that embedded a float would be layered rendering, not
- *     flow content, and that's out of scope for v1)
- *   - `buildFragments` (callers inspect blocks directly; fragment identity
- *     is a pagination concern that mini-docs don't have)
- *   - Phase 1b early-termination cache (mini-docs are small enough that
- *     the cache overhead isn't worth it; always full-measure)
- *   - Streaming / resumption (mini-docs are always small, completed in
- *     one synchronous pass)
+ *     flow content, and is out of scope.
+ *   - `buildFragments` — callers inspect blocks directly; fragment identity
+ *     is a pagination concern that mini-docs don't have
+ *   - The early-termination cache — mini-docs are small enough that the
+ *     cache overhead isn't worth it; always full-measure
+ *   - Streaming / resumption — mini-docs are always small, completed in
+ *     one synchronous pass
  *
- * ## Why it exists as a separate function
+ * ## Why it exists as a separate function, not a flag on `runPipeline`
  *
- * See `docs/export-extensibility.md` §6.1 and
- * `docs/multi-surface-architecture.md` §3.4. The short version:
+ * Chrome contributors (a future header-footer plugin, a future footnotes
+ * plugin) will need to measure mini-documents from inside their own
+ * `measure()` hook — a header contributor measures its header content,
+ * a footnote contributor measures its footnote bodies, etc. These hooks
+ * run from inside the main pipeline's chrome aggregator.
  *
- *   - Chrome contributors (the header-footer plugin, the footnotes plugin)
- *     will need to measure mini-docs from inside their `measure()` hook
- *   - Calling `runPipeline` from that hook would re-enter `aggregateChrome`
- *     and cause infinite recursion
- *   - `runMiniPipeline` is physically unable to call `aggregateChrome` —
- *     the aggregator isn't even imported into this file — so using it as
- *     the entry point makes the correct thing also the obvious thing
+ * If a contributor called `runPipeline` from its hook, `runPipeline` would
+ * re-enter the aggregator, which would re-invoke the contributor, which
+ * would re-call `runPipeline`, and so on — infinite recursion. The fix is
+ * to make it structurally impossible: `runMiniPipeline` lives in a separate
+ * file, doesn't import the aggregator, and can be called freely from
+ * anywhere without risk of re-entry.
  *
- * `runPipeline` has a recursion guard that throws on re-entry. If a plugin
- * author accidentally calls `runPipeline` instead of `runMiniPipeline`,
- * the guard catches it with a readable error message pointing at this file.
+ * `runPipeline` has a recursion guard that throws on re-entry as a
+ * belt-and-suspenders safety net. If a plugin author accidentally calls
+ * `runPipeline` instead of `runMiniPipeline`, the guard catches it with a
+ * readable error message pointing at this file as the correct choice.
+ *
+ * A simple flag on `runPipeline` (e.g. `skipChrome: true`) would be easy to
+ * forget or accidentally clear, so the two entry points are kept physically
+ * separate instead.
  *
  * ## Pageless semantics
  *
@@ -51,20 +57,22 @@
  * virtual page with no overflow handling. The caller reads the natural
  * height from the returned layout to compute how much vertical space the
  * mini-doc needs (e.g. for a header band height). There's no meaningful
- * "page 2 of the mini-doc" concept.
+ * "page 2 of the mini-doc" concept: a header doesn't paginate across
+ * multiple pages, it just is as tall as its content.
  *
  * `pageless: true` in PageConfig is what enables this — `paginateFlow`
  * skips the overflow check and keeps appending to the current page
- * indefinitely.
+ * indefinitely. `runMiniPipeline` forces `pageless: true` regardless of
+ * what the caller passed in, so consumers don't need to remember to set it.
  *
  * ## What's returned
  *
  * A minimal `DocumentLayout`-shaped object with:
  *   - `pages: [LayoutPage]` — always exactly one page
- *   - `pageConfig` — the pageConfig that was passed in (with pageless: true forced)
+ *   - `pageConfig` — the pageConfig that was passed in, with `pageless: true` forced
  *   - `version: 1` — mini-docs don't carry version state
  *   - `totalContentHeight` — Y of the bottom of the last block, for band-height computation
- *   - `metrics: [PageMetrics]` — a single-entry array, mirrors runPipeline's shape
+ *   - `metrics: [PageMetrics]` — a single-entry array, mirrors `runPipeline`'s shape
  *   - `runId: 0` — mini-doc measurements aren't run-identified
  *   - `convergence: "stable"` — no iteration possible
  *   - `iterationCount: 1`
@@ -136,21 +144,23 @@ export function runMiniPipeline(
   const contentWidth = pageWidth - margins.left - margins.right;
 
   // Always use EMPTY_RESOLVED_CHROME — mini-pipelines cannot aggregate chrome.
-  // If a future chrome contributor ever needs to measure sub-chrome (e.g. a
-  // nested footnote inside a header), it still uses EMPTY_RESOLVED_CHROME
-  // here; the recursion guard on the outer runPipeline prevents the nesting
-  // from becoming a problem.
+  // Even if a future chrome contributor needs to measure sub-chrome (e.g. a
+  // nested footnote inside a header), the nested call still uses the empty
+  // resolved chrome here; the recursion guard on the outer runPipeline
+  // prevents the nesting from becoming a runaway loop.
   const resolved = EMPTY_RESOLVED_CHROME;
 
   // Per-page metrics helper — mirrors runPipeline's shape but trivially
-  // simple since we only ever need page 1.
+  // simple since we only ever need page 1 (pageless means everything lands
+  // on one virtual page). The fallback for pageNumber > 1 exists only to
+  // satisfy `paginateFlow`'s signature; it should never be called.
   const page1Metrics = computePageMetrics(pageConfig, resolved, 1);
   const metricsFor = (pageNumber: number): PageMetrics =>
     pageNumber === 1
       ? page1Metrics
       : computePageMetrics(pageConfig, resolved, pageNumber);
 
-  // ── Stage 1: measure ───────────────────────────────────────────────────
+  // ── Measure blocks ─────────────────────────────────────────────────────
   const items = collectLayoutItems(doc, fontConfig);
   const flowConfig: FlowConfig = { margins, contentWidth };
   const flowResult = buildBlockFlow(
@@ -164,15 +174,15 @@ export function runMiniPipeline(
     undefined, // no maxBlocks cutoff
   );
 
-  // ── Stage 2: paginate (pageless) ───────────────────────────────────────
+  // ── Stack blocks (pageless) ────────────────────────────────────────────
   const initPage: { pageNumber: number; blocks: [] } = { pageNumber: 1, blocks: [] };
   const pr = paginateFlow(
     flowResult.flows,
     pageConfig,
     resolved,
     metricsFor,
-    0, // runId 0 — mini-docs aren't run-identified
-    undefined, // no previousLayout — no Phase 1b
+    0, // runId 0 — mini-docs aren't identified by per-run counters
+    undefined, // no previousLayout — no cross-run cache shortcut
     undefined, // no measureCache
     [],
     initPage,

@@ -1,27 +1,38 @@
 /**
  * Per-page layout metrics.
  *
- * This module is Phase 0 of the multi-surface architecture refactor (see
- * `docs/weekend-plan-2026-04-12.md` §PR 1 and `docs/header-footer-plan.md` §3).
- * It introduces the primitives that let future iterative-chrome contributors
- * (headers, footers, footnotes) reserve per-page vertical space without
- * scattering `pageHeight - margins.bottom` arithmetic across `runPipeline`,
- * `paginateFlow`, and `applyFloatLayout`.
+ * This module introduces the primitives that let iterative-chrome contributors
+ * (headers, footers, footnote bands, margin-notes gutters) reserve per-page
+ * vertical space without scattering `pageHeight - margins.bottom` arithmetic
+ * across `runPipeline`, `paginateFlow`, and `applyFloatLayout`. Instead, every
+ * vertical-position read in the pipeline goes through `computePageMetrics`
+ * which returns a single `PageMetrics` bundle for a specific page number.
  *
- * Design note: per-page metrics (`PageMetrics` carries `pageNumber`, not a
- * constant shared across pages) is deliberate from day one. `differentFirstPage`
- * headers reserve different heights on page 1 vs. the rest; footnotes reserve
- * different heights per page based on which refs anchor there. Collapsing to
- * a single `PageMetrics` per run and flipping to per-page later would ship a
- * visible "page 2+ has empty space" bug. See `docs/header-footer-plan.md` §3
- * for the rationale in detail.
+ * Why per-page, not a single shared constant:
  *
- * In this PR (Phase 0), the only contributor is an empty `ResolvedChrome`
- * (no registered `ChromeContribution`s), so `computePageMetrics` produces
- * values identical to the current hand-computed formula for every page. All
- * existing layout tests pass unchanged. Later PRs (Phase 1b, the header-
- * footer plugin, footnotes) fill in real contributors without touching this
- * file's interface.
+ *   - Different-first-page headers (a Word/Docs convention) reserve a
+ *     different amount of top space on page 1 than on pages 2+. Handling
+ *     that via a shared constant would require either always reserving the
+ *     first-page height everywhere (wasting space on pages 2+) or always
+ *     reserving the default height everywhere (breaking page 1).
+ *
+ *   - Footnotes reserve different bottom space per page depending on which
+ *     footnote refs anchor on that page. There's no way to express "page N
+ *     reserves 40px, page N+1 reserves 120px" without per-page metrics.
+ *
+ * A `PageMetrics` bundle carries its own `pageNumber`, so passing one into a
+ * function is unambiguous about which page it describes. `computePageMetrics`
+ * is a pure function — same inputs always produce the same output, safe to
+ * call from hot loops, no caching required at the implementation level
+ * (callers that hit this repeatedly memoize at their own level).
+ *
+ * Current state: no chrome contributors exist yet. `EMPTY_RESOLVED_CHROME`
+ * is used throughout the pipeline as the placeholder `ResolvedChrome` input.
+ * With no contributors, `computePageMetrics` reduces to the hand-computed
+ * `margins.top` / `pageHeight - margins.bottom` formula on every page, so
+ * every existing layout test passes unchanged. When a plugin registers a
+ * chrome contributor, its per-page reservations flow through the same
+ * function and the pipeline respects them automatically.
  */
 
 import type { PageConfig } from "./PageLayout";
@@ -33,7 +44,7 @@ import type { PageConfig } from "./PageLayout";
  *
  * Consumed by `runPipeline`, `paginateFlow`, and `applyFloatLayout` instead
  * of raw `pageConfig.pageHeight - margins.bottom` arithmetic. The per-page
- * shape is load-bearing: `differentFirstPage` headers and footnotes both
+ * shape is load-bearing: different-first-page headers and footnotes both
  * produce metrics that vary by page number.
  */
 export interface PageMetrics {
@@ -50,7 +61,7 @@ export interface PageMetrics {
   contentHeight: number;
   /**
    * pageWidth - margins.left - margins.right.
-   * Constant across pages for v1 (columns not yet implemented). Included here
+   * Constant across pages until multi-column layout lands. Included here
    * so downstream code can read everything page-related through one bundle.
    */
   contentWidth: number;
@@ -63,8 +74,8 @@ export interface PageMetrics {
   footerTop: number;
   /**
    * Resolved header height for this page. 0 when no chrome contributor
-   * reserves top space (which is the case throughout Phase 0 — this PR
-   * ships with an empty `ResolvedChrome`).
+   * reserves top space (currently true throughout the pipeline — no
+   * contributors have been registered yet).
    */
   headerHeight: number;
   /**
@@ -81,11 +92,28 @@ export interface PageMetrics {
  * core never inspects — it just routes the payload back to the contributor
  * at paint time.
  *
- * See `docs/multi-surface-architecture.md` §3.4 for the full iterative-chrome
- * lifecycle. In Phase 0 this shape is inert — no contributors exist yet, so
- * `ResolvedChrome.contributions` is always empty and none of these methods
- * are ever called. The shape is declared here anyway so Phase 1b can wire
- * real contributors without changing the type surface.
+ * Currently inert: no contributors exist, `ResolvedChrome.contributions` is
+ * always empty, and none of these methods are ever called. The shape is
+ * declared here so future chrome-contributing plugins can be wired in
+ * without changing the type surface.
+ *
+ * Iterative vs. non-iterative contributors:
+ *
+ *   - Non-iterative contributors (headers, footers) compute their
+ *     contribution in a single pass and report `stable: true` on iteration 1.
+ *     Their reservation doesn't depend on where flow content lands, so the
+ *     aggregator can accept their output and move on.
+ *
+ *   - Iterative contributors (footnotes) depend on the flow layout to
+ *     determine which footnote bodies appear on which page. They may need
+ *     several iterations before their per-page reservations stabilize — for
+ *     example, reserving space for a footnote pushes flow content forward,
+ *     which might move another footnote's anchor to a different page,
+ *     changing the reservations. They report `stable: true` only when the
+ *     anchor→page assignment matches the previous iteration.
+ *
+ * The eventual aggregator loop exits when every contributor reports
+ * `stable: true` in the same iteration, or hits a max-iteration safety cap.
  */
 export interface ChromeContribution {
   /** Reserved vertical space at the top of page `pageNumber` (px). */
@@ -99,21 +127,17 @@ export interface ChromeContribution {
   payload?: unknown;
   /**
    * True when this contributor has reached a fixed point for its own inputs.
-   * Non-iterative contributors (headers, footers) return `true` on iteration 1;
-   * iterative contributors (footnotes) return `true` only when their internal
-   * assignment has stabilized. The aggregator loop in Phase 1b exits when
-   * every contributor reports `stable`.
-   *
-   * Phase 0 doesn't use this (no contributors, no iteration) but we define
-   * it here so the type is complete and Phase 1b can consume it without a
-   * shape change.
+   * See the interface doc comment for the iterative-vs-non-iterative
+   * distinction. Currently unused (no contributors, no iteration) but declared
+   * here so the type is complete.
    */
   stable: boolean;
   /**
    * Number of synthetic pages this contributor needs appended after the
-   * flow's last natural page. Used for chrome-only overflow (e.g. footnote
-   * end-of-doc spill per `docs/multi-surface-architecture.md` §8.7.6).
-   * Zero for contributors that never overflow.
+   * flow's last natural page. Used for chrome-only overflow: a footnote
+   * that doesn't fit on any of the document's natural pages can request
+   * extra footnote-only pages at the end where it can spill its content.
+   * Zero for contributors that never overflow (headers, footers).
    */
   syntheticPages?: number;
 }
@@ -122,21 +146,24 @@ export interface ChromeContribution {
  * All chrome contributions for a single layout run, plus a version hash.
  *
  * `contributions` is keyed by contributor name (e.g. `"headerFooter"`,
- * `"footnotes"`) — same name the plugin uses in its `addPageChrome()`
- * registration. `metricsVersion` is a stable hash of the resolved state
- * used by `Phase 1b` early termination to invalidate cross-run caches
- * when the chrome shape changes.
+ * `"footnotes"`) — same name the plugin uses when it registers. The
+ * `metricsVersion` is a stable hash of the resolved state used by the
+ * cross-run early-termination cache to decide whether a cached block
+ * placement is still valid: if any contributor's output shape changed
+ * between runs, the version bumps and the cache is invalidated for that
+ * block.
  *
- * In Phase 0, `contributions` is always the empty record `{}` (no plugins
- * contributing yet), and `metricsVersion` is always 0.
+ * Currently, `contributions` is always the empty record `{}` (no
+ * contributors have been registered yet) and `metricsVersion` is always 0.
  */
 export interface ResolvedChrome {
   contributions: Record<string, ChromeContribution>;
   /**
    * Monotonic identity hash. Any change to any contributor's contribution
-   * bumps this. `metricsVersion === 0` is reserved for "no contributors"
-   * (Phase 0). Subsequent PRs compute it as a djb2-style hash over every
-   * contributor's stable identity.
+   * bumps this. `metricsVersion === 0` is reserved for the zero-contributor
+   * state (current default). Once contributors exist, this is computed as
+   * a stable hash over every contributor's identity — same inputs always
+   * produce the same hash, different inputs always produce different hashes.
    */
   metricsVersion: number;
 }
@@ -144,11 +171,12 @@ export interface ResolvedChrome {
 /**
  * Pure function. Given a `PageConfig` and a `ResolvedChrome`, produce the
  * `PageMetrics` for one specific page. No caching — callers that hit this
- * repeatedly should memoize at the call site (see `paginateFlow`'s 1-entry
- * `metricsFor` helper added in PR 1.3).
+ * repeatedly should memoize at the call site. `paginateFlow` maintains a
+ * 1-entry cache keyed by `currentPage.pageNumber` since page advances are
+ * sequential and the cache hits on nearly every call.
  *
- * Phase 0 behavior: when `resolved.contributions` is empty, the returned
- * metrics match the current hand-computed formula on every page:
+ * Behavior with zero contributors (current default): the returned metrics
+ * match the hand-computed formula on every page:
  *
  *   contentTop    = margins.top
  *   contentBottom = pageHeight - margins.bottom
@@ -157,14 +185,21 @@ export interface ResolvedChrome {
  *   headerHeight  = 0
  *   footerHeight  = 0
  *
- * With real contributors (Phase 1b+), `headerHeight` and `footerHeight` sum
- * over every contributor's `topForPage(pageNumber)` / `bottomForPage(pageNumber)`
- * result.
+ * This is what lets the rest of the pipeline be refactored to read through
+ * `computePageMetrics` without changing any pre-refactor behavior — zero
+ * contributors means `computePageMetrics` returns the same numbers the
+ * pipeline used to compute by hand.
+ *
+ * With real contributors, `headerHeight` and `footerHeight` sum over every
+ * contributor's `topForPage(pageNumber)` / `bottomForPage(pageNumber)`
+ * result. Different contributors can reserve different amounts per page
+ * (e.g. a header plugin that sets a taller band on page 1 than on pages 2+).
  *
  * Pageless mode: `config.pageless === true` zeros out the footer reservation
- * (the layout never ends on a specific bottom). Headers still reserve the
- * top of the virtual canvas, but in practice no chrome contributor runs in
- * pageless mode (the header-footer plugin short-circuits on `pageless`).
+ * because a pageless layout has no meaningful bottom to clamp against (the
+ * flow grows unbounded on a single virtual page). Top reservations still
+ * apply if a contributor requests them, though in practice chrome contributors
+ * typically short-circuit on `pageless` and don't reserve anything.
  */
 export function computePageMetrics(
   config: PageConfig,
@@ -210,9 +245,12 @@ export function computePageMetrics(
 }
 
 /**
- * Constant for the empty / Phase 0 state — no contributors, metricsVersion 0.
- * Exported so `runPipeline` and tests can reach for a stable reference
- * without constructing a fresh object every call.
+ * Constant for the zero-contributor state — no contributions, metricsVersion 0.
+ * Used by `runPipeline` as the current default and by tests that need a
+ * stable reference without constructing a fresh object every call.
+ *
+ * Any code that wants to verify "the pipeline is currently running without
+ * chrome contributors" can identity-check against this constant.
  */
 export const EMPTY_RESOLVED_CHROME: ResolvedChrome = {
   contributions: {},

@@ -65,7 +65,7 @@ describe("runMiniPipeline", () => {
   });
 
   describe("DocumentLayout shape", () => {
-    it("returns the expected field set for Phase 0", () => {
+    it("returns a minimal DocumentLayout with the measurement-only fields populated", () => {
       const layout = runMiniPipeline(doc(p("Test")), {
         pageConfig: defaultPageConfig,
         measurer: createMeasurer(),
