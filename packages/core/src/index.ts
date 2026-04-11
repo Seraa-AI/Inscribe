@@ -22,3 +22,8 @@ export * from "./renderer";
 export * from "./input";
 export * from "./extensions";
 export * from "./menus";
+// Re-export ProseMirror's built-in DocAttrStep so extension authors can
+// import it from @scrivr/core alongside the addDocAttrs() extension lane.
+// Call sites typically use `tr.setDocAttribute(name, value)` instead of
+// instantiating DocAttrStep directly; both routes produce the same step.
+export { DocAttrStep } from "prosemirror-transform";
