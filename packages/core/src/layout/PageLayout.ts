@@ -447,7 +447,55 @@ export const defaultPagelessConfig: PageConfig = {
  * This function is the single source of truth for orchestration; both
  * LayoutCoordinator and tests call it instead of duplicating the logic.
  */
+// ── runPipeline recursion guard (Phase 0 belt-and-suspenders) ─────────────
+//
+// `runPipeline` will eventually call `aggregateChrome` (Phase 1b) which invokes
+// plugin measure() hooks. A hook that accidentally calls back into runPipeline
+// instead of `runMiniPipeline` would cause infinite recursion via re-entry
+// into aggregation. This counter trips the throw on any such call.
+//
+// In Phase 0 the aggregator is inert, so the guard is dormant — nothing can
+// actually trigger recursion yet. Ships now so Phase 1b doesn't have to
+// retrofit a safety net while also adding real contributors. See
+// `docs/export-extensibility.md` §6.1 for the rationale.
+let _runPipelineDepth = 0;
+
+/**
+ * Test-only: artificially set the runPipeline depth counter. Used by the
+ * recursion-guard tests to simulate a re-entry condition without wiring up
+ * a full contributor stack. Prefix `__` signals "not public API"; any
+ * production code that calls this will break in future refactors.
+ */
+export function __setRunPipelineDepthForTest(n: number): void {
+  _runPipelineDepth = n;
+}
+
 export function runPipeline(
+  doc: Node,
+  options: PageLayoutOptions,
+): DocumentLayout {
+  // ── Recursion guard ───────────────────────────────────────────────────
+  // Throws if invoked while another runPipeline call is already on the
+  // stack. Chrome contributors that need to measure a mini-document must
+  // call `runMiniPipeline` instead — it shares the measurement internals
+  // but bypasses the chrome aggregator entirely.
+  if (_runPipelineDepth > 0) {
+    throw new Error(
+      "[runPipeline] recursive call detected. Chrome contributors must call " +
+      "runMiniPipeline() from their measure() hook, not runPipeline(). " +
+      "runPipeline invokes aggregateChrome which would re-enter every " +
+      "contributor and infinite-loop.",
+    );
+  }
+  _runPipelineDepth++;
+  try {
+    return _runPipelineBody(doc, options);
+  } finally {
+    _runPipelineDepth--;
+  }
+}
+
+function _runPipelineBody(
   doc: Node,
   options: PageLayoutOptions,
 ): DocumentLayout {
